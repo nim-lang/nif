@@ -187,11 +187,11 @@ Grammar:
 ```
 Digit ::= [0-9]
 NumberSuffix ::= [a-z]+ [0-9a-z]*  # suffixes can only contain lowercase letters
-FloatingPointPart ::= ('.' Digit+ ('E' Digit+)? ) | 'E' Digit+
-Number ::= Digit+ FloatingPointPart? NumberSuffix?
+FloatingPointPart ::= ('.' Digit+ ('E' '-'? Digit+)? ) | 'E' '-'? Digit+
+Number ::= '-'? Digit+ FloatingPointPart? NumberSuffix?
 ```
 
-Numbers must start with a digit and only their decimal notation is supported. Numbers can have
+Numbers must start with a digit (or a minus) and only their decimal notation is supported. Numbers can have
 a suffix that has to start with a lowercase letter. For example Nim's `0xff'i32` would become `256i32x`.
 (The `x` encodes the fact that the number was originally written in hex.)
 
