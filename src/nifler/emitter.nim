@@ -8,7 +8,7 @@
 
 type
   Emitter* = object # state we need in order to do some formatting
-    #minified*: bool # produce minified code
+    minified*: bool # produce minified code
     output*: string
     nesting, lineLen: int
 
@@ -49,6 +49,7 @@ proc addStrLit*(em: var Emitter; s, suffix: string) =
   var r = "\""
   var l = em.lineLen + 1
   var lastPart = 1
+  var afterNewline = false
   for c in s:
     if l > 80:
       var endedInSpace = false
@@ -61,7 +62,9 @@ proc addStrLit*(em: var Emitter; s, suffix: string) =
         r.add "\\20"
         inc l, 3
         inc lastPart, 3
-    if c.needsEscape:
+      else:
+        afterNewline = true
+    if (c == ' ' and afterNewline) or c.needsEscape:
       r.escape c
       inc l, 3
       inc lastPart, 3
@@ -69,6 +72,7 @@ proc addStrLit*(em: var Emitter; s, suffix: string) =
       r.add c
       inc l, 1
       inc lastPart, 1
+    afterNewline = false
   r.add "\""
   em.emit r, lastPart
   em.emit suffix, suffix.len
@@ -83,11 +87,14 @@ type
 
 proc prepare*(em: var Emitter; kind: string): NodeEmitter =
   result = NodeEmitter(innerLineLen: em.lineLen, oldLen: em.output.len, prefix: kind)
-  inc em.nesting
+  if not em.minified:
+    inc em.nesting
   swap em.output, result.inner
 
 proc addSep*(em: var Emitter; n: var NodeEmitter) =
-  if em.lineLen > 90:
+  if em.output.len > 0 and em.output[em.output.len-1] in {'\n', ' ', '(', ')'}:
+    discard "nothing to do"
+  elif em.lineLen > 90 and false:
     em.output.add "\n"
     for i in 0..<em.nesting*2: em.output.add ' '
     em.lineLen = em.nesting*2
@@ -115,6 +122,11 @@ proc patch*(em: var Emitter; n: var NodeEmitter) =
   em.output.add ')'
   inc em.lineLen, em.output.len - oldLen
   dec em.nesting
+
+proc patchDir*(em: var Emitter; n: var NodeEmitter) =
+  patch em, n
+  em.output.add '\n'
+  em.lineLen = 0
 
 proc addEmpty*(em: var Emitter; count = 1) =
   for i in 1..count:

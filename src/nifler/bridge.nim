@@ -109,7 +109,8 @@ proc absLineInfo(i: TLineInfo; em: var Emitter; c: var TranslationContext) =
   em.addRaw ","
   em.addIdent toFullPath(c.conf, i.fileIndex)
 
-proc relLineInfo(n, parent: PNode; em: var Emitter; c: var TranslationContext) =
+proc relLineInfo(n, parent: PNode; em: var Emitter; c: var TranslationContext;
+                 emitSpace = false) =
   let i = n.info
   if parent == nil:
     absLineInfo i, em, c
@@ -127,7 +128,7 @@ proc relLineInfo(n, parent: PNode; em: var Emitter; c: var TranslationContext) =
       em.addRaw "@"
     seps = 2
     em.addRaw ","
-    em.addLine int32 i.col
+    em.addLine lineDiff
   if i.fileIndex != p.fileIndex:
     case seps
     of 0:
@@ -137,7 +138,10 @@ proc relLineInfo(n, parent: PNode; em: var Emitter; c: var TranslationContext) =
     of 2:
       em.addRaw ","
     else: discard
+    inc seps
     em.addIdent toFullPath(c.conf, i.fileIndex)
+  if seps > 0 and emitSpace:
+    em.addRaw " "
 
 proc toNif*(n, parent: PNode; em: var Emitter; c: var TranslationContext) =
   case n.kind
@@ -159,49 +163,49 @@ proc toNif*(n, parent: PNode; em: var Emitter; c: var TranslationContext) =
     relLineInfo(n, parent, em, c)
     em.addCharLit char(n.intVal)
   of nkIntLit:
-    relLineInfo(n, parent, em, c)
+    relLineInfo(n, parent, em, c, true)
     em.addIntLit n.intVal
   of nkInt8Lit:
-    relLineInfo(n, parent, em, c)
+    relLineInfo(n, parent, em, c, true)
     em.addIntLit n.intVal, "i8"
   of nkInt16Lit:
-    relLineInfo(n, parent, em, c)
+    relLineInfo(n, parent, em, c, true)
     em.addIntLit n.intVal, "i16"
   of nkInt32Lit:
-    relLineInfo(n, parent, em, c)
+    relLineInfo(n, parent, em, c, true)
     em.addIntLit n.intVal, "i32"
   of nkInt64Lit:
-    relLineInfo(n, parent, em, c)
+    relLineInfo(n, parent, em, c, true)
     em.addIntLit n.intVal, "i64"
   of nkUIntLit:
-    relLineInfo(n, parent, em, c)
+    relLineInfo(n, parent, em, c, true)
     em.addUIntLit cast[BiggestUInt](n.intVal), "u"
   of nkUInt8Lit:
-    relLineInfo(n, parent, em, c)
+    relLineInfo(n, parent, em, c, true)
     em.addUIntLit cast[BiggestUInt](n.intVal), "u8"
   of nkUInt16Lit:
-    relLineInfo(n, parent, em, c)
+    relLineInfo(n, parent, em, c, true)
     em.addUIntLit cast[BiggestUInt](n.intVal), "u16"
   of nkUInt32Lit:
-    relLineInfo(n, parent, em, c)
+    relLineInfo(n, parent, em, c, true)
     em.addUIntLit cast[BiggestUInt](n.intVal), "u32"
   of nkUInt64Lit:
-    relLineInfo(n, parent, em, c)
+    relLineInfo(n, parent, em, c, true)
     em.addUIntLit cast[BiggestUInt](n.intVal), "u64"
   of nkFloatLit:
-    relLineInfo(n, parent, em, c)
+    relLineInfo(n, parent, em, c, true)
     em.addFloatLit n.floatVal
   of nkFloat32Lit:
-    relLineInfo(n, parent, em, c)
+    relLineInfo(n, parent, em, c, true)
     em.addFloatLit n.floatVal, "f32"
   of nkFloat64Lit:
-    relLineInfo(n, parent, em, c)
+    relLineInfo(n, parent, em, c, true)
     em.addFloatLit n.floatVal, "f64"
   of nkFloat128Lit:
-    relLineInfo(n, parent, em, c)
+    relLineInfo(n, parent, em, c, true)
     em.addFloatLit n.floatVal, "f128"
   of nkIdent:
-    relLineInfo(n, parent, em, c)
+    relLineInfo(n, parent, em, c, true)
     em.addIdent n.ident.s
   of nkTypeDef:
     relLineInfo(n, parent, em, c)
@@ -379,10 +383,16 @@ proc toNif*(n, parent: PNode; em: var Emitter; c: var TranslationContext) =
     # 3: generics
 
     em.addSep patchPos
-    toNif n[0], n, em, c  # 4: params
+    if n.len > 0:
+      toNif n[0], n, em, c  # 4: params
+    else:
+      em.addEmpty
 
     em.addSep patchPos
-    toNif n[1], n, em, c  # 5: pragmas
+    if n.len > 1:
+      toNif n[1], n, em, c  # 5: pragmas
+    else:
+      em.addEmpty
 
     em.addSep patchPos
     em.addEmpty 2 # 6: exceptions
@@ -564,11 +574,11 @@ proc initTranslationContext*(conf: ConfigRef): TranslationContext =
 
 proc moduleToIr*(n: PNode; em: var Emitter; c: var TranslationContext) =
   var ver = em.prepare ".nif34"
-  em.patch ver
+  em.patchDir ver
   var vendor = em.prepare ".vendor"
   em.addSep vendor
   em.addStrLit "Nifler", ""
-  em.patch vendor
+  em.patchDir vendor
   toNif(n, nil, em, c)
 
 proc createConf(): ConfigRef =

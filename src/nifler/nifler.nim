@@ -29,7 +29,7 @@ proc writeHelp() = quit(Usage)
 proc writeVersion() = quit(Version & "\n")
 
 proc main(infile, outfile: string) =
-  var em = Emitter()
+  var em = Emitter(minified: true)
   parseFile em, infile
   if em.output.len > 0:
     writeFile outfile, em.output
