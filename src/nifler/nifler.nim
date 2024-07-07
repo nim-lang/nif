@@ -25,8 +25,8 @@ Options:
   --help                show this help
 """
 
-proc writeHelp() = quit(Usage)
-proc writeVersion() = quit(Version & "\n")
+proc writeHelp() = quit(Usage, QuitSuccess)
+proc writeVersion() = quit(Version & "\n", QuitSuccess)
 
 proc main(infile, outfile: string) =
   var em = Emitter(minified: true)
