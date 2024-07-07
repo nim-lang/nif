@@ -1,3 +1,4 @@
 nimcache/
 nimblecache/
 htmldocs/
+*.exe
