@@ -579,6 +579,10 @@ proc moduleToIr*(n: PNode; em: var Emitter; c: var TranslationContext) =
   em.addSep vendor
   em.addStrLit "Nifler", ""
   em.patchDir vendor
+  var dialect = em.prepare ".dialect"
+  em.addSep dialect
+  em.addStrLit "nim-parsed", ""
+  em.patchDir dialect
   toNif(n, nil, em, c)
 
 proc createConf(): ConfigRef =
