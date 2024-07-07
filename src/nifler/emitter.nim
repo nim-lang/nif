@@ -51,20 +51,7 @@ proc addStrLit*(em: var Emitter; s, suffix: string) =
   var lastPart = 1
   var afterNewline = false
   for c in s:
-    if l > 80:
-      var endedInSpace = false
-      if r.len > 0 and r[r.len-1] == ' ':
-        endedInSpace = true
-        setLen r, r.len - 1
-      lineBreak(r, l, em.nesting)
-      lastPart = em.nesting * 2
-      if endedInSpace:
-        r.add "\\20"
-        inc l, 3
-        inc lastPart, 3
-      else:
-        afterNewline = true
-    if (c == ' ' and afterNewline) or c.needsEscape:
+    if c in ControlChars:
       r.escape c
       inc l, 3
       inc lastPart, 3

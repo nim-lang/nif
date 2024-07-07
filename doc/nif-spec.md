@@ -57,7 +57,7 @@ In order to get a feeling for how a NIF file can look, here is a complete exampl
 (.nif24)
 (stmts
 (imp @2,5,sysio.nim(type :File (object ..)))
-(imp (proc :write.1.sys . (pragmas (pragma varargs)) (params (param f File)).))
+(imp (proc :write.1.sys . (pragmas varargs) (params (param f File)).))
 (call write.1.sys "Hello World!\0A")
 )
 ```
@@ -68,11 +68,10 @@ A generator can produce shorter code by making use of `.k` and `.i` (substitutio
 (.nif24)
 (.k I imp)
 (.k P pragmas)
-(.k p pragmas)
 (.i write write.1.sys)
 (stmts
 (I @2,5,sysio.nim(type :File (object ..)))
-(I (proc :write . (P(p varargs)) (params (param f File)).))
+(I (proc :write . (P varargs) (params (param f File)).))
 (call write "Hello World!\0A")
 )
 ```
@@ -175,9 +174,9 @@ For example the 2nd proc named `foo` in a Nim module `m` would typically become 
 Symbols that contain characters that are neither letters nor digits must be escaped via
 backslashes, `\xx` much like it is used in string and character literals.
 
-A `SymbolDef` is a symbol annotated with a leading ':' that indicates this the parent node is
+A `SymbolDef` is a symbol annotated with a leading ':'. It indicates that the parent node is
 the node introducing this symbol. Thus a tool can implement a feature like "goto definition"
-in a language agnostic way without having to model the AST precisely.
+in a language agnostic way without having to know which node kinds introduce new symbols.
 
 
 ### Numbers
@@ -214,16 +213,14 @@ Char literals are enclosed in single quotes. The only supported escape sequence 
 Grammar:
 
 ```
-Newline ::= Whitespace* '\n' Whitespace*
 StringSuffix ::= Identifier
-EscapedData ::= (VisibleChar | Escape | Newline)+
+EscapedData ::= (VisibleChar | Escape | Whitespace)*
 StringLiteral ::= '"' EscapedData '"' StringSuffix?
 ```
 
 String literals are enclosed in double quotes. The only supported escape sequence is `\xx`.
-A string literal can contain newlines for better readability. Such newlines including any
-preceeding and succeeding whitespace is ignored. Note that a literal newline character would
-be written as `\0A` so that this is not ambiguous.
+Whitespace, even including newlines, can be part of the string literal without having to
+escape it.
 
 For example:
 
@@ -232,7 +229,7 @@ For example:
   literal string"
 ```
 
-Produces: `"This is a single literal string"`.
+Produces: `"This is a single \n  literal string"`.
 
 A string literal can have a suffix that is usually ignored but can be used to store the
 original format of the string. For example, Nim supports "raw string literals" and "triple
@@ -319,8 +316,6 @@ programming languages.
 | `neq`   | Testing for "not equals" ("!="). Takes a type like `add`. |
 | `le`    | Less than or equals ("<="). Takes a type like `add`. |
 | `lt`    | Strictly less than ("<"). Takes a type like `add`. |
-| `ge`    | Greater than or equals (">="). Takes a type like `add`. |
-| `gt`    | Strictly greater than (">"). Takes a type like `add`. |
 | `i` N | Where N can be 8, 16, ... The signed integer type that uses N bits. |
 | `u` N | Where N can be 8, 16, ... The unsigned integer type that uses N bits. |
 | `f` N | Where N can be 8, 16, ... The floating point type that uses N bits. |
@@ -329,7 +324,8 @@ programming languages.
 | `ptr`    | Type constructor that produces a pointer type. |
 | `proctype`    | Type constructor that produces a proc type. |
 | `pragmas`    | List of pragmas. |
-| `pragma`    | A single (key, value) pragma pair. |
+| `kv`    | A single (key, value) pair. The `ExprColonExpr` node kind in Nim. |
+| `vv`    | A (value, value) pair. The `ExprEqExpr` node kind in Nim. |
 | `par`    | Wraps an expression inside parentheses. |
 | `cons`    | An object/array/etc. constructor. First child is a type. |
 | `lab`    | A label declaration (target of a `jmp`). |
@@ -397,6 +393,7 @@ start with a dot. The existing directives are:
 - `.vendor`
 - `.platform`
 - `.config`
+- `.dialect`
 - `.i` and `.k` substitutions.
 
 Directives must be at the start of the file, before the module's AST. Directives that unknown
@@ -416,6 +413,19 @@ For example:
 ```nif
 (.nif24)
 ```
+
+### Dialect directive
+
+The `.dialect` directive takes a single string literal describing what exactly the NIF
+code describes. The values are vendor specific. For Nim the possible values are:
+
+| Value      | Description                                                                 |
+| --------------- | --------------------------------------------------------------------------- |
+| `"nim-parsed"`  | Parsed Nim code without semantic checking. |
+| `"nim-sem"`     | Parsed Nim code after semantic checking. |
+| `"nim-inlined"` | Nim code after inlining. |
+| `"nim-arc"` | Nim code after destructor injections (final step before code generation). |
+| `"nif-c"` | NIF code that is very close to C code. |
 
 
 ### Substitutions
