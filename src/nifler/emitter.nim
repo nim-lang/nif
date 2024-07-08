@@ -90,6 +90,13 @@ proc addSep*(em: var Emitter; n: var NodeEmitter) =
     em.output.add ' '
     inc em.lineLen
 
+proc addSep*(em: var Emitter) =
+  if em.output.len > 0 and em.output[em.output.len-1] in {'\n', ' ', '(', ')'}:
+    discard "nothing to do"
+  else:
+    em.output.add ' '
+    inc em.lineLen
+
 proc patch*(em: var Emitter; n: var NodeEmitter) =
   swap em.output, n.inner
 
