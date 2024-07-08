@@ -21,8 +21,8 @@ proc nodeKindTranslation(k: TNodeKind): string =
   of nkInfix: "infix"
   of nkPrefix: "prefix"
   of nkHiddenCallConv: "<error>"
-  of nkExprEqExpr: "exprEqExpr"
-  of nkExprColonExpr: "exprColonExpr"
+  of nkExprEqExpr: "vv"
+  of nkExprColonExpr: "kv"
   of nkPar: "par"
   of nkObjConstr: "objConstr"
   of nkCurly: "curlyConstr"
@@ -87,7 +87,7 @@ proc nodeKindTranslation(k: TNodeKind): string =
   of nkStaticTy: "staticTy"
   of nkRefTy: "ref"
   of nkPtrTy: "ptr"
-  of nkVarTy: "varTy"
+  of nkVarTy: "mut"
   of nkDistinctTy: "distinct"
   of nkIteratorTy: "iterTy"
   of nkEnumTy: "enum"
@@ -573,7 +573,7 @@ proc initTranslationContext*(conf: ConfigRef): TranslationContext =
   result = TranslationContext(conf: conf)
 
 proc moduleToIr*(n: PNode; em: var Emitter; c: var TranslationContext) =
-  var ver = em.prepare ".nif34"
+  var ver = em.prepare ".nif24"
   em.patchDir ver
   var vendor = em.prepare ".vendor"
   em.addSep vendor
