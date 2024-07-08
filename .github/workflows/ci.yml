@@ -2,7 +2,7 @@ name: nif ci
 on:
   push:
     branches:
-    - '**'
+    - 'master'
   pull_request:
 
 jobs:
@@ -28,7 +28,7 @@ jobs:
             builder: ubuntu-latest
           - target:
               os: macos
-            builder: macos-latest
+            builder: macos-13
           - target:
               os: windows
             builder: windows-latest
