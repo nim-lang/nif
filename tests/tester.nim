@@ -95,9 +95,26 @@ proc test*(filename: string) =
   var r = nifreader.open(filename)
   let res = processDirectives(r)
   assert res == Success
-  let firstTok = next(r)
-  let t = parse(r, firstTok)
+  let t = parse(r)
   assert outline(t) == ExpectedOutput
   r.close()
 
+const
+  SubsResult = """
+(stmts
+ (call
+  Symbol:echo.1.sys StringLit:Hello World!\0A) (call
+  Symbol:echo.1.sys StringLit:different string))"""
+
+proc subsTest(filename: string): string =
+  var r = nifreader.open(filename)
+  let res = processDirectives(r)
+  assert res == Success
+  let t = parse(r)
+  result = $t
+  r.close()
+
 test "tests/data/vm.nif"
+
+let st = subsTest("tests/data/tsubs.nif")
+assert st == SubsResult

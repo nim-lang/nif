@@ -13,7 +13,8 @@ type
     tok*: Token
     down*, next*: NifTree
 
-proc parse*(r: var Reader; t: sink Token): NifTree =
+proc parse*(r: var Reader): NifTree =
+  let t = next(r)
   case t.tk
   of EofToken, ParRi:
     result = nil
@@ -21,10 +22,8 @@ proc parse*(r: var Reader; t: sink Token): NifTree =
     result = NifTree(tok: ensureMove t)
     var append {.cursor.} = result
     while true:
-      let x = next(r)
-      if x.tk in {EofToken, ParRi}: break
-      let child = parse(r, x)
-      assert child != nil
+      let child = parse(r)
+      if child == nil: break
       if append == result:
         append.down = child
       else:
@@ -33,3 +32,21 @@ proc parse*(r: var Reader; t: sink Token): NifTree =
   of UnknownToken, DotToken, Ident, Symbol, SymbolDef,
       StringLit, CharLit, IntLit, UIntLit, FloatLit:
     result = NifTree(tok: ensureMove t)
+
+proc toString(n: NifTree; result: var string; nesting: int) =
+  if n != nil:
+    result.add $n.tok
+    var it {.cursor.} = n.down
+    if it != nil:
+      result.add "\n"
+      for i in 0..<nesting-1: result.add ' '
+    while it != nil:
+      result.add ' '
+      toString it, result, nesting+1
+      it = it.next
+    if n.tok.tk == ParLe:
+      result.add ')'
+
+proc `$`*(n: NifTree): string =
+  result = ""
+  toString(n, result, 1)
