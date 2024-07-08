@@ -414,6 +414,10 @@ For example:
 (.nif24)
 ```
 
+There must be no whitespace before the version directive so that it also functions as a
+"magic cookie" for tools that use these to determine file types.
+
+
 ### Dialect directive
 
 The `.dialect` directive takes a single string literal describing what exactly the NIF

@@ -1,0 +1,7 @@
+(.nif24)
+(.k C call)
+(.i ECHO echo.1.sys)
+(stmts
+  (C ECHO "Hello World!\0A")
+  (call echo.1.sys "different string")
+)
