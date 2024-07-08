@@ -47,5 +47,12 @@ proc `$`*(s: StringView): string =
   if s.len > 0:
     copyMem addr(result[0]), s.p, s.len
 
+proc toStringViewUnsafe*(s: string): StringView =
+  ## Watch out that the string lives longer than the string view!
+  if s.len != 0:
+    result = StringView(p: cast[pchar](addr(s[0])), len: s.len)
+  else:
+    result = StringView(p: nil, len: 0)
+
 proc hash*(a: StringView): Hash {.inline.} =
   hash toOpenArray(a.p, 0, a.len-1)
