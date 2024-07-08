@@ -128,4 +128,4 @@ jobs:
       - name: Run tester
         run: |
           cd nif
-          testament all
+          nim c -r tests/tester.nim

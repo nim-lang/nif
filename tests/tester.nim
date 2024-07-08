@@ -1,5 +1,5 @@
 
-import "../../src/lib" / [nifreader, niftree]
+import "../src/lib" / [nifreader, niftree]
 
 const
   ExpectedOutput = """
@@ -100,4 +100,4 @@ proc test*(filename: string) =
   assert outline(t) == ExpectedOutput
   r.close()
 
-test "tests/spec/data/vm.nif"
+test "tests/data/vm.nif"
