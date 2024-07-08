@@ -127,4 +127,5 @@ jobs:
 
       - name: Run tester
         run: |
-          testament cat spec
+          cd nif
+          testament all
