@@ -120,7 +120,11 @@ jobs:
           version: ${{ matrix.target.nim_branch }}
           architecture: ${{ matrix.target.cpu }}
 
-      - name: Run tests
+      - name: Test Building nifler
         run: |
           cd nif
           nim c src/nifler/nifler.nim
+
+      - name: Run tester
+        run: |
+          testament all
