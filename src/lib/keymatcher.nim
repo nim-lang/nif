@@ -132,7 +132,7 @@ proc genMatcher(body, selector: NimNode; a: openArray[Key]) =
   split a, solution
   decodeSolution body, solution, 0, selector
 
-macro declareMatcher*(name: untyped; e: typedesc): untyped =
+macro declareMatcher*(name: untyped; e: typedesc; start: static[int]): untyped =
   let typ = e.getTypeInst[1]
   let typSym = typ.getTypeImpl.getTypeInst # skip aliases etc to get type sym
   let impl = typSym.getImpl[2]
@@ -144,7 +144,7 @@ macro declareMatcher*(name: untyped; e: typedesc): untyped =
   var i = 0
   for f in impl:
     inc i
-    if i <= 2: continue # skip `low(e)`
+    if i <= start+1: continue # skip `low(e)`
     case f.kind
     of nnkEmpty: continue # skip first node of `enumTy`
     of nnkSym, nnkIdent:
@@ -176,11 +176,11 @@ macro declareMatcher*(name: untyped; e: typedesc): untyped =
   var body = newStmtList()
   genMatcher body, ident"sel", a
 
-  echo repr body
+  #echo repr body
   template t(name, body, e: untyped): untyped {.dirty.} =
-    proc `name`(sel: StringView): e =
+    proc `name`(sel: StringView; onError = low(e)): e =
       body
-      return low(e)
+      return onError
   result = getAst t(name, body, e)
 
 when isMainModule:
@@ -188,7 +188,7 @@ when isMainModule:
     MyEnum = enum
       UnknownValue, ValueA, ValueB = "value B", ValueC
 
-  declareMatcher whichKeyword, MyEnum
+  declareMatcher whichKeyword, MyEnum, ord(ValueA)
 
   assert whichKeyword(toStringViewUnsafe"ValueC") == ValueC
 
@@ -247,7 +247,7 @@ when isMainModule:
       wchar_t, whileQ = "while",
       xorQ = "xor", xor_eq
 
-  declareMatcher whichCppKeyword, CppKeyword
+  declareMatcher whichCppKeyword, CppKeyword, ord(alignas)
 
   var i = 1
   for k in AllKeys:

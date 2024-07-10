@@ -24,7 +24,7 @@ type
     StringLit, CharLit, IntLit, UIntLit, FloatLit
 
   FilePos* = object
-    col*, line*: int
+    col*, line*: int32
 
   TokenFlag = enum
     TokenHasEscapes, FilenameHasEscapes
@@ -140,7 +140,6 @@ proc decodeChar*(t: Token): char =
     result = handleHex(p)
 
 proc decodeStr*(t: Token): string =
-  assert t.tk == StringLit
   if TokenHasEscapes in t.flags:
     result = ""
     var p = t.s.p
@@ -155,6 +154,22 @@ proc decodeStr*(t: Token): string =
   else:
     result = newString(t.s.len)
     copyMem(addr result[0], t.s.p, t.s.len)
+
+proc decodeFilename*(t: Token): string =
+  if FilenameHasEscapes in t.flags:
+    result = ""
+    var p = t.filename.p
+    let sentinel = p +! t.filename.len
+    while p < sentinel:
+      if ^p == '\\':
+        result.add handleHex(p)
+        inc p, 2
+      else:
+        result.add ^p
+      inc p
+  else:
+    result = newString(t.filename.len)
+    copyMem(addr result[0], t.filename.p, t.filename.len)
 
 proc decodeFloat*(t: Token): BiggestFloat =
   assert t.tk == FloatLit
@@ -221,7 +236,7 @@ proc handleLineInfo(r: var Reader; result: var Token) =
         line = line * 10 + c
       inc r.p
 
-  result.pos = FilePos(col: col, line: line)
+  result.pos = FilePos(col: col.int32, line: line.int32)
 
   if r.p < r.eof and ^r.p == ',':
     inc r.p
@@ -359,7 +374,7 @@ proc next*(r: var Reader): Token =
           result.tk = repl[0]
           result.s = repl[1]
 
-    r.nifPos.col = r.p -! r.lineStart
+    r.nifPos.col = int32(r.p -! r.lineStart)
 
 const
   Cookie = "(.nif24)"
