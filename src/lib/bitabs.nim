@@ -60,7 +60,7 @@ proc getKeyId*[Id, T](t: BiTable[Id, T]; v: T): Id =
     while true:
       let litId = t.keys[h]
       if not isFilled(litId): break
-      if t.vals[idToIdx t.keys[h]] == v: return litId
+      if v == t.vals[idToIdx t.keys[h]]: return litId
       h = nextTry(h, maxHash(t))
   return Id(0)
 
@@ -71,7 +71,7 @@ template getOrInclImpl() {.dirty.} =
     while true:
       let litId = t.keys[h]
       if not isFilled(litId): break
-      if t.vals[idToIdx t.keys[h]] == v: return litId
+      if v == t.vals[idToIdx t.keys[h]]: return litId
       h = nextTry(h, maxHash(t))
     # not found, we need to insert it:
     if mustRehash(t.keys.len, t.vals.len):
@@ -116,6 +116,18 @@ proc hash*[Id, T](t: BiTable[Id, T]): Hash =
   for i, n in pairs t.keys:
     h = h !& hash((i, n))
   result = !$h
+
+proc memSize*[Id, T](t: BiTable[Id, T]): int =
+  when T is string:
+    var shorts = 0
+    result = 0
+    for x in items(t.vals):
+      if x.len <= 3: shorts += 1
+      result += x.len
+    inc result, t.vals.len * sizeof(T) + t.keys.len * sizeof(Id)
+    echo "SHORT STRINGS ", shorts
+  else:
+    t.vals.len * sizeof(T) + t.keys.len * sizeof(Id)
 
 when isMainModule:
 

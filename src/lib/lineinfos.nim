@@ -69,6 +69,8 @@ proc unpack*(m: LineInfoManager; i: PackedLineInfo): (FileId, int32, int32) =
 proc getFileId*(m: LineInfoManager; i: PackedLineInfo): FileId =
   result = unpack(m, i)[0]
 
+proc memSize*(m: LineInfoManager): int = m.aside.len
+
 when isMainModule:
   var m = LineInfoManager(aside: @[])
   for i in 0'i32..<16388'i32:

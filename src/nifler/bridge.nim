@@ -6,6 +6,9 @@
 
 ## Implements the mapping from Nim AST -> NIF.
 
+when defined(nifBench):
+  import std / monotimes
+
 import "$nim" / compiler / [
   ast, options, pathutils, renderer, lineinfos,
   parser, llstream, idents, msgs]
@@ -590,6 +593,14 @@ proc createConf(): ConfigRef =
   #result.notes.excl hintLineTooLong
   result.errorMax = 1000
 
+template bench(task, body) =
+  when defined(nifBench):
+    let t0 = getMonoTime()
+    body
+    echo task, " TOOK ", getMonoTime() - t0
+  else:
+    body
+
 proc parseFile*(em: var Emitter; thisfile: string) =
   let stream = llStreamOpen(AbsoluteFile thisfile, fmRead)
   if stream == nil:
@@ -599,5 +610,10 @@ proc parseFile*(em: var Emitter; thisfile: string) =
     var parser: Parser
     openParser(parser, AbsoluteFile(thisfile), stream, newIdentCache(), conf)
     var tc = initTranslationContext(conf)
-    moduleToIr(parseAll(parser), em, tc)
+
+    bench "parseAll":
+      let fullTree = parseAll(parser)
+
+    bench "moduleToIr":
+      moduleToIr(fullTree, em, tc)
     closeParser(parser)

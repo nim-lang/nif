@@ -31,16 +31,16 @@ proc isTree[E: enum](e: E): bool {.inline.} =
   mixin Err
   e >= Err
 
-proc createPackedTree*[E: enum](): PackedTree[E] =
+proc createPackedTree*[E: enum](sizeHint: int): PackedTree[E] =
   static:
     assert ord(high(E)) <= 255, "enum must fit a single byte"
-  PackedTree(nodes: @[])
+  PackedTree[E](nodes: newSeqOfCap[PackedNode[E]](sizeHint))
 
 const
   NodeKindBits = 8'u32
   NodeKindMask = (1'u32 shl NodeKindBits) - 1'u32
 
-template kind*[E](n: PackedNode[E]): E = E(n.x and NodeKindMask)
+template kind*[E](n: PackedNode[E]): E = cast[E](n.x and NodeKindMask)
 template uoperand*[E](n: PackedNode[E]): uint32 = (n.x shr NodeKindBits)
 template soperand*[E](n: PackedNode[E]): int32 = cast[int32](uoperand(n))
 
