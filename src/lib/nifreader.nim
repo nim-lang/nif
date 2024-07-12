@@ -108,7 +108,7 @@ proc skipWhitespace(r: var Reader) =
   useCpuRegisters:
     while p < eof:
       case ^p
-      of ' ', '\t':
+      of ' ', '\t', '\r':
         inc p
       of '\n':
         inc p

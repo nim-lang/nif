@@ -78,12 +78,21 @@ A generator can produce shorter code by making use of `.k` and `.i` (substitutio
 
 <div style="page-break-after: always;"></div>
 
+Encoding
+--------
+
+A NIF file is stored as a mere sequence of bytes ("octets"). No Unicode validation
+steps are performed and no BOM-prefix can be used.
+
+
 Whitespace
 ----------
 
 Whitespace is used to separate tokens from each other but apart from that carries no
 meaning and a NIF parser is supposed to ignore whitespace. Editors and other tools
 can format and layout NIF code to be pleasing to look at.
+
+Whitespace is the set `{' ', '\t', '\n', '\r'}`.
 
 
 Control characters
@@ -249,7 +258,8 @@ Compound nodes
 Grammar:
 
 ```
-Atom ::= Empty | Identifier | Symbol | SymbolDef | Number | CharLiteral | StringLiteral
+Atom ::= Empty | Identifier | Symbol | SymbolDef | Number | CharLiteral |
+         StringLiteral
 
 NodeKind ::= Identifier
 
