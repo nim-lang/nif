@@ -1,5 +1,5 @@
 
-import "../src/lib" / [nifreader, niftree]
+import "../src/lib" / [nifreader, nif_linkedtree]
 
 const
   ExpectedOutput = """
