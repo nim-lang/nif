@@ -1,5 +1,5 @@
 
-import "../src/lib" / [nifreader, nif_linkedtree]
+import "../src/lib" / [nifreader, nifbuilder, nif_linkedtree]
 
 const
   ExpectedOutput = """
@@ -118,3 +118,30 @@ test "tests/data/vm.nif"
 
 let st = subsTest("tests/data/tsubs.nif")
 assert st == SubsResult
+
+const
+  ExpectedNifBuilderResult = """(.nif24)
+(.vendor "tester")
+(.dialect "niftest")
+
+(stmts @4,5,mymodb.nim
+ (call @1,3,mymod.nim foo.3.mymod 3423 50.4))"""
+
+proc buildSomething(b: sink Builder): string =
+  b.addHeader "tester", "niftest"
+  b.withTree "stmts":
+    b.addLineInfo 4, 5, "mymodb.nim"
+    b.withTree "call":
+      b.addLineInfo 1, 3, "mymod.nim"
+      b.addSymbol "foo.3.mymod"
+      b.addIntLit 3423
+      b.addFloatLit 50.4
+
+  assert(not b.attachedToFile)
+  result = b.extract()
+
+proc testNifBuilder() =
+  var b = open(10)
+  assert buildSomething(b) == ExpectedNifBuilderResult
+
+testNifBuilder()
