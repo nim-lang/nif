@@ -92,16 +92,17 @@ proc close*(r: var Reader) =
   if not r.err: close r.f
 
 proc skipWhitespace(r: var Reader) =
-  while r.p < r.eof:
-    case ^r.p
-    of ' ', '\t':
-      inc r.p
-    of '\n':
-      inc r.p
-      r.lineStart = r.p
-      inc r.nifPos.line
-    else:
-      break
+  useCpuRegisters:
+    while p < eof:
+      case ^p
+      of ' ', '\t', '\r':
+        inc p
+      of '\n':
+        inc p
+        r.lineStart = p
+        inc r.nifPos.line
+      else:
+        break
 
 proc skipComment(r: var Reader) {.inline.} =
   while r.p < r.eof:
