@@ -24,7 +24,7 @@ type
     StringLit, CharLit, IntLit, UIntLit, FloatLit
 
   FilePos* = object
-    col*, line*: int
+    col*, line*: int32
 
   TokenFlag = enum
     TokenHasEscapes, FilenameHasEscapes
@@ -49,6 +49,7 @@ type
     eof: pchar
     lineStart: pchar
     f: MemFile
+    buf: string
     err: bool
     isubs, ksubs: Table[StringView, (TokenKind, StringView)]
     nifPos: FilePos # file position within the NIF file, not affected by '@' annotations
@@ -85,11 +86,23 @@ proc open*(filename: string): Reader =
   result = Reader(f: f, err: err, p: nil)
   if not err:
     result.p = cast[pchar](result.f.mem)
-    result.eof = result.p
-    inc result.eof, result.f.size
+    result.eof = result.p +! result.f.size
+
+proc openFromBuffer*(buf: sink string): Reader =
+  result = Reader(f: default(MemFile), err: true, buf: ensureMove buf)
+  result.p = cast[pchar](addr result.buf[0])
+  result.eof = result.p +! result.buf.len
+  result.f.mem = result.p
+  result.f.size = result.buf.len
 
 proc close*(r: var Reader) =
   if not r.err: close r.f
+
+template useCpuRegisters(body) {.dirty.} =
+  var p = r.p # encourage the code generator to use a register for this.
+  let eof = r.eof
+  body
+  r.p = p # store back
 
 proc skipWhitespace(r: var Reader) =
   useCpuRegisters:
@@ -105,16 +118,17 @@ proc skipWhitespace(r: var Reader) =
         break
 
 proc skipComment(r: var Reader) {.inline.} =
-  while r.p < r.eof:
-    if ^r.p == '#':
-      inc r.p
-      break
-    elif ^r.p == '\n':
-      inc r.p
-      r.lineStart = r.p
-      inc r.nifPos.line
-    else:
-      inc r.p
+  useCpuRegisters:
+    while p < eof:
+      if ^p == '#':
+        inc p
+        break
+      elif ^p == '\n':
+        inc p
+        r.lineStart = p
+        inc r.nifPos.line
+      else:
+        inc p
 
 proc handleHex(p: pchar): char =
   var output = 0
@@ -141,7 +155,6 @@ proc decodeChar*(t: Token): char =
     result = handleHex(p)
 
 proc decodeStr*(t: Token): string =
-  assert t.tk == StringLit
   if TokenHasEscapes in t.flags:
     result = ""
     var p = t.s.p
@@ -155,7 +168,24 @@ proc decodeStr*(t: Token): string =
       inc p
   else:
     result = newString(t.s.len)
-    copyMem(addr result[0], t.s.p, t.s.len)
+    if t.s.len > 0:
+      copyMem(addr result[0], t.s.p, t.s.len)
+
+proc decodeFilename*(t: Token): string =
+  if FilenameHasEscapes in t.flags:
+    result = ""
+    var p = t.filename.p
+    let sentinel = p +! t.filename.len
+    while p < sentinel:
+      if ^p == '\\':
+        result.add handleHex(p)
+        inc p, 2
+      else:
+        result.add ^p
+      inc p
+  else:
+    result = newString(t.filename.len)
+    copyMem(addr result[0], t.filename.p, t.filename.len)
 
 proc decodeFloat*(t: Token): BiggestFloat =
   assert t.tk == FloatLit
@@ -173,71 +203,84 @@ proc decodeInt*(t: Token): BiggestInt =
   assert res == t.s.len
 
 proc handleNumber(r: var Reader; result: var Token) =
-  if r.p < r.eof and ^r.p in Digits:
-    result.tk = IntLit # overwritten if we detect a float or unsigned
-    while r.p < r.eof and ^r.p in Digits:
-      inc r.p
-      inc result.s.len
-
-    if r.p < r.eof and ^r.p == '.':
-      result.tk = FloatLit
-      inc r.p
-      inc result.s.len
-      while r.p < r.eof and ^r.p in Digits:
-        inc r.p
+  useCpuRegisters:
+    if p < eof and ^p in Digits:
+      result.tk = IntLit # overwritten if we detect a float or unsigned
+      while p < eof and ^p in Digits:
+        inc p
         inc result.s.len
 
-    if r.p < r.eof and ^r.p == 'E':
-      result.tk = FloatLit
-      inc r.p
-      inc result.s.len
-      if r.p < r.eof and ^r.p == '-':
-        inc r.p
+      if p < eof and ^p == '.':
+        result.tk = FloatLit
+        inc p
         inc result.s.len
-      while r.p < r.eof and ^r.p in Digits:
-        inc r.p
+        while p < eof and ^p in Digits:
+          inc p
+          inc result.s.len
+
+      if p < eof and ^p == 'E':
+        result.tk = FloatLit
+        inc p
         inc result.s.len
-    if r.p < r.eof and ^r.p in NumberSuffixChars:
-      result.suffix.p = r.p
-      if ^r.p == 'u': result.tk = UIntLit
-      elif ^r.p == 'f': result.tk = FloatLit
-      while r.p < r.eof and ^r.p in NumberSuffixChars:
-        inc r.p
-        inc result.suffix.len
+        if p < eof and ^p == '-':
+          inc p
+          inc result.s.len
+        while p < eof and ^p in Digits:
+          inc p
+          inc result.s.len
+      if p < eof and ^p in NumberSuffixChars:
+        result.suffix.p = p
+        if ^p == 'u': result.tk = UIntLit
+        elif ^p == 'f': result.tk = FloatLit
+        while p < eof and ^p in NumberSuffixChars:
+          inc p
+          inc result.suffix.len
 
 proc handleLineInfo(r: var Reader; result: var Token) =
-  var col = 0
-  while r.p < r.eof and ^r.p in Digits:
-    let c = ord(^r.p) - ord('0')
-    if col >= (low(int) + c) div 10:
-      col = col * 10 + c
-    inc r.p
+  useCpuRegisters:
+    var col = 0
+    var negative = false
+    if p < eof and ^p == '-':
+      inc p
+      negative = true
+    while p < eof and ^p in Digits:
+      let c = ord(^p) - ord('0')
+      if col >= (low(int) + c) div 10:
+        col = col * 10 + c
+      inc p
+    if negative: col = -col
 
-  var line = 0
-  if r.p < r.eof and ^r.p == ',':
-    inc r.p
-    while r.p < r.eof and ^r.p in Digits:
-      let c = ord(^r.p) - ord('0')
-      if line >= (low(int) + c) div 10:
-        line = line * 10 + c
-      inc r.p
+    var line = 0
+    negative = false
 
-  result.pos = FilePos(col: col, line: line)
+    if p < eof and ^p == ',':
+      inc p
+      if p < eof and ^p == '-':
+        inc p
+        negative = true
+      while p < eof and ^p in Digits:
+        let c = ord(^p) - ord('0')
+        if line >= (low(int) + c) div 10:
+          line = line * 10 + c
+        inc p
+      if negative: line = -line
 
-  if r.p < r.eof and ^r.p == ',':
-    inc r.p
-    result.filename.p = r.p
-    while r.p < r.eof:
-      let ch = ^r.p
-      if ch in ControlCharsOrWhite:
-        break
-      elif ch == '\\':
-        result.flags.incl FilenameHasEscapes
-      elif ch == '\n':
-        r.lineStart = r.p
-        inc r.nifPos.line
-      inc result.filename.len
-      inc r.p
+    result.pos = FilePos(col: col.int32, line: line.int32)
+
+    if p < eof and ^p == ',':
+      inc p
+      result.filename.p = p
+      while p < eof:
+        let ch = ^p
+        if ch in ControlCharsOrWhite:
+          break
+        elif ch == '\\':
+          result.flags.incl FilenameHasEscapes
+        elif ch == '\n':
+          r.lineStart = p
+          inc r.nifPos.line
+        inc result.filename.len
+        inc p
 
 proc next*(r: var Reader): Token =
   # Returning a new Token is somewhat unusual but lets clients
@@ -261,45 +304,52 @@ proc next*(r: var Reader): Token =
     case ^r.p
     of '(':
       result.tk = ParLe
-      inc r.p
-      result.s.p = r.p
-      result.s.len = 0
-      while r.p < r.eof and ^r.p notin ControlCharsOrWhite:
-        inc result.s.len
-        inc r.p
-      let repl = r.ksubs.getOrDefault(result.s)
-      if repl[0] != UnknownToken:
-        result.s = repl[1]
+      useCpuRegisters:
+        inc p
+        result.s.p = p
+        result.s.len = 0
+        while p < eof and ^p notin ControlCharsOrWhite:
+          inc result.s.len
+          inc p
+      if r.ksubs.len > 0:
+        let repl = r.ksubs.getOrDefault(result.s)
+        if repl[0] != UnknownToken:
+          result.s = repl[1]
     of ')':
       result.tk = ParRi
+      result.s.p = r.p
+      inc result.s.len
       inc r.p
     of '.':
       result.tk = DotToken
+      result.s.p = r.p
+      inc result.s.len
       inc r.p
     of '"':
-      inc r.p
-      result.tk = StringLit
-      result.s.p = r.p
-      result.s.len = 0
-      while r.p < r.eof:
-        let ch = ^r.p
-        if ch == '"':
-          inc r.p
-          break
-        elif ch == '\\':
-          result.flags.incl TokenHasEscapes
-        elif ch == '\n':
-          r.lineStart = r.p
-          inc r.nifPos.line
-        inc result.s.len
-        inc r.p
+      useCpuRegisters:
+        inc p
+        result.tk = StringLit
+        result.s.p = p
+        result.s.len = 0
+        while p < eof:
+          let ch = ^p
+          if ch == '"':
+            inc p
+            break
+          elif ch == '\\':
+            result.flags.incl TokenHasEscapes
+          elif ch == '\n':
+            r.lineStart = r.p
+            inc r.nifPos.line
+          inc result.s.len
+          inc p
 
-      if r.p < r.eof and ^r.p in StringSuffixChars:
-        result.suffix.p = r.p
-        while true:
-          inc r.p
-          inc result.suffix.len
-          if r.p == r.eof or ^r.p notin StringSuffixChars: break
+        if p < eof and ^p in StringSuffixChars:
+          result.suffix.p = p
+          while true:
+            inc p
+            inc result.suffix.len
+            if p == eof or ^p notin StringSuffixChars: break
     of '\'':
       inc r.p
       result.s.p = r.p
@@ -320,19 +370,21 @@ proc next*(r: var Reader): Token =
           result.tk = CharLit # only now valid
 
     of ':':
-      inc r.p
-      result.s.p = r.p
-      while r.p < r.eof and ^r.p notin ControlCharsOrWhite:
-        if ^r.p == '\\': result.flags.incl TokenHasEscapes
-        inc result.s.len
-        inc r.p
+      useCpuRegisters:
+        inc p
+        result.s.p = p
+        while p < eof and ^p notin ControlCharsOrWhite:
+          if ^p == '\\': result.flags.incl TokenHasEscapes
+          inc result.s.len
+          inc p
       if result.s.len > 0:
         result.tk = SymbolDef
-        let repl = r.isubs.getOrDefault(result.s)
-        if repl[0] == Symbol:
-          result.s = repl[1]
-        else:
-          result.tk = UnknownToken # error
+        if r.isubs.len > 0:
+          let repl = r.isubs.getOrDefault(result.s)
+          if repl[0] == Symbol:
+            result.s = repl[1]
+          else:
+            result.tk = UnknownToken # error
 
     of '-':
       result.s.p = r.p
@@ -345,22 +397,34 @@ proc next*(r: var Reader): Token =
       handleNumber r, result
 
     else:
-      result.s.p = r.p
-      var hasDot = false
-      while r.p < r.eof and ^r.p notin ControlCharsOrWhite:
-        if ^r.p == '\\': result.flags.incl TokenHasEscapes
-        elif ^r.p == '.': hasDot = true
-        inc result.s.len
-        inc r.p
+      useCpuRegisters:
+        result.s.p = p
+        var hasDot = false
+        while p < eof and ^p notin ControlCharsOrWhite:
+          if ^p == '\\': result.flags.incl TokenHasEscapes
+          elif ^p == '.': hasDot = true
+          inc result.s.len
+          inc p
 
       if result.s.len > 0:
         result.tk = if hasDot: Symbol else: Ident
-        let repl = r.isubs.getOrDefault(result.s)
-        if repl[0] != UnknownToken:
-          result.tk = repl[0]
-          result.s = repl[1]
+        if r.isubs.len > 0:
+          let repl = r.isubs.getOrDefault(result.s)
+          if repl[0] != UnknownToken:
+            result.tk = repl[0]
+            result.s = repl[1]
 
-    r.nifPos.col = r.p -! r.lineStart
+    r.nifPos.col = int32(r.p -! r.lineStart)
+
+when false:
+  proc setPosition*(r: var Reader; s: StringView) {.inline.} =
+    assert r.p >= cast[pchar](r.f.mem) and r.p < r.eof
+    r.p = s.p +! s.len
+    r.lineStart = cast[pchar](r.f.mem)
+
+  proc span*(r: Reader; offset: int; s: StringView): int {.inline.} =
+    assert s.p >= cast[pchar](r.f.mem) and s.p < r.eof
+    result = (s.p -! cast[pchar](r.f.mem)) - offset
 
 const
   Cookie = "(.nif24)"
@@ -431,3 +495,9 @@ proc processDirectives*(r: var Reader): DirectivesResult =
         break
   else:
     result = WrongHeader
+
+proc fileSize*(r: var Reader): int {.inline.} =
+  r.f.size
+
+proc offset*(r: var Reader): int {.inline.} =
+  result = r.p -! cast[pchar](r.f.mem)

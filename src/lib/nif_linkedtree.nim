@@ -6,12 +6,21 @@
 
 ## Do not use. Instead use the `nifreader` directly.
 
-import nifreader
+import nifreader, arenas
 
 type
-  NifTree* = ref object
+  NifDesc* = object
     tok*: Token
-    down*, next*: NifTree
+    down*, next*: ptr NifDesc
+  NifTree* = ptr NifDesc
+
+var nodeAlloc* = createArena[NifDesc]()
+
+proc newNode*(t: sink Token): NifTree =
+  result = nodeAlloc.new[:NifDesc]()
+  result.down = nil
+  result.next = nil
+  result.tok = ensureMove t
 
 proc parse*(r: var Reader): NifTree =
   let t = next(r)
@@ -19,7 +28,7 @@ proc parse*(r: var Reader): NifTree =
   of EofToken, ParRi:
     result = nil
   of ParLe:
-    result = NifTree(tok: ensureMove t)
+    result = newNode(t)
     var append {.cursor.} = result
     while true:
       let child = parse(r)
@@ -31,7 +40,7 @@ proc parse*(r: var Reader): NifTree =
       append = child
   of UnknownToken, DotToken, Ident, Symbol, SymbolDef,
       StringLit, CharLit, IntLit, UIntLit, FloatLit:
-    result = NifTree(tok: ensureMove t)
+    result = newNode(t)
 
 proc toString(n: NifTree; result: var string; nesting: int) =
   if n != nil:
