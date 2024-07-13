@@ -26,7 +26,7 @@ Name mangling is performed by NIFC. The following assumptions are made:
   grammar for further details.
 
 Names ending in `.c` are mangled by removing the `.c` suffix. For other names the `.` is
-replaced by `_` and `_` is encoded as `_U`. The letter following the `.` is converted into
+replaced by `_` and `_` is encoded as `Q_`. The letter following the `.` is converted into
 a lowercase letter.
 
 By design names not imported from C contain a digit somewhere and thus cannot conflict with
@@ -37,33 +37,33 @@ or not!) are encoded via this table:
 
 | Character combination | Encoded as |
 | --------- | -------------- |
-| `Q`       | `_QQ` |
-| `_`       | `_Qu` |
-| `[]=`    | `_Put` |
-| `[]`     | `_Get` |
-| `$`      | `_Dollar` |
-| `%`      |  `_Percent` |
-| `&`      | `_Amp` |
-| `^` | `_Roof` |
-| `!` | `_Emark` |
-| `?` | `_Qmark` |
-| `*` | `_Star` |
-| `+` | `_Plus` |
-| `-` | `_Minus` |
-| `/` | `_Slash` |
-| `\` | `_Backslash` |
-| `=` | `_Eq` |
-| `<` | `_Lt` |
-| `>` | `_Gt` |
-| `~` | `_Tilde` |
-| `:` | `_Colon` |
-| `.` | `_Dot` |
-| `@` | `_At` |
-| `| ` | `_Bar` |
-| Other | `_Xxx` where `xx` is the hexadecimal value |
-
-The leading underscore is not produced if the character combination is at the
-very beginning of the identifier.
+| `Q`       | `QQ` (thanks to this rule `Q` is now available as an escape character) |
+| `_`       | `Q_` |
+| `[]=`    | `putQ` |
+| `[]`     | `getQ` |
+| `$`      | `dollarQ` |
+| `%`      |  `percentQ` |
+| `&`      | `ampQ` |
+| `^` | `roofQ` |
+| `!` | `emarkQ` |
+| `?` | `qmarkQ` |
+| `*` | `starQ` |
+| `+` | `plusQ` |
+| `-` | `minusQ` |
+| `/` | `slashQ` |
+| `\` | `bslashQ` |
+| `==` | `eqQ` |
+| `=` | `eQ` |
+| `<=` | `leQ` |
+| `>=` | `geQ` |
+| `<` | `ltQ` |
+| `>` | `gtQ` |
+| `~` | `tildeQ` |
+| `:` | `colonQ` |
+| `.` | `dotQ` |
+| `@` | `atQ` |
+| `| ` | `barQ` |
+| Other | `XxxQ` where `xx` is the hexadecimal value |
 
 
 Grammar
@@ -120,8 +120,8 @@ BranchValue ::= Number | CharLiteral | Symbol
 BranchRange ::= BranchValue | (range BranchValue BranchValue)
 BranchRanges ::= (ranges BranchRange+)
 
-VarDecl ::= (var SymbolDef [Empty | VarPragmas] Type [Empty | Expr])
-ConstDecl ::= (const SymbolDef [Empty | VarPragmas] Type Expr)
+VarDecl ::= (var SymbolDef VarPragmas Type [Empty | Expr])
+ConstDecl ::= (const SymbolDef VarPragmas Type Expr)
 EmitStmt ::= (emit Expr+)
 
 Stmt ::= Expr |
@@ -150,7 +150,7 @@ ObjDecl ::= (object [Empty | Type] FieldDecl*)
 EnumFieldDecl ::= (efld SymbolDef Expr)
 EnumDecl ::= (enum Type EnumFieldDecl+)
 
-ProcType ::= (proctype Empty Params Type ProcPragmas)
+ProcType ::= (proctype Empty Params Type ProcTypePragmas)
 
 IntQualifier ::= (atomic) | (ro)
 PtrQualifier ::= (atomic) | (ro) | (restrict)
@@ -170,16 +170,22 @@ Type ::= Symbol |
 TypeDecl ::= (type SymbolDef TypePragmas [Type | ObjDecl | UnionDecl | EnumDecl])
 
 CallingConvention ::= (cdecl) | (stdcall)
-ProcPragma ::= (inline) | CallingConvention | (varargs) | (was Identifier)
+Attribute ::= (attr StringLiteral)
+ProcPragma ::= (inline) | CallingConvention | (varargs) | (was Identifier) |
+               (selectany) | Attribute
+ProcTypePragma ::= CallingConvention | (varargs) | Attribute
+
+ProcTypePragmas ::= Empty | (pragmas ProcTypePragma+)
 ProcPragmas ::= Empty | (pragmas ProcPragma+)
 
-AlignOrAlias ::= (align Number) | (was Identifier)
-VarPragmas ::= Empty | (pragmas AlignOrAlias+)
+CommonPragma ::= (align Number) | (was Identifier) | Attribute
+VarPragma ::= CommonPragma | (tls)
+VarPragmas ::= Empty | (pragmas VarPragma+)
 
-FieldPragma ::= AlignOrAlias | (bits Number)
+FieldPragma ::= CommonPragma | (bits Number)
 FieldPragmas ::= (pragmas FieldPragma+)
 
-TypePragma ::= AlignOrAlias | (vector Number)
+TypePragma ::= CommonPragma | (vector Number)
 TypePragmas ::= Empty | (pragmas TypePragma+)
 
 
@@ -214,6 +220,14 @@ Notes:
 - `varargs` is modelled as a pragma instead of a fancy special syntax for parameter
   declarations.
 - The type `flexarray` can only be used for a last field in an object declaration.
+- The pragma `tls` is used to denote thread local storage. It can only be used on
+  toplevel (aka "global") variables.
+- The pragma `selectany` can be used to merge proc bodies that have the same name.
+  It is used for generic procs so that only one generic instances remains in the
+  final executable file.
+- `attr "abc"` annotates a symbol with `__attribute__(abc)`.
+- `cast` might be mapped to a type prunning operation via a `union` as C's aliasing
+  rules are broken.
 
 
 Inheritance
@@ -235,4 +249,4 @@ Declaration order
 It is currently not specified whether NIFC allows for an arbitrary order of declarations
 without the need for forward declarations. It might be easier for a generator to produce
 the declarations in a suitable order rather than burdening the NIFC to C translator with
-such an reorder task.
+such a reorder task.
