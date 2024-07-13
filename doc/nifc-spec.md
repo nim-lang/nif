@@ -26,8 +26,7 @@ Name mangling is performed by NIFC. The following assumptions are made:
   grammar for further details.
 
 Names ending in `.c` are mangled by removing the `.c` suffix. For other names the `.` is
-replaced by `_` and `_` is encoded as `Q_`. The letter following the `.` is converted into
-a lowercase letter.
+replaced by `_` and `_` is encoded as `Q_`.
 
 By design names not imported from C contain a digit somewhere and thus cannot conflict with
 a keyword from C or C++.
