@@ -113,7 +113,7 @@ Expr ::= Number | CharLiteral | StringLiteral |
          (le Expr Expr) |
          (lt Expr Expr) |
          (cast Type Expr) |
-         (call Expr+ ) |
+         (call Expr+ )
 
 BranchValue ::= Number | CharLiteral | Symbol
 BranchRange ::= BranchValue | (range BranchValue BranchValue)
@@ -135,6 +135,7 @@ Stmt ::= Expr |
          (jmp Symbol) |
          (tjmp Expr Symbol) | # jump if condition is true
          (fjmp Expr Symbol) | # jump if condition is false
+         (ret Expr) # return statement
 
 StmtList ::= (stmts Stmt*)
 
