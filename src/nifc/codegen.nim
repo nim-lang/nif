@@ -10,13 +10,15 @@
 # We produce C code as a list of tokens.
 
 import std / [assertions, syncio, tables, intsets, formatfloat]
-import .. / lib / [bitabs]
-import nirtypes, nirinsts, nirfiles
-import ../../dist/checksums/src/checksums/md5
+import .. / lib / [bitabs, packedtrees]
+import mangler, nifc_model
 
 type
-  Token = LitId # indexing into the tokens BiTable[string]
+  Token = distinct uint32
 
+proc `==`(a, b: Token): bool {.borrow.}
+
+type
   PredefinedToken = enum
     IgnoreMe = "<unused>"
     EmptyToken = ""
@@ -54,28 +56,27 @@ type
     TypedefUnion = "typedef union "
     IncludeKeyword = "#include "
 
-proc fillTokenTable(tab: var BiTable[string]) =
+proc fillTokenTable(tab: var BiTable[Token, string]) =
   for e in EmptyToken..high(PredefinedToken):
     let id = tab.getOrIncl $e
-    assert id == LitId(e), $(id, " ", ord(e))
+    assert id == Token(e), $(id, " ", ord(e))
 
 type
   GeneratedCode* = object
-    m: NirModule
-    includes: seq[LitId]
+    m: Module
+    includes: seq[Token]
     includedHeaders: IntSet
-    data: seq[LitId]
-    protos: seq[LitId]
-    code: seq[LitId]
-    init: seq[LitId]
-    tokens: BiTable[string]
+    data: seq[Token]
+    protos: seq[Token]
+    code: seq[Token]
+    init: seq[Token]
+    tokens: BiTable[Token, string]
     emittedStrings: IntSet
     needsPrefix: IntSet
     generatedTypes: IntSet
-    mangledModules: Table[LitId, LitId]
 
-proc initGeneratedCode*(m: sink NirModule): GeneratedCode =
-  result = GeneratedCode(m: m, code: @[], tokens: initBiTable[string]())
+proc initGeneratedCode*(m: sink Module): GeneratedCode =
+  result = GeneratedCode(m: m, code: @[], tokens: initBiTable[Token, string]())
   fillTokenTable(result.tokens)
 
 proc add*(g: var GeneratedCode; t: PredefinedToken) {.inline.} =
@@ -83,19 +84,6 @@ proc add*(g: var GeneratedCode; t: PredefinedToken) {.inline.} =
 
 proc add*(g: var GeneratedCode; s: string) {.inline.} =
   g.code.add g.tokens.getOrIncl(s)
-
-proc mangleModuleName(c: var GeneratedCode; key: LitId): LitId =
-  result = c.mangledModules.getOrDefault(key, LitId(0))
-  if result == LitId(0):
-    let u {.cursor.} = c.m.lit.strings[key]
-    var last = u.len - len(".nim") - 1
-    var start = last
-    while start >= 0 and u[start] != '/': dec start
-    var sum = getMD5(u)
-    sum.setLen(8)
-    let dest = u.substr(start+1, last) & sum
-    result = c.tokens.getOrIncl(dest)
-    c.mangledModules[key] = result
 
 type
   CppFile = object
@@ -135,6 +123,10 @@ proc writeTokenSeq(f: var CppFile; s: seq[Token]; c: GeneratedCode) =
     else:
       write f, c.tokens[x]
 
+proc error(m: Module; msg: string; id: StrId) =
+  write stdout, msg
+  writeLine stdout, m.lits.strings[id]
+  quit 1
 
 # Type graph
 
@@ -150,75 +142,79 @@ proc add(dest: var TypeList; elem: TypeId; decl: PredefinedToken) =
 type
   TypeOrder = object
     forwardedDecls, ordered: TypeList
-    typeImpls: Table[string, TypeId]
-    lookedAt: IntSet
+    lookedAt, lookedAtBodies: IntSet
 
-proc traverseObject(types: TypeGraph; lit: Literals; c: var TypeOrder; t: TypeId)
+proc traverseObjectBody(m: Module; c: var TypeOrder; t: TypeId)
 
-proc recordDependency(types: TypeGraph; lit: Literals; c: var TypeOrder; parent, child: TypeId) =
+proc recordDependency(m: Module; c: var TypeOrder; parent, child: TypeId) =
   var ch = child
   var viaPointer = false
   while true:
-    case types[ch].kind
-    of APtrTy, UPtrTy, AArrayPtrTy, UArrayPtrTy:
+    case m.types[ch].kind
+    of APtrC, PtrC:
       viaPointer = true
-      ch = elementType(types, ch)
-    of LastArrayTy:
-      ch = elementType(types, ch)
+      ch = elementType(m.types, ch)
+    of FlexarrayC:
+      ch = elementType(m.types, ch)
     else:
       break
 
-  case types[ch].kind
-  of ObjectTy, UnionTy:
-    let decl = if types[ch].kind == ObjectTy: TypedefStruct else: TypedefUnion
-    let obj = c.typeImpls.getOrDefault(lit.strings[types[ch].litId])
+  case m.types[ch].kind
+  of ObjectC, UnionC:
+    let decl = if m.types[ch].kind == ObjectC: TypedefStruct else: TypedefUnion
+    let obj = ch
     if viaPointer:
-      c.forwardedDecls.add obj, decl
+      c.forwardedDecls.add parent, decl
     else:
       if not containsOrIncl(c.lookedAt, obj.int):
-        traverseObject(types, lit, c, obj)
+        traverseObjectBody(m, c, obj)
       c.ordered.add obj, decl
-  of ArrayTy:
+  of ArrayC:
     if viaPointer:
-      c.forwardedDecls.add ch, TypedefStruct
+      c.forwardedDecls.add parent, TypedefStruct
     else:
       if not containsOrIncl(c.lookedAt, ch.int):
-        traverseObject(types, lit, c, ch)
+        traverseObjectBody(m, c, ch)
       c.ordered.add ch, TypedefStruct
+  of Sym:
+    # follow the symbol to its definition:
+    let id = m.types[ch].litId
+    let def = m.defs.getOrDefault(id)
+    if def == NodePos(0):
+      error m, "undeclared symbol: ", id
+    else:
+      let decl = asTypeDecl(m.types, def)
+      if not containsOrIncl(c.lookedAtBodies, decl.body.int):
+        recordDependency m, c, parent, decl.body
   else:
     discard "uninteresting type as we only focus on the required struct declarations"
 
-proc traverseObject(types: TypeGraph; lit: Literals; c: var TypeOrder; t: TypeId) =
-  for x in sons(types, t):
-    case types[x].kind
-    of FieldDecl:
-      recordDependency types, lit, c, t, x.firstSon
-    of ObjectTy:
+proc traverseObjectBody(m: Module; c: var TypeOrder; t: TypeId) =
+  for x in sons(m.types, t):
+    case m.types[x].kind
+    of FldC:
+      let decl = asFieldDecl(m.types, x)
+      recordDependency m, c, t, decl.typ
+    of Sym:
       # inheritance
-      recordDependency types, lit, c, t, x
+      recordDependency m, c, t, x
     else: discard
 
-proc traverseTypes(types: TypeGraph; lit: Literals; c: var TypeOrder) =
-  for t in allTypes(types):
-    if types[t].kind in {ObjectDecl, UnionDecl}:
-      assert types[t.firstSon].kind == NameVal
-      c.typeImpls[lit.strings[types[t.firstSon].litId]] = t
-
-  for t in allTypesIncludingInner(types):
-    case types[t].kind
-    of ObjectDecl, UnionDecl:
-      traverseObject types, lit, c, t
-      let decl = if types[t].kind == ObjectDecl: TypedefStruct else: TypedefUnion
-      c.ordered.add t, decl
-    of ArrayTy:
-      traverseObject types, lit, c, t
-      c.ordered.add t, TypedefStruct
+proc traverseTypes(m: Module; c: var TypeOrder) =
+  for ch in sons(m.types, StartPos):
+    let decl = asTypeDecl(m.types, ch)
+    let t = decl.body
+    case m.types[t].kind
+    of ObjectC:
+      traverseObjectBody m, c, t
+      c.ordered.add ch, TypedefStruct
+    of UnionC:
+      traverseObjectBody m, c, t
+      c.ordered.add ch, TypedefUnion
+    of ArrayC:
+      traverseObjectBody m, c, t
+      c.ordered.add ch, TypedefStruct
     else: discard
-
-when false:
-  template emitType(s: string) = c.types.add c.tokens.getOrIncl(s)
-  template emitType(t: Token) = c.types.add t
-  template emitType(t: PredefinedToken) = c.types.add Token(t)
 
 proc genType(g: var GeneratedCode; types: TypeGraph; lit: Literals; t: TypeId; name = "") =
   template maybeAddName =
@@ -230,8 +226,8 @@ proc genType(g: var GeneratedCode; types: TypeGraph; lit: Literals; t: TypeId; n
     g.add s
     maybeAddName()
   case types[t].kind
-  of VoidTy: atom "void"
-  of IntTy: atom "NI" & $types[t].integralBits
+  of VoidC: atom "void"
+  of IntC: atom "NI" & $types[t].integralBits
   of UIntTy: atom "NU" & $types[t].integralBits
   of FloatTy: atom "NF" & $types[t].integralBits
   of BoolTy: atom "NB" & $types[t].integralBits
@@ -320,7 +316,7 @@ template emitData(s: string) = c.data.add c.tokens.getOrIncl(s)
 template emitData(t: Token) = c.data.add t
 template emitData(t: PredefinedToken) = c.data.add Token(t)
 
-proc genStrLit(c: var GeneratedCode; lit: Literals; litId: LitId): Token =
+proc genStrLit(c: var GeneratedCode; lit: Literals; litId: Token): Token =
   result = Token(c.tokens.getOrIncl "QStr" & $litId)
   if not containsOrIncl(c.emittedStrings, int(litId)):
     let s {.cursor.} = lit.strings[litId]
@@ -345,7 +341,7 @@ proc genStrLit(c: var GeneratedCode; lit: Literals; litId: LitId): Token =
     emitData CurlyRi
     emitData Semicolon
 
-proc genIntLit(c: var GeneratedCode; lit: Literals; litId: LitId) =
+proc genIntLit(c: var GeneratedCode; lit: Literals; litId: Token) =
   let i = lit.numbers[litId]
   if i > low(int32) and i <= high(int32):
     c.add $i
@@ -363,7 +359,7 @@ proc gen(c: var GeneratedCode; t: Tree; n: NodePos)
 
 proc genDisplayName(c: var GeneratedCode; symId: SymId) =
   let displayName = c.m.symnames[symId]
-  if displayName != LitId(0):
+  if displayName != Token(0):
     c.add "/*"
     c.add c.m.lit.strings[displayName]
     c.add "*/"
@@ -646,7 +642,7 @@ proc gen(c: var GeneratedCode; t: Tree; n: NodePos) =
     c.gen t, ri
     c.add Colon
   of ForeignDecl:
-    c.data.add LitId(ExternKeyword)
+    c.data.add Token(ExternKeyword)
     c.gen t, n.firstSon
   of SummonGlobal:
     moveToDataSection:
@@ -944,7 +940,7 @@ proc generateCode*(inp, outp: string) =
   var c = initGeneratedCode(load(inp))
 
   var co = TypeOrder()
-  traverseTypes(c.m.types, c.m.lit, co)
+  traverseTypes(c.m, co)
 
   generateTypes(c, c.m.types, c.m.lit, co)
   let typeDecls = move c.code

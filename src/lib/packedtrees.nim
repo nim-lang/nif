@@ -176,6 +176,23 @@ proc sons3*[E](tree: PackedTree[E]; n: NodePos): (NodePos, NodePos, NodePos) =
   let c = b + span(tree, b)
   result = (NodePos a, NodePos b, NodePos c)
 
+proc sons4*[E](tree: PackedTree[E]; n: NodePos): (NodePos, NodePos, NodePos, NodePos) {.inline.} =
+  assert(not isAtom(tree, n.int))
+  let a = n.int+1
+  let b = a + span(tree, a)
+  let c = b + span(tree, b)
+  let d = c + span(tree, c)
+  result = (NodePos a, NodePos b, NodePos c, NodePos d)
+
+proc sons5*[E](tree: PackedTree[E]; n: NodePos): (NodePos, NodePos, NodePos, NodePos, NodePos) {.inline.} =
+  assert(not isAtom(tree, n.int))
+  let a = n.int+1
+  let b = a + span(tree, a)
+  let c = b + span(tree, b)
+  let d = c + span(tree, c)
+  let e = d + span(tree, d)
+  result = (NodePos a, NodePos b, NodePos c, NodePos d, NodePos e)
+
 proc ithSon*[E](tree: PackedTree[E]; n: NodePos; i: int): NodePos =
   result = default(NodePos)
   if tree.nodes[n.int].kind.isTree:
@@ -185,7 +202,12 @@ proc ithSon*[E](tree: PackedTree[E]; n: NodePos; i: int): NodePos =
       inc count
   assert false, "node has no i-th child"
 
+const
+  StartPos* = NodePos(0)
+
 proc firstSon*(n: NodePos): NodePos {.inline.} = NodePos(n.int+1)
+
+proc currentPos*[E](tree: PackedTree[E]): NodePos {.inline.} = NodePos(tree.nodes.len)
 
 template copyIntoFrom*(dest, n, body) =
   let patchPos = prepare(dest, tree, n)

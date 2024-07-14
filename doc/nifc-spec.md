@@ -112,6 +112,7 @@ Expr ::= Number | CharLiteral | StringLiteral |
          (le Expr Expr) |
          (lt Expr Expr) |
          (cast Type Expr) |
+         (conv Type Expr) |
          (call Expr+ )
 
 BranchValue ::= Number | CharLiteral | Symbol
@@ -162,11 +163,11 @@ Type ::= Symbol |
          (bool IntQualifier*) |
          (void) |
          (ptr Type PtrQualifier) | # pointer to a single object
-         (array Type Expr) |
          (flexarray Type) |
          (aptr Type PtrQualifier) | # pointer to an array of objects
          ProcType
-TypeDecl ::= (type SymbolDef TypePragmas [Type | ObjDecl | UnionDecl | EnumDecl])
+ArrayDecl ::= (array Type Expr)
+TypeDecl ::= (type SymbolDef TypePragmas [Type | ObjDecl | UnionDecl | EnumDecl | ArrayDecl])
 
 CallingConvention ::= (cdecl) | (stdcall)
 Attribute ::= (attr StringLiteral)
@@ -227,6 +228,12 @@ Notes:
 - `attr "abc"` annotates a symbol with `__attribute__(abc)`.
 - `cast` might be mapped to a type prunning operation via a `union` as C's aliasing
   rules are broken.
+- `conv` is a value preserving type conversion between numeric types, `cast` is a bit
+  preserving type cast.
+- `array` is mapped to a struct with an array inside so that arrays gain value semantics.
+  Hence arrays can only be used within a `type` environment are become nominal types.
+  A NIFC code generator has to ensure that e.g. `(type :MyArray.T . (array T 4))` is only
+  emitted once.
 
 
 Inheritance
