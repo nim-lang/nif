@@ -63,4 +63,3 @@ proc handleCmdLine() =
 
 when isMainModule:
   handleCmdLine()
-

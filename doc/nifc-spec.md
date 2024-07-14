@@ -59,7 +59,6 @@ or not!) are encoded via this table:
 | `>` | `gtQ` |
 | `~` | `tildeQ` |
 | `:` | `colonQ` |
-| `.` | `dotQ` |
 | `@` | `atQ` |
 | `| ` | `barQ` |
 | Other | `XxxQ` where `xx` is the hexadecimal value |

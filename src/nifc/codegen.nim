@@ -10,7 +10,6 @@
 # We produce C code as a list of tokens.
 
 import std / [assertions, syncio, tables, intsets, formatfloat]
-from std / strutils import toOctal
 import .. / lib / [bitabs]
 import nirtypes, nirinsts, nirfiles
 import ../../dist/checksums/src/checksums/md5
@@ -316,23 +315,6 @@ proc generateTypes(g: var GeneratedCode; types: TypeGraph; lit: Literals; c: Typ
       g.add Semicolon
 
 # Procs
-
-proc toCChar*(c: char; result: var string) {.inline.} =
-  case c
-  of '\0'..'\x1F', '\x7F'..'\xFF':
-    result.add '\\'
-    result.add toOctal(c)
-  of '\'', '\"', '\\', '?':
-    result.add '\\'
-    result.add c
-  else:
-    result.add c
-
-proc makeCString(s: string): string =
-  result = newStringOfCap(s.len + 10)
-  result.add('"')
-  for c in s: toCChar(c, result)
-  result.add('"')
 
 template emitData(s: string) = c.data.add c.tokens.getOrIncl(s)
 template emitData(t: Token) = c.data.add t

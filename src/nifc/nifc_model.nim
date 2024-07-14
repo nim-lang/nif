@@ -6,14 +6,14 @@
 
 ## Parse NIF into a packed tree representation.
 
-import "../lib" / [bitabs, lineinfos, stringviews, packedtrees, nifreader]
+import "../lib" / [bitabs, lineinfos, stringviews, packedtrees, nifreader, keymatcher]
 
 type
   NifcKind* = enum
     Empty, Ident, Sym, Symdef, IntLit, UIntLit, FloatLit, CharLit, StrLit,
     Err, # must not be an atom!
-    DerefC = "deref"
     AtC = "at"
+    DerefC = "deref"
     DotC = "dot"
     PatC = "pat"
     ParC = "par"
@@ -98,20 +98,14 @@ type
     ImpC = "imp"
     InclC = "incl"
 
+declareMatcher whichNifcKeyword, NifcKind, ord(AtC)
+
 type
   StrId* = distinct uint32
-  IntId* = distinct uint32
-  UIntId* = distinct uint32
-  FloatId* = distinct uint32
-  KindId* = distinct uint32
   Literals* = object
     man*: LineInfoManager
-    kinds*: BiTable[KindId, string]
     files*: BiTable[FileId, string] # we cannot use StringView here as it may have unexpanded backslashes!
     strings*: BiTable[StrId, string]
-    integers*: BiTable[IntId, int64]
-    uintegers*: BiTable[UIntId, uint64]
-    floats*: BiTable[FloatId, float64]
 
 proc addAtom*[L](dest: var PackedTree[NifcKind]; kind: NifcKind; lit: L; info: PackedLineInfo) =
   packedtrees.addAtom dest, kind, uint32(lit), info
@@ -134,13 +128,8 @@ proc parse*(r: var Reader; dest: var PackedTree[NifcKind]; lits: var Literals; p
   of EofToken, ParRi:
     result = false
   of ParLe:
-    #let kind = whichKind(t.s, Err)
-    let ka = lits.kinds.getOrInclFromView(t.s).uint32 + ord(Compound).uint32
-    let kb = if ka > 255'u32: ord(Compound).uint32 else: ka
-    copyInto(dest, cast[NifcKind](kb), currentInfo):
-      if ka > 255'u32:
-        # handle overflow:
-        dest.addAtom Ident, ka, currentInfo
+    let kind = whichNifcKeyword(t.s, Err)
+    copyInto(dest, kind, currentInfo):
       while true:
         let progress = parse(r, dest, lits, currentInfo)
         if not progress: break
@@ -161,11 +150,13 @@ proc parse*(r: var Reader; dest: var PackedTree[NifcKind]; lits: var Literals; p
   of CharLit:
     dest.addAtom CharLit, uint32 decodeChar(t), currentInfo
   of IntLit:
-    dest.addAtom IntLit, lits.integers.getOrIncl(decodeInt t), currentInfo
+    # we keep numbers as strings because we typically don't do anything with them
+    # but to pass them as they are to the C code.
+    dest.addAtom IntLit, lits.strings.getOrIncl(decodeStr t), currentInfo
   of UIntLit:
-    dest.addAtom UIntLit, lits.uintegers.getOrIncl(decodeUInt t), currentInfo
+    dest.addAtom UIntLit, lits.strings.getOrIncl(decodeStr t), currentInfo
   of FloatLit:
-    dest.addAtom FloatLit, lits.floats.getOrIncl(decodeFloat t), currentInfo
+    dest.addAtom FloatLit, lits.strings.getOrIncl(decodeStr t), currentInfo
 
 type
   Module* = object
@@ -181,9 +172,5 @@ proc parse*(r: var Reader): Module =
 proc memSizes*(m: Module) =
   echo "Tree ", m.t.len # * sizeof(PackedNode[NifcKind])
   echo "Man ", m.lits.man.memSize
-  echo "Kinds ", m.lits.kinds.memSize
   echo "Files ", m.lits.files.memSize
   echo "Strings ", m.lits.strings.memSize
-  echo "Ints ", m.lits.integers.memSize
-  echo "UInts ", m.lits.uintegers.memSize
-  echo "Floats ", m.lits.floats.memSize
