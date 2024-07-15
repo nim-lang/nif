@@ -23,6 +23,7 @@ Command:
   c|cpp file.nif [output.c]     convert the NIF file to C|C++
 
 Options:
+  --bits:N              (int M) has N bits; possible values: 64, 32, 16
   --version             show the version
   --help                show this help
 """
@@ -33,6 +34,7 @@ proc writeVersion() = quit(Version & "\n", QuitSuccess)
 proc handleCmdLine() =
   var action = ""
   var args: seq[string] = @[]
+  var bits = sizeof(int)*8
   for kind, key, val in getopt():
     case kind
     of cmdArgument:
@@ -42,6 +44,12 @@ proc handleCmdLine() =
         args.add key
     of cmdLongOption, cmdShortOption:
       case normalize(key)
+      of "bits":
+        case val
+        of "64": bits = 64
+        of "32": bits = 32
+        of "16": bits = 16
+        else: quit "invalid value for --bits"
       of "help", "h": writeHelp()
       of "version", "v": writeVersion()
       else: writeHelp()
@@ -57,7 +65,7 @@ proc handleCmdLine() =
       let destExt = if action == "c": ".c" else: ".cpp"
       let inp = args[0]
       let outp = if args.len >= 2: args[1].addFileExt(destExt) else: changeFileExt(inp, destExt)
-      generateCode inp, outp
+      generateCode inp, outp, bits
   else:
     quit "Invalid action: " & action
 

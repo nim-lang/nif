@@ -85,6 +85,7 @@ Lvalue ::= Symbol | (deref Expr) |
              (dot Expr Symbol Number) | # field access
              (pat Expr Expr) | # pointer indexing
 
+Call ::= (call Expr+ )
 Expr ::= Number | CharLiteral | StringLiteral |
          Lvalue |
          (par Expr) | # wraps the expression in parentheses
@@ -94,9 +95,8 @@ Expr ::= Number | CharLiteral | StringLiteral |
          (or Expr Expr) | # "||"
          (not Expr) | # "!"
          (sizeof Expr) |
-         (constr Type Expr*) |
-         (kv Expr Expr) |
-
+         (oconstr Type (kv Symbol Expr)*) |  # (object constructor){...}
+         (aconstr Type Expr*) |              # array constructor
          (add Type Expr Expr) |
          (sub Type Expr Expr) |
          (mul Type Expr Expr) |
@@ -107,13 +107,14 @@ Expr ::= Number | CharLiteral | StringLiteral |
          (bitand Type Expr Expr) |
          (bitor Type Expr Expr) |
          (bitnot Type Expr Expr) |
+         (bitxor Type Expr Expr) |
          (eq Expr Expr) |
          (neq Expr Expr) |
          (le Expr Expr) |
          (lt Expr Expr) |
          (cast Type Expr) |
          (conv Type Expr) |
-         (call Expr+ )
+         Call
 
 BranchValue ::= Number | CharLiteral | Symbol
 BranchRange ::= BranchValue | (range BranchValue BranchValue)
@@ -123,7 +124,7 @@ VarDecl ::= (var SymbolDef VarPragmas Type [Empty | Expr])
 ConstDecl ::= (const SymbolDef VarPragmas Type Expr)
 EmitStmt ::= (emit Expr+)
 
-Stmt ::= Expr |
+Stmt ::= Call |
          VarDecl |
          ConstDecl |
          EmitStmt |
@@ -133,12 +134,11 @@ Stmt ::= Expr |
          (case Expr (of BranchRanges StmtList)* (else StmtList)?) |
          (lab SymbolDef) |
          (jmp Symbol) |
-         (tjmp Expr Symbol) | # jump if condition is true
-         (fjmp Expr Symbol) | # jump if condition is false
          (ret Expr) # return statement
 
 StmtList ::= (stmts Stmt*)
 
+Param ::= (param SymbolDef ParamPragmas Type)
 Params ::= Empty | (params Param*)
 
 ProcDecl ::= (proc SymbolDef Params Type ProcPragmas [Empty | StmtList])
@@ -167,11 +167,13 @@ Type ::= Symbol |
          (aptr Type PtrQualifier) | # pointer to an array of objects
          ProcType
 ArrayDecl ::= (array Type Expr)
-TypeDecl ::= (type SymbolDef TypePragmas [Type | ObjDecl | UnionDecl | EnumDecl | ArrayDecl])
+TypeDecl ::= (type SymbolDef TypePragmas [ProcType | ObjDecl | UnionDecl | EnumDecl | ArrayDecl])
 
-CallingConvention ::= (cdecl) | (stdcall)
+CallingConvention ::= (cdecl) | (stdcall) | (safecall) | (syscall)  |
+                      (fastcall) | (thiscall) | (noconv) | (member)
+
 Attribute ::= (attr StringLiteral)
-ProcPragma ::= (inline) | CallingConvention | (varargs) | (was Identifier) |
+ProcPragma ::= (inline) | (noinline) | CallingConvention | (varargs) | (was Identifier) |
                (selectany) | Attribute
 ProcTypePragma ::= CallingConvention | (varargs) | Attribute
 
@@ -182,6 +184,9 @@ CommonPragma ::= (align Number) | (was Identifier) | Attribute
 VarPragma ::= CommonPragma | (tls)
 VarPragmas ::= Empty | (pragmas VarPragma+)
 
+ParamPragma ::= (was Identifier) | Attribute
+ParamPragmas ::= Empty | (pragmas ParamPragma+)
+
 FieldPragma ::= CommonPragma | (bits Number)
 FieldPragmas ::= (pragmas FieldPragma+)
 
@@ -190,11 +195,11 @@ TypePragmas ::= Empty | (pragmas TypePragma+)
 
 
 ExternDecl ::= (imp ProcDecl | VarDecl | ConstDecl)
+Include ::= (incl StringLiteral)
 
 TopLevelConstruct ::= ExternDecl | ProcDecl | VarDecl | ConstDecl |
-                      TypeDecl | EmitStmt
-Include ::= (incl StringLiteral)
-Module ::= (stmts Include* TopLevelConstruct*)
+                      TypeDecl | Include | EmitStmt
+Module ::= (stmts TopLevelConstruct*)
 
 ```
 
@@ -205,8 +210,6 @@ Notes:
 - There can be more calling conventions than only `cdecl` and `stdcall`.
 - `case` is mapped to a `switch` but the generation of `break` is handled
   automatically.
-- `constr` is an array or union or object constructor. For this case `Expr` was
-  extended to cover the item `kv` (which is a key-value pair).
 - `ro` stands for `readonly` and is C's notion of the `const` type qualifier.
   Not to be confused with NIFC's `const` which introduces a named constant.
 - C allows for `typedef` within proc bodies. NIFC does not, a type declaration must
@@ -234,6 +237,9 @@ Notes:
   Hence arrays can only be used within a `type` environment are become nominal types.
   A NIFC code generator has to ensure that e.g. `(type :MyArray.T . (array T 4))` is only
   emitted once.
+- `type` can only be used to introduce a name for a nominal type (that is a type which
+  is only compatible to itself) or for a proc type for code compression purposes. Arbitrary
+  aliases for types **cannot** be used! Rationale: Implementation simplicity.
 
 
 Inheritance
@@ -252,7 +258,4 @@ and RTTI must be implemented manually, if required.
 Declaration order
 -----------------
 
-It is currently not specified whether NIFC allows for an arbitrary order of declarations
-without the need for forward declarations. It might be easier for a generator to produce
-the declarations in a suitable order rather than burdening the NIFC to C translator with
-such a reorder task.
+NIFC allows for an arbitrary order of declarations without the need for forward declarations.

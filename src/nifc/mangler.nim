@@ -7,7 +7,7 @@
 #    distribution, for details about the copyright.
 #
 
-## See nifc-spec.md for details.
+## Name mangling. See nifc-spec.md for details.
 
 from std / strutils import toOctal
 

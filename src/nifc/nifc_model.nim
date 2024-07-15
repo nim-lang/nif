@@ -7,7 +7,8 @@
 ## Parse NIF into a packed tree representation.
 
 import std / [hashes, tables]
-import "../lib" / [bitabs, lineinfos, stringviews, packedtrees, nifreader, keymatcher]
+import "../lib" / [bitabs, lineinfos, stringviews, packedtrees, nifreader, keymatcher,
+  nifbuilder]
 
 type
   NifcKind* = enum
@@ -26,7 +27,8 @@ type
     OrC = "or"
     NotC = "not"
     SizeofC = "sizeof"
-    ConstrC = "constr"
+    OconstrC = "oconstr"
+    AconstrC = "aconstr"
     KvC = "kv"
     AddC = "add"
     SubC = "sub"
@@ -37,6 +39,7 @@ type
     ShlC = "shl"
     BitandC = "bitand"
     BitorC = "bitor"
+    BitxorC = "bitxor"
     BitnotC = "bitnot"
     EqC = "eq"
     NeqC = "neq"
@@ -59,10 +62,9 @@ type
     OfC = "of"
     LabC = "lab"
     JmpC = "jmp"
-    TjmpC = "tjmp"
-    FjmpC = "fjmp"
     RetC = "ret"
     StmtsC = "stmts"
+    ParamC = "param"
     ParamsC = "params"
     ProcC = "proc"
     FldC = "fld"
@@ -87,8 +89,15 @@ type
     TypeC = "type"
     CdeclC = "cdecl"
     StdcallC = "stdcall"
+    SafecallC = "safecall"
+    SyscallC = "syscall"
+    FastcallC = "fastcall"
+    ThiscallC = "thiscall"
+    NoconvC = "noconv"
+    MemberC = "member"
     AttrC = "attr"
     InlineC = "inline"
+    NoinlineC = "noinline"
     VarargsC = "varargs"
     WasC = "was"
     SelectanyC = "selectany"
@@ -99,6 +108,9 @@ type
     VectorC = "vector"
     ImpC = "imp"
     InclC = "incl"
+
+const
+  CallingConventions* = {CdeclC..MemberC}
 
 declareMatcher whichNifcKeyword, NifcKind, ord(AtC)
 
@@ -117,8 +129,10 @@ type
   TypeGraph* = PackedTree[NifcKind]
   TypeId* = NodePos
 
+  Tree* = PackedTree[NifcKind]
+
   Module* = object
-    t*: PackedTree[NifcKind]
+    code*: Tree
     types*: TypeGraph
     defs*: Table[StrId, NodePos]
     lits*: Literals
@@ -181,8 +195,10 @@ proc parse*(r: var Reader; dest: var PackedTree[NifcKind]; m: var Module; parent
 proc parse*(r: var Reader): Module =
   # empirically, (size div 7) is a good estimate for the number of nodes
   # in the file:
-  result = Module(t: createPackedTree[NifcKind](r.fileSize div 7))
-  discard parse(r, result.t, result, NoLineInfo)
+  let nodeCount = r.fileSize div 7
+  result = Module(code: createPackedTree[NifcKind](nodeCount),
+                  types: createPackedTree[NifcKind](60))
+  discard parse(r, result.code, result, NoLineInfo)
 
 proc load*(filename: string): Module =
   var r = nifreader.open(filename)
@@ -190,7 +206,7 @@ proc load*(filename: string): Module =
   r.close
 
 proc memSizes*(m: Module) =
-  echo "Tree ", m.t.len # * sizeof(PackedNode[NifcKind])
+  echo "Tree ", m.code.len + m.types.len # * sizeof(PackedNode[NifcKind])
   echo "Man ", m.lits.man.memSize
   echo "Files ", m.lits.files.memSize
   echo "Strings ", m.lits.strings.memSize
@@ -220,3 +236,61 @@ proc asFieldDecl*(types: TypeGraph; n: NodePos): FieldDecl =
   assert types[n].kind == FldC
   let (a, b, c) = sons3(types, n)
   FieldDecl(name: a, pragmas: b, typ: c)
+
+type
+  ParamDecl* = object
+    name*, pragmas*, typ*: NodePos
+
+proc asParamDecl*(types: TypeGraph; n: NodePos): ParamDecl =
+  assert types[n].kind == ParamC
+  let (a, b, c) = sons3(types, n)
+  ParamDecl(name: a, pragmas: b, typ: c)
+
+type
+  ProcType* = object
+    params*, returnType*, pragmas*: NodePos
+
+proc asProcType*(types: TypeGraph; n: NodePos): ProcType =
+  assert types[n].kind == ProctypeC
+  let (_, a, b, c) = sons4(types, n)
+  ProcType(params: a, returnType: b, pragmas: c)
+
+type
+  ProcDecl* = object
+    name*, params*, returnType*, pragmas*, body*: NodePos
+
+proc asProcDecl*(t: Tree; n: NodePos): ProcDecl =
+  assert t[n].kind == ProcC
+  let (a, b, c, d, e) = sons5(t, n)
+  ProcDecl(name: a, params: b, returnType: c, pragmas: d, body: e)
+
+type
+  VarDecl* = object
+    name*, pragmas*, typ*, value*: NodePos
+
+proc asVarDecl*(t: Tree; n: NodePos): VarDecl =
+  assert t[n].kind == VarC
+  let (a, b, c, d) = sons4(t, n)
+  VarDecl(name: a, pragmas: b, typ: c, value: d)
+
+proc toString(b: var Builder; tree: PackedTree[NifcKind]; n: NodePos; m: Module) =
+  case tree[n].kind
+  of Empty:
+    b.addEmpty()
+  of Ident:
+    b.addIdent(m.lits.strings[tree[n].litId])
+  of Sym, Symdef, IntLit, UIntLit, FloatLit:
+    b.addSymbol(m.lits.strings[tree[n].litId])
+  of CharLit:
+    b.addCharLit char(tree[n].uoperand)
+  of StrLit:
+    b.addStrLit(m.lits.strings[tree[n].litId])
+  else:
+    b.withTree $tree[n].kind:
+      for ch in sons(tree, n):
+        toString b, tree, ch, m
+
+proc toString*(tree: PackedTree[NifcKind]; n: NodePos; m: Module): string =
+  var b = nifbuilder.open(20)
+  toString b, tree, n, m
+  result = b.extract()
