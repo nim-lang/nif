@@ -198,10 +198,12 @@ proc parse*(r: var Reader): Module =
   let nodeCount = r.fileSize div 7
   result = Module(code: createPackedTree[NifcKind](nodeCount),
                   types: createPackedTree[NifcKind](60))
-  discard parse(r, result.code, result, NoLineInfo)
+  result.types.copyInto StmtsC, NoLineInfo:
+    discard parse(r, result.code, result, NoLineInfo)
 
 proc load*(filename: string): Module =
   var r = nifreader.open(filename)
+  discard nifreader.processDirectives(r)
   result = parse(r)
   r.close
 
