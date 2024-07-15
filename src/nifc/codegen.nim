@@ -301,10 +301,11 @@ proc genProcDecl(g: var GeneratedCode; t: Tree; n: NodePos; isExtern: bool) =
   g.add ParLe
 
   var params = 0
-  for ch in sons(t, prc.params):
-    if params > 0: g.add Comma
-    genParam g, t, ch
-    inc params
+  if t[prc.params].kind != Empty:
+    for ch in sons(t, prc.params):
+      if params > 0: g.add Comma
+      genParam g, t, ch
+      inc params
 
   if isVarargs in flags:
     if params > 0: g.add Comma

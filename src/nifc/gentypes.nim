@@ -99,7 +99,8 @@ proc traverseTypes(m: Module; c: var TypeOrder) =
 
 template integralBits(types: TypeGraph; t: TypeId): string =
   let lit = types[t.firstSon].litId
-  g.m.lits.strings[lit]
+  let r = g.m.lits.strings[lit]
+  (if r == "M": "" else: r)
 
 proc genProcTypePragma(g: var GeneratedCode; types: TypeGraph; n: NodePos; isVarargs: var bool) =
   # ProcTypePragma ::= CallingConvention | (varargs) | Attribute
@@ -158,7 +159,7 @@ proc genType(g: var GeneratedCode; types: TypeGraph; t: TypeId; name = "") =
   of BoolC: atom "NB" & types.integralBits(t)
   of CharC: atom "NC" & types.integralBits(t)
   of Sym:
-    atom g.m.lits.strings[types[t].litId]
+    atom mangle(g.m.lits.strings[types[t].litId])
   of PtrC, APtrC:
     # XXX implement `ro` etc annotations
     genType g, types, elementType(types, t)
@@ -222,7 +223,7 @@ proc genObjectOrUnionBody(g: var GeneratedCode; types: TypeGraph; n: NodePos) =
 proc generateTypes(g: var GeneratedCode; types: TypeGraph; c: TypeOrder) =
   for (d, declKeyword) in c.forwardedDecls.s:
     let decl = asTypeDecl(types, d)
-    let s {.cursor.} = g.m.lits.strings[types[decl.name].litId]
+    let s = mangle(g.m.lits.strings[types[decl.name].litId])
     g.add declKeyword
     g.add s
     g.add Space
@@ -233,7 +234,7 @@ proc generateTypes(g: var GeneratedCode; types: TypeGraph; c: TypeOrder) =
     let decl = asTypeDecl(types, d)
     let litId = types[decl.name].litId
     if not g.generatedTypes.containsOrIncl(litId.int):
-      let s {.cursor.} = g.m.lits.strings[litId]
+      let s = mangle(g.m.lits.strings[litId])
       g.add declKeyword
       g.add CurlyLe
       case types[decl.body].kind

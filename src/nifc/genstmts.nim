@@ -158,6 +158,7 @@ proc genStmt(c: var GeneratedCode; t: Tree; n: NodePos) =
       genStmt(c, t, ch)
   of CallC:
     genCall c, t, n
+    c.add Semicolon
   of VarC: genVarDecl c, t, n, EmptyToken
   of ConstC:
     moveToDataSection:
