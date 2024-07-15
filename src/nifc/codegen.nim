@@ -58,6 +58,7 @@ type
     ReturnKeyword = "return "
     TypedefStruct = "typedef struct "
     TypedefUnion = "typedef union "
+    TypedefKeyword = "typedef "
     IncludeKeyword = "#include "
 
 proc fillTokenTable(tab: var BiTable[Token, string]) =

@@ -113,18 +113,5 @@ typedef NU8 NU;
 #  endif
 #endif
 
-#define NIM_STRLIT_FLAG ((NU)(1) << ((NIM_INTBITS) - 2)) /* This has to be the same as system.strlitFlag! */
-
-#define nimAddInt64(a, b, L) ({long long int res; if(__builtin_saddll_overflow(a, b, &res)) goto L; res})
-#define nimSubInt64(a, b, L) ({long long int res; if(__builtin_ssubll_overflow(a, b, &res)) goto L; res})
-#define nimMulInt64(a, b, L) ({long long int res; if(__builtin_smulll_overflow(a, b, &res)) goto L; res})
-
-#define nimAddInt32(a, b, L) ({long int res; if(__builtin_sadd_overflow(a, b, &res)) goto L; res})
-#define nimSubInt32(a, b, L) ({long int res; if(__builtin_ssub_overflow(a, b, &res)) goto L; res})
-#define nimMulInt32(a, b, L) ({long int res; if(__builtin_smul_overflow(a, b, &res)) goto L; res})
-
-#define nimCheckRange(x, a, b, L) ({if (x < a || x > b) goto L; x})
-#define nimCheckIndex(x, a, L) ({if (x >= a) goto L; x})
-
 """
 

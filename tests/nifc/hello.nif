@@ -2,6 +2,7 @@
 (stmts
   (incl "<stdio.h>")
   (type :MyObject.c . (object . ))
+  (type :MyProc . (proctype . (params) (void) . ))
   (nodecl (proc :printf.c (params (param :f.1 . (ptr FILE.c))) (void) (pragmas (varargs)) .))
   (proc :main.c . (i M 90) . (stmts
     (call printf.c "hello %s" "abc")

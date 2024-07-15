@@ -95,6 +95,12 @@ proc traverseTypes(m: Module; o: var TypeOrder) =
     of ArrayC:
       traverseObjectBody m, o, t
       o.ordered.add ch, TypedefStruct
+    of ProctypeC:
+      # XXX
+      #traverseProctypeBody m, o, t
+      o.ordered.add ch, TypedefKeyword
+    of EnumC:
+      o.ordered.add ch, TypedefKeyword
     else: discard
 
 template integralBits(types: TypeGraph; t: TypeId): string =
@@ -235,22 +241,29 @@ proc generateTypes(c: var GeneratedCode; types: TypeGraph; o: TypeOrder) =
     let litId = types[decl.name].litId
     if not c.generatedTypes.containsOrIncl(litId.int):
       let s = mangle(c.m.lits.strings[litId])
-      c.add declKeyword
-      c.add CurlyLe
       case types[decl.body].kind
       of ArrayC:
+        c.add declKeyword
+        c.add CurlyLe
         let (elem, size) = sons2(types, decl.body)
         genType c, types, elem, "a"
         c.add BracketLe
         c.genIntLit types[size].litId
         c.add BracketRi
         c.add Semicolon
-      of EnumC, ProctypeC:
+        c.add CurlyRi
+        c.add s
+      of EnumC:
         assert false, "too implement"
+      of ProctypeC:
+        c.add TypedefKeyword
+        genType c, types, decl.body, s
       else:
+        c.add declKeyword
+        c.add CurlyLe
         # XXX generate attributes and pragmas here
         c.genObjectOrUnionBody types, decl.body
-      c.add CurlyRi
-      c.add s
+        c.add CurlyRi
+        c.add s
       c.add Semicolon
 
