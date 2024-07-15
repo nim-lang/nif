@@ -153,7 +153,13 @@ proc hasAtLeastXsons*[E](tree: PackedTree[E]; n: NodePos; x: int): bool =
   return false
 
 proc firstSon*[E](tree: PackedTree[E]; n: NodePos): NodePos {.inline.} =
+  assert tree[n].kind.isTree
+  assert n.int <= int(n) + tree[n].rawSpan
   NodePos(n.int+1)
+
+template check[E](a: int; tree: PackedTree[E]; n: NodePos) =
+  assert a  < int(n) + int(n) + tree[n].rawSpan
+
 proc kind*[E](tree: PackedTree[E]; n: NodePos): E {.inline.} =
   tree.nodes[n.int].kind
 
@@ -166,15 +172,46 @@ proc span*[E](tree: PackedTree[E]; pos: int): int {.inline.} =
 proc sons2*[E](tree: PackedTree[E]; n: NodePos): (NodePos, NodePos) =
   assert(not isAtom(tree, n.int))
   let a = n.int+1
+  check a, tree, n
   let b = a + span(tree, a)
+  check b, tree, n
   result = (NodePos a, NodePos b)
 
 proc sons3*[E](tree: PackedTree[E]; n: NodePos): (NodePos, NodePos, NodePos) =
   assert(not isAtom(tree, n.int))
   let a = n.int+1
+  check a, tree, n
   let b = a + span(tree, a)
+  check b, tree, n
   let c = b + span(tree, b)
+  check c, tree, n
   result = (NodePos a, NodePos b, NodePos c)
+
+proc sons4*[E](tree: PackedTree[E]; n: NodePos): (NodePos, NodePos, NodePos, NodePos) {.inline.} =
+  assert(not isAtom(tree, n.int))
+  let a = n.int+1
+  check a, tree, n
+  let b = a + span(tree, a)
+  check b, tree, n
+  let c = b + span(tree, b)
+  check c, tree, n
+  let d = c + span(tree, c)
+  check d, tree, n
+  result = (NodePos a, NodePos b, NodePos c, NodePos d)
+
+proc sons5*[E](tree: PackedTree[E]; n: NodePos): (NodePos, NodePos, NodePos, NodePos, NodePos) {.inline.} =
+  assert(not isAtom(tree, n.int))
+  let a = n.int+1
+  check a, tree, n
+  let b = a + span(tree, a)
+  check b, tree, n
+  let c = b + span(tree, b)
+  check c, tree, n
+  let d = c + span(tree, c)
+  check d, tree, n
+  let e = d + span(tree, d)
+  check e, tree, n
+  result = (NodePos a, NodePos b, NodePos c, NodePos d, NodePos e)
 
 proc ithSon*[E](tree: PackedTree[E]; n: NodePos; i: int): NodePos =
   result = default(NodePos)
@@ -185,7 +222,12 @@ proc ithSon*[E](tree: PackedTree[E]; n: NodePos; i: int): NodePos =
       inc count
   assert false, "node has no i-th child"
 
+const
+  StartPos* = NodePos(0)
+
 proc firstSon*(n: NodePos): NodePos {.inline.} = NodePos(n.int+1)
+
+proc currentPos*[E](tree: PackedTree[E]): NodePos {.inline.} = NodePos(tree.nodes.len)
 
 template copyIntoFrom*(dest, n, body) =
   let patchPos = prepare(dest, tree, n)

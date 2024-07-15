@@ -87,6 +87,7 @@ proc open*(filename: string): Reader =
   if not err:
     result.p = cast[pchar](result.f.mem)
     result.eof = result.p +! result.f.size
+    result.lineStart = result.p
 
 proc openFromBuffer*(buf: sink string): Reader =
   result = Reader(f: default(MemFile), err: true, buf: ensureMove buf)
@@ -94,6 +95,7 @@ proc openFromBuffer*(buf: sink string): Reader =
   result.eof = result.p +! result.buf.len
   result.f.mem = result.p
   result.f.size = result.buf.len
+  result.lineStart = result.p
 
 proc close*(r: var Reader) =
   if not r.err: close r.f
