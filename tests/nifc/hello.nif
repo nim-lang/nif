@@ -1,8 +1,8 @@
 (.nif24)
 (stmts
   (incl "<stdio.h>")
-  (type :FILE.c . (object . ))
-  (imp (proc :printf.c (params (param :f.1 . (ptr FILE.c))) (void) (pragmas (varargs)) .))
+  (type :MyObject.c . (object . ))
+  (nodecl (proc :printf.c (params (param :f.1 . (ptr FILE.c))) (void) (pragmas (varargs)) .))
   (proc :main.c . (i M 90) . (stmts
     (call printf.c "hello %s" "abc")
     (ret 0)

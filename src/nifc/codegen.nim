@@ -83,11 +83,11 @@ proc initGeneratedCode*(m: sink Module): GeneratedCode =
   result = GeneratedCode(m: m, code: @[], tokens: initBiTable[Token, string]())
   fillTokenTable(result.tokens)
 
-proc add*(g: var GeneratedCode; t: PredefinedToken) {.inline.} =
-  g.code.add Token(t)
+proc add*(c: var GeneratedCode; t: PredefinedToken) {.inline.} =
+  c.code.add Token(t)
 
-proc add*(g: var GeneratedCode; s: string) {.inline.} =
-  g.code.add g.tokens.getOrIncl(s)
+proc add*(c: var GeneratedCode; s: string) {.inline.} =
+  c.code.add c.tokens.getOrIncl(s)
 
 type
   CppFile = object
@@ -176,7 +176,7 @@ type
   ProcFlag = enum
     isSelectAny, isVarargs, isInline
 
-proc genProcPragmas(g: var GeneratedCode; t: Tree; n: NodePos;
+proc genProcPragmas(c: var GeneratedCode; t: Tree; n: NodePos;
                     flags: var set[ProcFlag]) =
   # ProcPragma ::= (inline) | (noinline) | CallingConvention | (varargs) | (was Identifier) |
   #               (selectany) | Attribute
@@ -186,7 +186,7 @@ proc genProcPragmas(g: var GeneratedCode; t: Tree; n: NodePos;
     for ch in sons(t, n):
       case t[ch].kind
       of CallingConventions:
-        g.add " __" & $t[ch].kind
+        c.add " __" & $t[ch].kind
       of VarargsC:
         flags.incl isVarargs
       of SelectanyC:
@@ -194,26 +194,26 @@ proc genProcPragmas(g: var GeneratedCode; t: Tree; n: NodePos;
       of InlineC:
         flags.incl isInline
       of AttrC:
-        g.add " __attribute__((" & toString(t, ch.firstSon, g.m) & "))"
+        c.add " __attribute__((" & toString(t, ch.firstSon, c.m) & "))"
       of NoinlineC:
-        g.add " __attribute__((noinline))"
+        c.add " __attribute__((noinline))"
       of WasC:
-        g.add "/* " & toString(t, ch.firstSon, g.m) & " */"
+        c.add "/* " & toString(t, ch.firstSon, c.m) & " */"
       else:
-        error g.m, "invalid proc pragma: ", t, ch
+        error c.m, "invalid proc pragma: ", t, ch
   else:
-    error g.m, "expected proc pragmas but got: ", t, n
+    error c.m, "expected proc pragmas but got: ", t, n
 
-proc genSymDef(g: var GeneratedCode; t: Tree; n: NodePos): string =
+proc genSymDef(c: var GeneratedCode; t: Tree; n: NodePos): string =
   if t[n].kind == SymDef:
     let lit = t[n].litId
-    result = mangle(g.m.lits.strings[lit])
-    g.add result
+    result = mangle(c.m.lits.strings[lit])
+    c.add result
   else:
-    error g.m, "expected SymbolDef but got: ", t, n
+    error c.m, "expected SymbolDef but got: ", t, n
     result = ""
 
-proc genParamPragmas(g: var GeneratedCode; t: Tree; n: NodePos) =
+proc genParamPragmas(c: var GeneratedCode; t: Tree; n: NodePos) =
   # ProcPragma ::= (was Identifier) | Attribute
   if t[n].kind == Empty:
     discard
@@ -221,59 +221,59 @@ proc genParamPragmas(g: var GeneratedCode; t: Tree; n: NodePos) =
     for ch in sons(t, n):
       case t[ch].kind
       of AttrC:
-        g.add " __attribute__((" & toString(t, ch.firstSon, g.m) & "))"
+        c.add " __attribute__((" & toString(t, ch.firstSon, c.m) & "))"
       of WasC:
-        g.add "/* " & toString(t, ch.firstSon, g.m) & " */"
+        c.add "/* " & toString(t, ch.firstSon, c.m) & " */"
       else:
-        error g.m, "invalid pragma: ", t, ch
+        error c.m, "invalid pragma: ", t, ch
   else:
-    error g.m, "expected pragmas but got: ", t, n
+    error c.m, "expected pragmas but got: ", t, n
 
-proc genParam(g: var GeneratedCode; t: Tree; n: NodePos) =
+proc genParam(c: var GeneratedCode; t: Tree; n: NodePos) =
   let d = asParamDecl(t, n)
   if t[d.name].kind == SymDef:
     let lit = t[d.name].litId
-    let name = mangle(g.m.lits.strings[lit])
-    genType g, t, d.typ, name
-    genParamPragmas g, t, d.pragmas
+    let name = mangle(c.m.lits.strings[lit])
+    genType c, t, d.typ, name
+    genParamPragmas c, t, d.pragmas
   else:
-    error g.m, "expected SymbolDef but got: ", t, n
+    error c.m, "expected SymbolDef but got: ", t, n
 
-proc genVarPragmas(g: var GeneratedCode; t: Tree; n: NodePos) =
+proc genVarPragmas(c: var GeneratedCode; t: Tree; n: NodePos) =
   if t[n].kind == Empty:
     discard
   elif t[n].kind == PragmasC:
     for ch in sons(t, n):
       case t[ch].kind
       of TlsC:
-        g.add " __thread"
+        c.add " __thread"
       of AlignC:
-        g.add " NIM_ALIGN(" & toString(t, ch.firstSon, g.m) & ")"
+        c.add " NIM_ALIGN(" & toString(t, ch.firstSon, c.m) & ")"
       of AttrC:
-        g.add " __attribute__((" & toString(t, ch.firstSon, g.m) & "))"
+        c.add " __attribute__((" & toString(t, ch.firstSon, c.m) & "))"
       of WasC:
-        g.add "/* " & toString(t, ch.firstSon, g.m) & " */"
+        c.add "/* " & toString(t, ch.firstSon, c.m) & " */"
       else:
-        error g.m, "invalid pragma: ", t, ch
+        error c.m, "invalid pragma: ", t, ch
   else:
-    error g.m, "expected pragmas but got: ", t, n
+    error c.m, "expected pragmas but got: ", t, n
 
 include genexprs
 
-proc genVarDecl(g: var GeneratedCode; t: Tree; n: NodePos; prefix: PredefinedToken) =
+proc genVarDecl(c: var GeneratedCode; t: Tree; n: NodePos; prefix: PredefinedToken) =
   let d = asVarDecl(t, n)
   if t[d.name].kind == SymDef:
     let lit = t[d.name].litId
-    let name = mangle(g.m.lits.strings[lit])
-    g.add prefix
-    genType g, t, d.typ, name
-    genVarPragmas g, t, d.pragmas
+    let name = mangle(c.m.lits.strings[lit])
+    c.add prefix
+    genType c, t, d.typ, name
+    genVarPragmas c, t, d.pragmas
     if t[d.value].kind != Empty:
-      g.add AsgnOpr
-      genx g, t, d.value
-    g.add Semicolon
+      c.add AsgnOpr
+      genx c, t, d.value
+    c.add Semicolon
   else:
-    error g.m, "expected SymbolDef but got: ", t, n
+    error c.m, "expected SymbolDef but got: ", t, n
 
 template moveToDataSection(body: untyped) =
   let oldLen = c.code.len
@@ -284,51 +284,51 @@ template moveToDataSection(body: untyped) =
 
 include genstmts
 
-proc genProcDecl(g: var GeneratedCode; t: Tree; n: NodePos; isExtern: bool) =
-  let signatureBegin = g.code.len
+proc genProcDecl(c: var GeneratedCode; t: Tree; n: NodePos; isExtern: bool) =
+  let signatureBegin = c.code.len
   let prc = asProcDecl(t, n)
 
   if isExtern:
-    g.add ExternKeyword
+    c.add ExternKeyword
 
-  genType g, t, prc.returnType
-  g.add Space
-  let name = genSymDef(g, t, prc.name)
+  genType c, t, prc.returnType
+  c.add Space
+  let name = genSymDef(c, t, prc.name)
 
   var flags: set[ProcFlag] = {}
-  genProcPragmas g, t, prc.pragmas, flags
+  genProcPragmas c, t, prc.pragmas, flags
 
-  g.add ParLe
+  c.add ParLe
 
   var params = 0
   if t[prc.params].kind != Empty:
     for ch in sons(t, prc.params):
-      if params > 0: g.add Comma
-      genParam g, t, ch
+      if params > 0: c.add Comma
+      genParam c, t, ch
       inc params
 
   if isVarargs in flags:
-    if params > 0: g.add Comma
-    g.add "..."
+    if params > 0: c.add Comma
+    c.add "..."
     inc params
 
   if params == 0:
-    g.add "void"
-  g.add ParRi
+    c.add "void"
+  c.add ParRi
 
-  if isExtern or g.requestedSyms.contains(name):
+  if isExtern or c.requestedSyms.contains(name):
     # symbol was used before its declaration has been processed so
     # add a signature:
-    for i in signatureBegin ..< g.code.len:
-      g.protos.add g.code[i]
-    g.protos.add Token Semicolon
+    for i in signatureBegin ..< c.code.len:
+      c.protos.add c.code[i]
+    c.protos.add Token Semicolon
 
   if isExtern:
-    g.code.setLen signatureBegin
+    c.code.setLen signatureBegin
   else:
-    g.add CurlyLe
-    genStmt g, t, prc.body
-    g.add CurlyRi
+    c.add CurlyLe
+    genStmt c, t, prc.body
+    c.add CurlyRi
 
 proc genInclude(c: var GeneratedCode; t: Tree; n: NodePos) =
   let lit = t[n.firstSon].litId
@@ -352,13 +352,25 @@ proc genImp(c: var GeneratedCode; t: Tree; n: NodePos) =
   else:
     error c.m, "expected declaration for `imp` but got: ", t, n
 
+proc genNodecl(c: var GeneratedCode; t: Tree; n: NodePos) =
+  let signatureBegin = c.code.len
+  let arg = n.firstSon
+  case t[arg].kind
+  of ProcC: genProcDecl c, t, arg, false
+  of VarC: genStmt c, t, arg
+  of ConstC: genStmt c, t, arg
+  else:
+    error c.m, "expected declaration for `nodecl` but got: ", t, n
+  c.code.setLen signatureBegin
+
 proc genToplevel(c: var GeneratedCode; t: Tree; n: NodePos) =
   # ExternDecl ::= (imp ProcDecl | VarDecl | ConstDecl)
   # Include ::= (incl StringLiteral)
   # TopLevelConstruct ::= ExternDecl | ProcDecl | VarDecl | ConstDecl |
   #                       TypeDecl | Include | EmitStmt
   case t[n].kind
-  of ImpC: genImp(c, t, n)
+  of ImpC: genImp c, t, n
+  of NodeclC: genNodecl c, t, n
   of InclC: genInclude c, t, n
   of ProcC: genProcDecl c, t, n, false
   of VarC: genStmt c, t, n

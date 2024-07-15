@@ -107,6 +107,7 @@ type
     BitsC = "bits"
     VectorC = "vector"
     ImpC = "imp"
+    NodeclC = "nodecl"
     InclC = "incl"
 
 const

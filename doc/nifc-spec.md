@@ -195,9 +195,10 @@ TypePragmas ::= Empty | (pragmas TypePragma+)
 
 
 ExternDecl ::= (imp ProcDecl | VarDecl | ConstDecl)
+IgnoreDecl ::= (nodecl ProcDecl | VarDecl | ConstDecl)
 Include ::= (incl StringLiteral)
 
-TopLevelConstruct ::= ExternDecl | ProcDecl | VarDecl | ConstDecl |
+TopLevelConstruct ::= ExternDecl | IngoreDecl | ProcDecl | VarDecl | ConstDecl |
                       TypeDecl | Include | EmitStmt
 Module ::= (stmts TopLevelConstruct*)
 
@@ -234,12 +235,14 @@ Notes:
 - `conv` is a value preserving type conversion between numeric types, `cast` is a bit
   preserving type cast.
 - `array` is mapped to a struct with an array inside so that arrays gain value semantics.
-  Hence arrays can only be used within a `type` environment are become nominal types.
+  Hence arrays can only be used within a `type` environment and are nominal types.
   A NIFC code generator has to ensure that e.g. `(type :MyArray.T . (array T 4))` is only
   emitted once.
 - `type` can only be used to introduce a name for a nominal type (that is a type which
   is only compatible to itself) or for a proc type for code compression purposes. Arbitrary
   aliases for types **cannot** be used! Rationale: Implementation simplicity.
+- `nodecl` is an import mechanism like `imp` but the declarations come from a header file
+  and are not to be declared in the resulting C/C++ code.
 
 
 Inheritance
