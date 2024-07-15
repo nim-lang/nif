@@ -226,6 +226,34 @@ proc genObjectOrUnionBody(c: var GeneratedCode; types: TypeGraph; n: NodePos) =
       c.add Semicolon
     else: discard
 
+proc genEnumDecl(c: var GeneratedCode; t: TypeGraph; n: NodePos) =
+  # (efld SymbolDef Expr)
+  # EnumDecl ::= (enum Type EnumFieldDecl+)
+  let baseType = n.firstSon
+  for ch in sonsFromX(t, n):
+    if t[ch].kind == EfldC:
+      let (a, b) = sons2(t, ch)
+      if t[a].kind == SymDef:
+        let enumFieldName = mangle(c.m.lits.strings[t[a].litId])
+        c.add "#define "
+        c.add enumFieldName
+        c.add Space
+        c.add ParLe
+        c.add ParLe
+        c.genType t, baseType
+        c.add ParRi
+        case t[b].kind
+        of IntLit: c.genIntLit t[b].litId
+        of UIntLit: c.genUIntLit t[b].litId
+        else:
+          error c.m, "expected `Number` but got: ", t, a
+        c.add ParRi
+        c.add NewLine
+      else:
+        error c.m, "expected `SymbolDef` but got: ", t, a
+    else:
+      error c.m, "expected `efld` but got: ", t, ch
+
 proc generateTypes(c: var GeneratedCode; types: TypeGraph; o: TypeOrder) =
   for (d, declKeyword) in o.forwardedDecls.s:
     let decl = asTypeDecl(types, d)
@@ -253,11 +281,13 @@ proc generateTypes(c: var GeneratedCode; types: TypeGraph; o: TypeOrder) =
         c.add Semicolon
         c.add CurlyRi
         c.add s
+        c.add Semicolon
       of EnumC:
-        assert false, "too implement"
+        genEnumDecl c, types, decl.body
       of ProctypeC:
         c.add TypedefKeyword
         genType c, types, decl.body, s
+        c.add Semicolon
       else:
         c.add declKeyword
         c.add CurlyLe
@@ -265,5 +295,4 @@ proc generateTypes(c: var GeneratedCode; types: TypeGraph; o: TypeOrder) =
         c.genObjectOrUnionBody types, decl.body
         c.add CurlyRi
         c.add s
-      c.add Semicolon
-
+        c.add Semicolon

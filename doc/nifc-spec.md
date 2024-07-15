@@ -147,7 +147,7 @@ FieldDecl ::= (fld SymbolDef FieldPragmas Type)
 
 UnionDecl ::= (union Empty FieldDecl*)
 ObjDecl ::= (object [Empty | Type] FieldDecl*)
-EnumFieldDecl ::= (efld SymbolDef Expr)
+EnumFieldDecl ::= (efld SymbolDef Number)
 EnumDecl ::= (enum Type EnumFieldDecl+)
 
 ProcType ::= (proctype Empty Params Type ProcTypePragmas)
