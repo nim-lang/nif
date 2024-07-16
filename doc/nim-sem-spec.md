@@ -13,7 +13,7 @@ of `(call M ...)`.
 
 Information that is stored in a `PSym` or `PType` field in Nim are generally turned into
 pragmas which are then attached to the sym's declaration side. For example, if `PSym.position`
-is set to some value `4` which is not trivially recomputable it would be stored like:
+is set to some value `4` which is not trivially recomputable it would be stored as:
 
 ```
 (var :theSymbol.2 . (pragmas (position 4)) int .)
@@ -23,17 +23,103 @@ is set to some value `4` which is not trivially recomputable it would be stored 
 Sections
 --------
 
-Instead of the typical `stmts` root node there are two roots: `iface` ("interface")
-and `impl` ("implementation"). The `iface` can be loaded independently from `impl`.
-
-Both `iface` and `impl` can have `deps` ("dependencies"). If only the interface is
-processed only the interface's dependencies need to be loaded.
+Instead of the typical `stmts` root node there are three roots: `deps` ("dependencies"),
+`iface` ("interface") and `impl` ("implementation"). An `iface` can be loaded
+independently from an `impl`.
 
 
 Unique module names
 -------------------
 
-Every Nim module's absolute file path is
+Every Nim module's absolute file path is turned into a unique, short, machine independent name.
+For example `/home/araq/nim/lib/system.nim` is turned into `sys1xfa`. It is not possible to
+get back from the short name to the full path. Hence the mapping is stored in the `.nif` file
+and while we're at it, we also store a module's checksum:
+
+```
+(deps
+  (mod mod134ab "/path/to/module.nim" <sha1 of the file's contents>)
+)
+```
+
+The unique module name is used as a symbol suffix. The N-th `foo` inside module `M` is
+encoded as `foo.N.<M's unique module name>`. For local identifiers the module suffix is
+left out.
+
+Both `iface` and `impl` can have dependencies. The dependencies are implicitly
+stored via the name mangling mechanism. If proc `p` in an `iface` section uses `system.HSlice`
+this is encoded as `HSlice.1.sys1xfa` and the suffix can be used to follow this
+type to its definition inside `sys1xfa` (which is `system.nim`).
+
+
+Interface section
+-----------------
+
+Because of Nim's `export` feature a module can have symbols in its `iface` that are not "owned"
+by it. That means their module suffix differs from the current module's. However, the loading
+mechanism for symbols does not need special logic in order to support this feature.
+
+
+Types
+-----
+
+Lisp trees and the symbol mangling to the scheme `<name>.<number>.<module-suffix>` are
+sufficient to encode any Nim type into a short descriptive unique name. Many builtin types
+like `system.int` are directly mapped to node kinds. For example, like in NIFC `system.int`
+becomes `(i M)` and `system.char` becomes `(c 8)`.
+
+More examples:
+
+| type | Encoded as / canonical type description |
+| --------- | -------------- |
+| `string`  | `(str)`  |
+| `seq`  | `(seq)`  |
+| `typeof(nil)`  | `(typeof (nil))` |
+| `array[2..6, ref MyObj]` | `(array (ref MyObj.1.msfx) (range (i M) 2 6))` |
+
+
+Type aliases are immediately resolved and cannot be found in the canonical type description.
+
+`ref` types are a special beast in Nim. `ref` can be an ordinary structural type.
+But it can also be combined with an anonymous object type (`type X = ref object`). It is then
+modelled as a different `(refobj)` construct.
+
+
+Generic instantiations
+----------------------
+
+A module does "announce" to its clients the procs that it instantiated. Instantiating these
+again in a different module can then be avoided.
+
+For example:
+
+```
+(ginst (proc Symbol . TypeVars Params ReturnType))
+```
+
+Note that generic **type** instances are not stored in the nim-sem file separately.
+The reason is that duplicated type instances are harmless.
+
+
+Type based hooks
+----------------
+
+A type bound operator like `=copy` for type `T` is not encoded as `(proc \3Dcopy ...)` but
+instead as `(cop T ...)`.
+This makes it easier to lookup hooks for hook synthesis and code generation.
+
+| hook name | Node kind in nim-sem |
+| --------- | -------------- |
+| `=copy`   | `cop` |
+| `=sink`   | `snk` |
+| `=dup`    | `dup` | 
+| `=destroy` | `kil` |
+| `=trace`   | `trc` |
+| `=wasMoved` | `clr` |
+
+Note: Short names have been chosen in anticipation of their frequent use.
+
+Synthesized hooks are stored like other generic instantiations.
 
 
 Grammar
@@ -52,9 +138,27 @@ CharLiteral ::= <according to NIF's spec>
 StringLiteral ::= <according to NIF's spec>
 IntBits ::= [0-9]+ | 'M'
 
+ExportMarker ::= Empty | 'x'
+
 Iface ::= (iface Decl*)
 
-Decl ::= ($routine SymbolDef ExportMarker TypeVars Params ReturnType Pragmas Body)
+ReturnType ::= Type
+
+Effect ::= Type
+Effects ::= Empty | (Effect+)
+
+Decl ::= ($routine SymbolDef ExportMarker TypeVars Params ReturnType Effects Pragmas Body) |
+         VarDecl | LetDecl | ConstDecl | TypeDecl
+VarDecl ::= (var SymbolDef ExportMarker Pragmas Type Expr)
+
+Type ::= Symbol | (ref Type) | (ptr Type) | (refobj Type) | (ptrobj Type) |
+         (seq Type) | (string) | (i IntBits) | (u IntBits) | (f IntBits) |
+         (c 8) | (bool) | (uarray Type) | (lent Type) |
+         (array Type [Type Expr | (range Type Expr Expr)]) |
+         (mut Type) | (sink Type) | (out Type) # type modifiers
+         (invok Type Type (Type+)) | # tyGenericInvokation
+         (inst Type Type (Type+)) | # tyGenericInst
+
 
 ```
 
