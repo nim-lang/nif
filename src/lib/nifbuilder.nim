@@ -132,12 +132,7 @@ proc addStrLit*(b: var Builder; s: string; suffix = "") =
   b.put suffix
 
 proc addEmpty*(b: var Builder; count = 1) =
-  var j = b.buf.len-1
-  var count = count
-  if j >= 0 and b.buf[j] == '.':
-    dec count
-  else:
-    addSep b
+  addSep b
   for i in 1..count:
     b.put '.'
 
