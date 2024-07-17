@@ -74,19 +74,55 @@ More examples:
 | --------- | -------------- |
 | `string`  | `(str)`  |
 | `seq`  | `(seq)`  |
-| `typeof(nil)`  | `(typeof (nil))` |
+| `typeof(nil)`  | `(nilt)` |
 | `array[2..6, ref MyObj]` | `(array (ref MyObj.1.msfx) (range (i M) 2 6))` |
 
 
+### Type aliases
+
 Type aliases are immediately resolved and cannot be found in the canonical type description.
+Generic type aliases are completely different beasts though and handled differently. To see
+why consider this program:
+
+```nim
+
+type
+  G[T] = int
+
+proc p[T](x: G[T]) = echo typeof(T)
+
+var v: G[string]
+p v
+```
+
+It produces "string" as output. Generic type aliases are thus handled like other generic types.
+
+
+### TypeVars
+
+The position of a "type variable"/"generic parameter" (the `T` in `proc p[T](...)`) is important
+for the process of generic instantiation. Every usage of `T` carries its position with it,
+`(p T <N>)` (where N is the position) is generated instead of `T`. This makes it much faster
+to produce a generic instantiation as no lookup for `T`'s declaration is required.
+
+For example:
+
+```
+(type :G.1.m (typevars (typevar :T.1 .)).(object . (fld :FieldName (p T.1 0))))
+```
+
+A similar mechanism is used for template parameters.
+
+
+### Refs
 
 `ref` types are a special beast in Nim. `ref` can be an ordinary structural type.
 But it can also be combined with an anonymous object type (`type X = ref object`). It is then
 modelled as a different `(refobj)` construct.
 
 
-Generic instantiations
-----------------------
+Generic routine instantiations
+------------------------------
 
 A module does "announce" to its clients the procs that it instantiated. Instantiating these
 again in a different module can then be avoided.
@@ -104,7 +140,7 @@ The reason is that duplicated type instances are harmless.
 Type based hooks
 ----------------
 
-A type bound operator like `=copy` for type `T` is not encoded as `(proc \3Dcopy ...)` but
+A type bound operator like `=copy` for type `T` is not encoded as `(proc :\3Dcopy.3.m ...)` but
 instead as `(cop T ...)`.
 This makes it easier to lookup hooks for hook synthesis and code generation.
 
@@ -165,3 +201,4 @@ Type ::= Symbol | (ref Type) | (ptr Type) | (refobj Type) | (ptrobj Type) |
 Notes:
 
 - `$routine` is short for `proc`, `func`, `iterator`, `macro`, `template`, `method`, `converter`.
+- `mut` is used instead of `var` as `var` is already used for variable declarations.
