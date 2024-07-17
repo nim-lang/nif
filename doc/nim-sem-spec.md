@@ -137,18 +137,21 @@ Note that generic **type** instances are not stored in the nim-sem file separate
 The reason is that duplicated type instances are harmless.
 
 
-Type based hooks
+Type bound hooks
 ----------------
 
 A type bound operator like `=copy` for type `T` is not encoded as `(proc :\3Dcopy.3.m ...)` but
-instead as `(cop T ...)`.
+instead as `(hook Type RoutineDecl)`.
+
 This makes it easier to lookup hooks for hook synthesis and code generation.
+
+Calls into hooks are compressed. `(call =copy a b)` becomes `(cop a b)`.
 
 | hook name | Node kind in nim-sem |
 | --------- | -------------- |
 | `=copy`   | `cop` |
 | `=sink`   | `snk` |
-| `=dup`    | `dup` | 
+| `=dup`    | `dup` |
 | `=destroy` | `kil` |
 | `=trace`   | `trc` |
 | `=wasMoved` | `clr` |
@@ -158,11 +161,22 @@ Note: Short names have been chosen in anticipation of their frequent use.
 Synthesized hooks are stored like other generic instantiations.
 
 
+Expansions
+----------
+
+nim-sem stores the AST after template and macro expansion. This would not allow for
+the operation "find all usages of template `>=`". To compensate for this use case nim-sem
+has a special section called `expansions` within `impl` that lists every usage/callsite
+of a template or macro.
+
+
 Grammar
 -------
 
 Generated nim-sem code must adhere to this grammar. For better readability `'('` and `')'` are written
 without quotes and `[]` is used for grouping.
+
+Currently the grammar is simplified and work-in-progress:
 
 ```
 Empty ::= <according to NIF's spec>
@@ -176,29 +190,76 @@ IntBits ::= [0-9]+ | 'M'
 
 ExportMarker ::= Empty | 'x'
 
-Iface ::= (iface Decl*)
-
 ReturnType ::= Type
 
-Effect ::= Type
-Effects ::= Empty | (Effect+)
+Effect ::= (raises Type+) | (sideeffect) | (nosideeffect) | (tags Type+) |
+           (gcsafe) | (effectsof Symbol)
+Effects ::= Empty | (effects Effect+)
 
-Decl ::= ($routine SymbolDef ExportMarker TypeVars Params ReturnType Effects Pragmas Body) |
-         VarDecl | LetDecl | ConstDecl | TypeDecl
+RoutineDecl ::= ($routine SymbolDef ExportMarker TypeVars Params ReturnType
+                 Effects Pragmas Body)
+
+GenericInstance ::= (ginst RoutineDecl)
+
+TypeBoundHook ::= (hook Type RoutineDecl)
+
 VarDecl ::= (var SymbolDef ExportMarker Pragmas Type Expr)
+LetDecl ::= (var SymbolDef ExportMarker Pragmas Type Expr)
+ConstDecl ::= (var SymbolDef ExportMarker Pragmas Type Expr)
 
 Type ::= Symbol | (ref Type) | (ptr Type) | (refobj Type) | (ptrobj Type) |
          (seq Type) | (string) | (i IntBits) | (u IntBits) | (f IntBits) |
          (c 8) | (bool) | (uarray Type) | (lent Type) |
+         (p Symbol Number) | # position annotation for a typevar
          (array Type [Type Expr | (range Type Expr Expr)]) |
-         (mut Type) | (sink Type) | (out Type) # type modifiers
+         (mut Type) | (sink Type) | (out Type) | (stat Type) | # type modifiers
          (invok Type Type (Type+)) | # tyGenericInvokation
          (inst Type Type (Type+)) | # tyGenericInst
 
+BaseClass ::= Empty | Symbol
+FieldValue ::= Empty | Expr # default value for object field
+Field ::= (fld Symbol ExportMarker Pragmas Type FieldValue)
+
+BranchValue ::= Expr
+BranchRange ::= BranchValue | (range BranchValue BranchValue)
+BranchRanges ::= (ranges BranchRange+)
+
+CaseObj ::= (case Field (of BranchRanges FieldList)+ (else FieldList)?)
+ObjBody ::= Field | CaseObj
+FieldList ::= (discard) | ObjBody+
+ObjDecl ::= (object BaseClass ObjBody*)
+
+TypeBody ::= ObjDecl | EnumDecl | (distinct Type) | Type
+
+TypeDecl ::= (type SymbolDef ExportMarker TypeVars Pragmas TypeBody)
+
+Decl ::= RoutineDecl | VarDecl | LetDecl | ConstDecl | TypeDecl | TypeBoundHook
+
+Expr ::= Identifier | Symbol | Number | CharLiteral | StringLiteral |
+         (at Expr Expr) | (dot Expr Expr) |
+         (cast Type Expr) | (conv Type Expr) |
+         (call Expr+) | IfExpr | CaseExpr | TryExpr | AnonProc
+
+DiscardStmt ::= (discard Empty | Expr)
+ReturnStmt ::= (discard Empty | Expr)
+RaiseStmt ::= (discard Empty | Expr)
+Stmt ::= DiscardStmt | ReturnStmt | RaiseStmt | IfStmt | CaseStmt |
+         ForStmt | WhileStmt | ...
+
+Toplevel ::= Decl |
+             (expansions Symbol*) | Stmt
+
+IfaceDecl ::= Decl |
+              GenericInstance
+
+Iface ::= (iface IfaceDecl*)
+Impl ::= (impl Toplevel*)
+
+Module ::= Iface Impl
 
 ```
 
 Notes:
 
 - `$routine` is short for `proc`, `func`, `iterator`, `macro`, `template`, `method`, `converter`.
-- `mut` is used instead of `var` as `var` is already used for variable declarations.
+- `mut` is used for the type modifier `var` as `var` is already used for variable declarations.
