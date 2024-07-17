@@ -4,7 +4,7 @@
 # See the file "license.txt", included in this
 # distribution, for details about the copyright.
 
-## Implements the mapping from Nim AST -> NIF.
+## Implements the mapping from Nim sem's AST to NIF ("nim-sem").
 
 when defined(nifBench):
   import std / monotimes
@@ -13,7 +13,8 @@ import "$nim" / compiler / [
   ast, options, pathutils, renderer, lineinfos,
   parser, llstream, idents, msgs]
 
-import emitter
+import ".." / lib / [nifbuilder]
+import modnames
 
 proc nodeKindTranslation(k: TNodeKind): string =
   # many of these kinds are never returned by the parser.
@@ -23,18 +24,19 @@ proc nodeKindTranslation(k: TNodeKind): string =
   of nkCallStrLit: "callstrlit"
   of nkInfix: "infix"
   of nkPrefix: "prefix"
-  of nkHiddenCallConv: "<error>"
+  of nkHiddenCallConv: "hcall"
   of nkExprEqExpr: "vv"
   of nkExprColonExpr: "kv"
   of nkPar: "par"
-  of nkObjConstr: "objConstr"
-  of nkCurly: "curlyConstr"
-  of nkCurlyExpr: "curlyExpr"
-  of nkBracket: "bracketConstr"
+  of nkObjConstr: "oconstr"
+  of nkCurly: "sconstr"
+  of nkCurlyExpr: "curlyexpr"
+  of nkBracket: "aconstr"
   of nkBracketExpr: "at"
-  of nkPragmaBlock, nkPragmaExpr: "pragmaExpr"
+  of nkPragmaBlock, nkPragmaExpr: "pragmaexpr"
   of nkDotExpr: "dot"
-  of nkAsgn, nkFastAsgn: "asgn"
+  of nkAsgn: "asgn"
+  of nkFastAsgn: "fasgn"
   of nkIfExpr, nkIfStmt: "if"
   of nkWhenStmt, nkRecWhen: "when"
   of nkWhileStmt: "while"
@@ -49,7 +51,7 @@ proc nodeKindTranslation(k: TNodeKind): string =
   of nkCast: "cast"
   of nkLambda: "proc"
   of nkAccQuoted: "quoted"
-  of nkTableConstr: "tableConstr"
+  of nkTableConstr: "tableconstr"
   of nkStmtListType, nkStmtListExpr, nkStmtList, nkRecList, nkArgList: "stmts"
   of nkBlockStmt, nkBlockExpr, nkBlockType: "block"
   of nkStaticStmt: "static"
@@ -61,7 +63,7 @@ proc nodeKindTranslation(k: TNodeKind): string =
   of nkImportAs: "importAs"
   of nkRaiseStmt: "raise"
   of nkContinueStmt: "continue"
-  of nkYieldStmt: "yld"
+  of nkYieldStmt: "yield"
   of nkProcDef: "proc"
   of nkFuncDef: "func"
   of nkMethodDef: "method"
@@ -74,10 +76,10 @@ proc nodeKindTranslation(k: TNodeKind): string =
   of nkFinally: "fin"
   of nkTryStmt: "try"
   of nkImportStmt: "import"
-  of nkImportExceptStmt: "importExcept"
+  of nkImportExceptStmt: "importexcept"
   of nkIncludeStmt: "include"
   of nkExportStmt: "export"
-  of nkExportExceptStmt: "exportExcept"
+  of nkExportExceptStmt: "exportexcept"
   of nkFromStmt: "from"
   of nkPragma: "pragmas"
   of nkAsmStmt: "asm"
@@ -87,147 +89,181 @@ proc nodeKindTranslation(k: TNodeKind): string =
   of nkObjectTy: "object"
   of nkTupleTy, nkTupleClassTy: "tuple"
   of nkTypeClassTy: "concept"
-  of nkStaticTy: "staticTy"
+  of nkStaticTy: "stat"
   of nkRefTy: "ref"
   of nkPtrTy: "ptr"
   of nkVarTy: "mut"
   of nkDistinctTy: "distinct"
-  of nkIteratorTy: "iterTy"
+  of nkIteratorTy: "itert"
   of nkEnumTy: "enum"
   #of nkEnumFieldDef: EnumFieldDecl
-  of nkTupleConstr: "tupleConstr"
+  of nkTupleConstr: "tupleconstr"
   of nkOutTy: "outTy"
-  of nkType:
+  of nkType: "<error>" # should follow n.typ instead
 
   of nkNone, nkEmpty, nkIdent, nkCharLit, nkIntLit, nkInt8Lit, nkInt16Lit,
      nkInt32Lit, nkInt64Lit, nkUIntLit, nkUInt8Lit, nkUInt16Lit, nkUInt32Lit,
      nkUInt64Lit, nkFloatLit, nkFloat32Lit, nkFloat64Lit, nkFloat128Lit,
      nkStrLit, nkRStrLit, nkTripleStrLit, nkNilLit, nkSym:
-    "<error>"
-
-   , nkType, , nkComesFrom, nkDotCall, nkPostfix, nkIdentDefs, nkVarTuple,
-  nkRange, nkCheckedFieldExpr, nkDerefExpr, nkDo, nkClosedSymChoice, nkOpenSymChoice, nkHiddenStdConv,
-  nkHiddenSubConv, nkConv, nkStaticExpr, nkHiddenAddr, nkHiddenDeref, nkObjDownConv, nkObjUpConv, nkChckRangeF,
-  nkChckRange64, nkChckRange, nkStringToCString, nkCStringToString, nkOfInherit, nkParForStmt, nkTypeSection,
-  nkVarSection, nkLetSection, nkConstSection, nkConstDef, nkTypeDef, nkWith, nkWithout, nkConstTy, nkProcTy,
-  nkSinkAsgn, nkEnumFieldDef, nkPattern, nkHiddenTryStmt, nkClosure, nkGotoState, nkState, nkBreakState,
-  nkError, nkModuleRef, nkReplayAction, nkNilRodNode
+    "<error>" # Atom: handled as a special case
+  of nkComesFrom: "comesfrom"
+  of nkDotCall: "dotcall"
+  of nkPostfix: "postfix"
+  of nkIdentDefs: "<error>" # eliminated in nim-sem
+  of nkVarTuple: "vartuple"
+  of nkRange: "range"
+  of nkCheckedFieldExpr: "xdot"
+  of nkDerefExpr: "deref"
+  of nkDo: "do"
+  of nkClosedSymChoice: "cchoice"
+  of nkOpenSymChoice: "ochoice"
+  of nkHiddenStdConv: "hstdconv"
+  of nkHiddenSubConv: "hsubconv"
+  of nkConv: "conv"
+  of nkStaticExpr: "static"
+  of nkHiddenAddr: "haddr"
+  of nkHiddenDeref: "hderef"
+  of nkObjDownConv: "downconv"
+  of nkObjUpConv: "upconv"
+  of nkChckRangeF: "xrangef"
+  of nkChckRange64: "xrange64"
+  of nkChckRange: "xrange"
+  of nkStringToCString: "tocstr"
+  of nkCStringToString: "tostr"
+  of nkOfInherit: "ofh"
+  of nkParForStmt: "parfor"
+  of nkTypeSection, nkVarSection, nkLetSection, nkConstSection:
+    "<error>" # not a thing in nim-sem
+  of nkConstDef: "const"
+  of nkTypeDef: "type"
+  of nkWith: "with"
+  of nkWithout: "without"
+  of nkConstTy: "ro"
+  of nkProcTy: "proctype"
+  of nkSinkAsgn: "snk"
+  of nkEnumFieldDef: "efld"
+  of nkPattern: "trpattern"
+  of nkHiddenTryStmt: "htry"
+  of nkClosure: "closure"
+  of nkGotoState: "gotostate"
+  of nkState: "state"
+  of nkBreakState: "brstate"
+  of nkError: "err"
+  of nkModuleRef: "modref"
+  of nkReplayAction: "replay"
+  of nkNilRodNode: "nilrod"
 
 
 type
   TranslationContext = object
     conf: ConfigRef
     section: string
+    b: Builder
 
-proc absLineInfo(i: TLineInfo; em: var Emitter; c: var TranslationContext) =
-  em.addRaw "@"
-  em.addLine int32 i.col
-  em.addRaw ","
-  em.addLine int32 i.line
-  em.addRaw ","
-  em.addIdent toFullPath(c.conf, i.fileIndex)
+proc absLineInfo(i: TLineInfo; c: var TranslationContext) =
+  c.b.addLineInfo int32(i.col), int32(i.line), toFullPath(c.conf, i.fileIndex)
 
-proc relLineInfo(n, parent: PNode; em: var Emitter; c: var TranslationContext;
+proc relLineInfo(n, parent: PNode; c: var TranslationContext;
                  emitSpace = false) =
   let i = n.info
   if parent == nil:
-    absLineInfo i, em, c
+    absLineInfo i, c
     return
   let p = parent.info
-  let colDiff = int32(i.col) - int32(p.col)
-  var seps = 0
-  if colDiff != 0:
-    em.addRaw "@"
-    em.addLine colDiff
-    seps = 1
-  let lineDiff = int32(i.line) - int32(p.line)
-  if lineDiff != 0:
-    if seps != 1:
-      em.addRaw "@"
-    seps = 2
-    em.addRaw ","
-    em.addLine lineDiff
   if i.fileIndex != p.fileIndex:
-    case seps
-    of 0:
-      em.addRaw "@,,"
-    of 1:
-      em.addRaw ",,"
-    of 2:
-      em.addRaw ","
-    else: discard
-    inc seps
-    em.addIdent toFullPath(c.conf, i.fileIndex)
-  if seps > 0 and emitSpace:
-    em.addRaw " "
+    absLineInfo i, c
+    return
 
-proc toNif*(n, parent: PNode; em: var Emitter; c: var TranslationContext) =
+  let colDiff = int32(i.col) - int32(p.col)
+  let lineDiff = int32(i.line) - int32(p.line)
+  c.b.addLineInfo colDiff, lineDiff, ""
+
+proc toNif*(t: PType; c: var TranslationContext) =
+  discard "XXX to implement"
+
+proc symUse(n: PNode; c: var TranslationContext) =
+  let s {.cursor.} = n.sym
+  var m = s.name.s & '.' & $s.disamb
+  if s.skipGenericOwner().kind == skModule:
+    m.add '.'
+    m.add moduleSuffix(toFullPath(c.conf, s.info.fileIndex))
+  if n.typ != s.typ:
+    c.b.withTree "hsubconv":
+      toNif n.typ, c
+      c.b.addSymbol m
+  else:
+    c.b.addSymbol m
+
+proc toNif*(n, parent: PNode; c: var TranslationContext) =
   case n.kind
   of nkNone, nkEmpty:
-    em.addEmpty 1
+    c.b.addEmpty 1
+  of nkSym:
+    relLineInfo(n, parent, c)
+    symUse(n, c)
   of nkNilLit:
-    relLineInfo(n, parent, em, c)
-    em.addRaw "(nil)"
+    relLineInfo(n, parent, c)
+    c.b.addRaw "(nil)"
   of nkStrLit:
-    relLineInfo(n, parent, em, c)
-    em.addStrLit n.strVal, ""
+    relLineInfo(n, parent, c)
+    c.b.addStrLit n.strVal, ""
   of nkRStrLit:
-    relLineInfo(n, parent, em, c)
-    em.addStrLit n.strVal, "R"
+    relLineInfo(n, parent, c)
+    c.b.addStrLit n.strVal, "R"
   of nkTripleStrLit:
-    relLineInfo(n, parent, em, c)
-    em.addStrLit n.strVal, "T"
+    relLineInfo(n, parent, c)
+    c.b.addStrLit n.strVal, "T"
   of nkCharLit:
-    relLineInfo(n, parent, em, c)
-    em.addCharLit char(n.intVal)
+    relLineInfo(n, parent, c)
+    c.b.addCharLit char(n.intVal)
   of nkIntLit:
-    relLineInfo(n, parent, em, c, true)
-    em.addIntLit n.intVal
+    relLineInfo(n, parent, c, true)
+    c.b.addIntLit n.intVal
   of nkInt8Lit:
-    relLineInfo(n, parent, em, c, true)
-    em.addIntLit n.intVal, "i8"
+    relLineInfo(n, parent, c, true)
+    c.b.addIntLit n.intVal, "i8"
   of nkInt16Lit:
-    relLineInfo(n, parent, em, c, true)
-    em.addIntLit n.intVal, "i16"
+    relLineInfo(n, parent, c, true)
+    c.b.addIntLit n.intVal, "i16"
   of nkInt32Lit:
-    relLineInfo(n, parent, em, c, true)
-    em.addIntLit n.intVal, "i32"
+    relLineInfo(n, parent, c, true)
+    c.b.addIntLit n.intVal, "i32"
   of nkInt64Lit:
-    relLineInfo(n, parent, em, c, true)
-    em.addIntLit n.intVal, "i64"
+    relLineInfo(n, parent, c, true)
+    c.b.addIntLit n.intVal, "i64"
   of nkUIntLit:
-    relLineInfo(n, parent, em, c, true)
-    em.addUIntLit cast[BiggestUInt](n.intVal), "u"
+    relLineInfo(n, parent, c, true)
+    c.b.addUIntLit cast[BiggestUInt](n.intVal), "u"
   of nkUInt8Lit:
-    relLineInfo(n, parent, em, c, true)
-    em.addUIntLit cast[BiggestUInt](n.intVal), "u8"
+    relLineInfo(n, parent, c, true)
+    c.b.addUIntLit cast[BiggestUInt](n.intVal), "u8"
   of nkUInt16Lit:
-    relLineInfo(n, parent, em, c, true)
-    em.addUIntLit cast[BiggestUInt](n.intVal), "u16"
+    relLineInfo(n, parent, c, true)
+    c.b.addUIntLit cast[BiggestUInt](n.intVal), "u16"
   of nkUInt32Lit:
-    relLineInfo(n, parent, em, c, true)
-    em.addUIntLit cast[BiggestUInt](n.intVal), "u32"
+    relLineInfo(n, parent, c, true)
+    c.b.addUIntLit cast[BiggestUInt](n.intVal), "u32"
   of nkUInt64Lit:
-    relLineInfo(n, parent, em, c, true)
-    em.addUIntLit cast[BiggestUInt](n.intVal), "u64"
+    relLineInfo(n, parent, c, true)
+    c.b.addUIntLit cast[BiggestUInt](n.intVal), "u64"
   of nkFloatLit:
-    relLineInfo(n, parent, em, c, true)
-    em.addFloatLit n.floatVal
+    relLineInfo(n, parent, c, true)
+    c.b.addFloatLit n.floatVal
   of nkFloat32Lit:
-    relLineInfo(n, parent, em, c, true)
-    em.addFloatLit n.floatVal, "f32"
+    relLineInfo(n, parent, c, true)
+    c.b.addFloatLit n.floatVal, "f32"
   of nkFloat64Lit:
-    relLineInfo(n, parent, em, c, true)
-    em.addFloatLit n.floatVal, "f64"
+    relLineInfo(n, parent, c, true)
+    c.b.addFloatLit n.floatVal, "f64"
   of nkFloat128Lit:
-    relLineInfo(n, parent, em, c, true)
-    em.addFloatLit n.floatVal, "f128"
+    relLineInfo(n, parent, c, true)
+    c.b.addFloatLit n.floatVal, "f128"
   of nkIdent:
-    relLineInfo(n, parent, em, c, true)
-    em.addIdent n.ident.s
+    relLineInfo(n, parent, c, true)
+    c.b.addIdent n.ident.s
   of nkTypeDef:
-    relLineInfo(n, parent, em, c)
-    var patchPos = em.prepare("type")
+    relLineInfo(n, parent, c)
+    c.b.addTree("type")
     var name: PNode
     var visibility: PNode
     var pragma: PNode
@@ -244,67 +280,61 @@ proc toNif*(n, parent: PNode; em: var Emitter; c: var TranslationContext) =
     else:
       name = n[0]
 
-    addSep em, patchPos
-    toNif(name, n, em, c)
+    toNif(name, n, c)
 
-    addSep em, patchPos
     if visibility != nil:
-      em.addRaw "x"
+      c.b.addRaw "x"
     else:
-      em.addEmpty
+      c.b.addEmpty
 
-    addSep em, patchPos
     if pragma != nil:
-      toNif(pragma, n, em, c)
+      toNif(pragma, n, c)
     else:
-      em.addEmpty
+      c.b.addEmpty
 
     for i in 1..<n.len:
-      addSep em, patchPos
-      toNif(n[i], n, em, c)
-    em.patch patchPos
+      toNif(n[i], n, c)
+    c.b.endTree
 
   of nkTypeSection:
     for i in 0..<n.len:
-      toNif(n[i], parent, em, c)
+      toNif(n[i], parent, c)
 
   of nkVarSection:
     c.section = "var"
     for i in 0..<n.len:
-      toNif(n[i], parent, em, c)
+      toNif(n[i], parent, c)
   of nkLetSection:
     c.section = "let"
     for i in 0..<n.len:
-      toNif(n[i], parent, em, c)
+      toNif(n[i], parent, c)
   of nkConstSection:
     c.section = "const"
     for i in 0..<n.len:
-      toNif(n[i], parent, em, c)
+      toNif(n[i], parent, c)
 
   of nkFormalParams:
     c.section = "param"
-    relLineInfo(n, parent, em, c)
-    var patchPos = em.prepare("params")
+    relLineInfo(n, parent, c)
+    c.b.addTree("params")
     for i in 0..<n.len:
-      addSep em, patchPos
-      toNif(n[i], n, em, c)
-    em.patch patchPos
+      toNif(n[i], n, c)
+    c.b.endTree
   of nkGenericParams:
     c.section = "typevar"
-    relLineInfo(n, parent, em, c)
-    var patchPos = em.prepare("typevars")
+    relLineInfo(n, parent, c)
+    c.b.addTree("typevars")
     for i in 0..<n.len:
-      addSep em, patchPos
-      toNif(n[i], n, em, c)
-    em.patch patchPos
+      toNif(n[i], n, c)
+    c.b.endTree
 
   of nkIdentDefs, nkConstDef:
     # multiple ident defs are annoying so we remove them here:
     assert c.section != ""
     let last = n.len-1
     for i in 0..last - 2:
-      relLineInfo(n[i], parent, em, c)
-      var patchPos = em.prepare(c.section)
+      relLineInfo(n[i], parent, c)
+      c.b.addTree(c.section)
       # flatten it further:
       var name: PNode
       var visibility: PNode
@@ -322,100 +352,84 @@ proc toNif*(n, parent: PNode; em: var Emitter; c: var TranslationContext) =
       else:
         name = n[i]
 
-      addSep em, patchPos
-      toNif(name, n[i], em, c) # name
+      toNif(name, n[i], c) # name
 
-      addSep em, patchPos
       if visibility != nil:
-        em.addRaw "x"
+        c.b.addRaw "x"
       else:
-        em.addEmpty
+        c.b.addEmpty
 
-      addSep em, patchPos
       if pragma != nil:
-        toNif(pragma, n[i], em, c)
+        toNif(pragma, n[i], c)
       else:
-        em.addEmpty
+        c.b.addEmpty
 
-      addSep em, patchPos
-      toNif(n[last-1], n[i], em, c) # type
 
-      addSep em, patchPos
-      toNif(n[last], n[i], em, c) # value
-      em.patch patchPos
+      toNif(n[last-1], n[i], c) # type
+      toNif(n[last], n[i], c) # value
+      c.b.endTree
   of nkDo:
-    relLineInfo(n, parent, em, c)
-    var patchPos = em.prepare("paramsAndBody")
-    addSep em, patchPos
-    toNif(n[paramsPos], n, em, c)
-    addSep em, patchPos
-    toNif(n[bodyPos], n, em, c)
-    em.patch patchPos
+    relLineInfo(n, parent, c)
+    c.b.addTree("paramsAndBody")
+
+    toNif(n[paramsPos], n, c)
+    toNif(n[bodyPos], n, c)
+    c.b.endTree
   of nkOfInherit:
     if n.len == 1:
-      toNif(n[0], parent, em, c)
+      toNif(n[0], parent, c)
     else:
-      relLineInfo(n, parent, em, c)
-      var patchPos = em.prepare("par")
+      relLineInfo(n, parent, c)
+      c.b.addTree("par")
       for i in 0..<n.len:
-        addSep em, patchPos
-        toNif(n[i], n, em, c)
-      em.patch patchPos
+        toNif(n[i], n, c)
+      c.b.endTree
   of nkOfBranch:
-    relLineInfo(n, parent, em, c)
-    var patchPos = em.prepare("of")
-    var patchPosB = em.prepare("curlyConstr")
+    relLineInfo(n, parent, c)
+    c.b.addTree("of")
+    c.b.addTree("curlyConstr")
     for i in 0..<n.len-1:
-      addSep em, patchPosB
-      toNif(n[i], n, em, c)
-    em.patch patchPosB
-    addSep em, patchPos
-    toNif(n[n.len-1], n, em, c)
-    em.patch patchPos
+      toNif(n[i], n, c)
+    c.b.endTree
+
+    toNif(n[n.len-1], n, c)
+    c.b.endTree
 
   of nkStmtListType, nkStmtListExpr:
-    relLineInfo(n, parent, em, c)
-    var patchPos = em.prepare("expr")
-    em.addSep patchPos
-    em.addEmpty # type information of StmtListExpr
-    var patchPosB = em.prepare("stmts")
+    relLineInfo(n, parent, c)
+    c.b.addTree("expr")
+
+    c.b.addEmpty # type information of StmtListExpr
+    c.b.addTree("stmts")
     for i in 0..<n.len-1:
-      em.addSep patchPosB
-      toNif(n[i], n, em, c)
-    em.patch patchPosB
+      toNif(n[i], n, c)
+    c.b.endTree
     if n.len > 0:
-      em.addSep patchPos
-      toNif(n[n.len-1], n, em, c)
+      toNif(n[n.len-1], n, c)
     else:
-      em.addEmpty
-    em.patch patchPos
+      c.b.addEmpty
+    c.b.endTree
 
   of nkProcTy:
-    relLineInfo(n, parent, em, c)
-    var patchPos = em.prepare("procTy")
+    relLineInfo(n, parent, c)
+    c.b.addTree("proctype")
 
-    em.addSep patchPos
-    em.addEmpty 4 # 0: name
+    c.b.addEmpty 4 # 0: name
     # 1: export marker
     # 2: pattern
     # 3: generics
-
-    em.addSep patchPos
     if n.len > 0:
-      toNif n[0], n, em, c  # 4: params
+      toNif n[0], n, c  # 4: params
     else:
-      em.addEmpty
-
-    em.addSep patchPos
+      c.b.addEmpty
     if n.len > 1:
-      toNif n[1], n, em, c  # 5: pragmas
+      toNif n[1], n, c  # 5: pragmas
     else:
-      em.addEmpty
+      c.b.addEmpty
 
-    em.addSep patchPos
-    em.addEmpty 2 # 6: exceptions
+    c.b.addEmpty 2 # 6: exceptions
     # 7: body
-    em.patch patchPos
+    c.b.endTree
 
   of nkEnumTy:
     # EnumField
@@ -424,8 +438,8 @@ proc toNif*(n, parent: PNode; em: var Emitter; c: var TranslationContext) =
     #   Empty      # pragmas
     #   EnumType
     #   (Integer value, "string value")
-    relLineInfo(n, parent, em, c)
-    var patchPos = em.prepare("enum")
+    relLineInfo(n, parent, c)
+    c.b.addTree("enum")
     if n.len > 0:
       assert n[0].kind == nkEmpty
     for i in 1..<n.len:
@@ -453,38 +467,27 @@ proc toNif*(n, parent: PNode; em: var Emitter; c: var TranslationContext) =
         pragma = nil
         val = nil
 
-      relLineInfo(it, n, em, c)
+      relLineInfo(it, n, c)
 
-      var patchPosB = em.prepare("enumFieldDecl")
-      relLineInfo(it, n, em, c)
-
-      em.addSep patchPosB
-      toNif name, it, em, c
-
-      em.addSep patchPosB
-      em.addEmpty # export marker
-
-      em.addSep patchPosB
+      c.b.addTree("efld")
+      relLineInfo(it, n, c)
+      toNif name, it, c
+      c.b.addEmpty # export marker
       if pragma == nil:
-        em.addEmpty
+        c.b.addEmpty
       else:
-        toNif(pragma, it, em, c)
-
-      em.addSep patchPosB
-      em.addEmpty # type (filled by sema)
-
-      em.addSep patchPosB
+        toNif(pragma, it, c)
+      c.b.addEmpty # type (filled by sema)
       if val == nil:
-        em.addEmpty
+        c.b.addEmpty
       else:
-        toNif(val, it, em, c)
-      em.patch patchPosB
-
-    em.patch patchPos
+        toNif(val, it, c)
+      c.b.endTree
+    c.b.endTree
 
   of nkProcDef, nkFuncDef, nkConverterDef, nkMacroDef, nkTemplateDef, nkIteratorDef, nkMethodDef:
-    relLineInfo(n, parent, em, c)
-    var patchPos = em.prepare(nodeKindTranslation(n.kind))
+    relLineInfo(n, parent, c)
+    c.b.addTree(nodeKindTranslation(n.kind))
 
     var name: PNode
     var visibility: PNode = nil
@@ -494,114 +497,80 @@ proc toNif*(n, parent: PNode; em: var Emitter; c: var TranslationContext) =
     else:
       name = n[0]
 
-    addSep em, patchPos
-    toNif(name, n, em, c)
-
-    addSep em, patchPos
+    toNif(name, n, c)
     if visibility != nil:
-      em.addRaw "x"
+      c.b.addRaw "x"
     else:
-      em.addEmpty
+      c.b.addEmpty
 
     for i in 1..<n.len:
-      addSep em, patchPos
-      toNif(n[i], n, em, c)
-    em.patch patchPos
+      toNif(n[i], n, c)
+    c.b.endTree
 
   of nkVarTuple:
-    relLineInfo(n, parent, em, c)
+    relLineInfo(n, parent, c)
     assert n[n.len-2].kind == nkEmpty
-    var patchPos = em.prepare("unpackDecl")
-    toNif(n[n.len-1], n, em, c)
-
-    em.addSep patchPos
-    var patchPosU = em.prepare("unpackIntoTuple")
+    c.b.addTree("unpackDecl")
+    toNif(n[n.len-1], n, c)
+    c.b.addTree("unpackIntoTuple")
     for i in 0..<n.len-2:
-      var patchPosB = em.prepare(c.section)
-      toNif(n[i], n, em, c) # name
-
-      em.addSep patchPosB
-      em.addEmpty 4 # 1: export marker
+      c.b.addTree(c.section)
+      toNif(n[i], n, c) # name
+      c.b.addEmpty 4 # 1: export marker
       # 2: pragmas
       # 3: type
       # 4: value
-      em.patch patchPosB
-    em.patch patchPosU
-    em.patch patchPos
+      c.b.endTree
+    c.b.endTree
+    c.b.endTree
 
   of nkForStmt:
-    relLineInfo(n, parent, em, c)
-    var patchPos = em.prepare("for")
-
-    em.addSep patchPos
-    toNif(n[n.len-2], n, em, c) # iterator
-
+    relLineInfo(n, parent, c)
+    c.b.addTree("for")
+    toNif(n[n.len-2], n, c) # iterator
     if n[0].kind == nkVarTuple:
       let v = n[0]
-      var patchPosB = em.prepare("unpackIntoTuple")
+      c.b.addTree("unpackIntoTuple")
       for i in 0..<v.len:
-        var patchPosD = em.prepare("let")
-
-        em.addSep patchPosD
-        toNif(v[i], n, em, c) # name
-
-        em.addSep patchPosD
-        em.addEmpty 4 # export marker, pragmas, type, value
-        em.patch patchPosD # LetDecl
-      em.patch patchPosB # UnpackIntoTuple
+        c.b.addTree("let")
+        toNif(v[i], n, c) # name
+        c.b.addEmpty 4 # export marker, pragmas, type, value
+        c.b.endTree # LetDecl
+      c.b.endTree # UnpackIntoTuple
     else:
-      var patchPosC = em.prepare("unpackIntoFlat")
+      c.b.addTree("unpackIntoFlat")
       for i in 0..<n.len-2:
-        var patchPosD = em.prepare("let")
-
-        em.addSep patchPosD
-        toNif(n[i], n, em, c) # name
-
-        em.addSep patchPosD
-        em.addEmpty 4 # export marker, pragmas, type, value
-        em.patch patchPosD # LetDecl
-      em.patch patchPosC # UnpackIntoFlat
+        c.b.addTree("let")
+        toNif(n[i], n, c) # name
+        c.b.addEmpty 4 # export marker, pragmas, type, value
+        c.b.endTree # LetDecl
+      c.b.endTree # UnpackIntoFlat
 
     # for-loop-body:
-    em.addSep patchPos
-    toNif(n[n.len-1], n, em, c)
-    em.patch patchPos
+    toNif(n[n.len-1], n, c)
+    c.b.endTree
 
   of nkObjectTy:
     c.section = "fld"
-    relLineInfo(n, parent, em, c)
-    var patchPos = em.prepare(nodeKindTranslation(n.kind))
-
-    em.addSep patchPos
-    em.addEmpty # objectTagPos
-
+    relLineInfo(n, parent, c)
+    c.b.addTree(nodeKindTranslation(n.kind))
     for i in 0..<n.len:
-      em.addSep patchPos
-      toNif(n[i], n, em, c)
-    em.patch patchPos
+      toNif(n[i], n, c)
+    c.b.endTree
   else:
-    relLineInfo(n, parent, em, c)
-    var patchPos = em.prepare(nodeKindTranslation(n.kind))
+    relLineInfo(n, parent, c)
+    c.b.addTree(nodeKindTranslation(n.kind))
     for i in 0..<n.len:
-      em.addSep patchPos
-      toNif(n[i], n, em, c)
-    em.patch patchPos
+      toNif(n[i], n, c)
+    c.b.endTree
 
 proc initTranslationContext*(conf: ConfigRef): TranslationContext =
   result = TranslationContext(conf: conf)
 
-proc moduleToIr*(n: PNode; em: var Emitter; c: var TranslationContext) =
-  var ver = em.prepare ".nif24"
-  em.patchDir ver
-  var vendor = em.prepare ".vendor"
-  em.addSep vendor
-  em.addStrLit "Nifler", ""
-  em.patchDir vendor
-  var dialect = em.prepare ".dialect"
-  em.addSep dialect
-  em.addStrLit "nim-parsed", ""
-  em.patchDir dialect
-  toNif(n, nil, em, c)
+proc moduleToIr*(n: PNode; c: var TranslationContext) =
+  c.b = nifbuilder.open(100)
+  c.b.addHeader "Nifler", "nim-sem"
+  toNif(n, nil, c)
 
 proc createConf(): ConfigRef =
   result = newConfigRef()
@@ -615,20 +584,3 @@ template bench(task, body) =
     echo task, " TOOK ", getMonoTime() - t0
   else:
     body
-
-proc parseFile*(em: var Emitter; thisfile: string) =
-  let stream = llStreamOpen(AbsoluteFile thisfile, fmRead)
-  if stream == nil:
-    quit "cannot open file: " & thisfile
-  else:
-    var conf = createConf()
-    var parser: Parser
-    openParser(parser, AbsoluteFile(thisfile), stream, newIdentCache(), conf)
-    var tc = initTranslationContext(conf)
-
-    bench "parseAll":
-      let fullTree = parseAll(parser)
-
-    bench "moduleToIr":
-      moduleToIr(fullTree, em, tc)
-    closeParser(parser)
