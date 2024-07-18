@@ -437,8 +437,8 @@ code describes. The values are vendor specific. For Nim the possible values are:
 | --------------- | --------------------------------------------------------------------------- |
 | `"nim-parsed"`  | Parsed Nim code without semantic checking. |
 | `"nim-sem"`     | Parsed Nim code after semantic checking. |
-| `"nim-inlined"` | Nim code after inlining. |
-| `"nim-arc"` | Nim code after destructor injections (final step before code generation). |
+| `"nim-gear3"` | Nim code after inlining. |
+| `"nim-gear4"` | Nim code after destructor injections (final step before code generation). |
 | `"nif-c"` | NIF code that is very close to C code. |
 
 

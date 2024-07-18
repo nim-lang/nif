@@ -436,6 +436,45 @@ proc toNifDecl(n, parent: PNode; c: var TranslationContext) =
   else:
     toNif n, parent, c
 
+proc magicToKind(m: TMagic): string =
+  case m
+  of mNone: "<cannot happen>"
+  of mArray: "array"
+  of mOpenArray: "oarray"
+  of mRange: "range"
+  of mSet: "set"
+  of mSeq: "seq"
+  of mVarargs: "varargs"
+  of mRef: "ref"
+  of mPtr: "ptr"
+  of mVar: "mut"
+  of mVoid, mVoidType: "void"
+  of mIterableType: "iterable"
+  of mType: "typeof"
+  of mUncheckedArray: "uarray"
+  of mAppendStrCh: "addc"
+  of mAppendStrStr: "adds"
+  of mAppendSeqElem: "adde"
+  of mInSet: "contains"
+  of mSetLengthStr: "ssetlen"
+  of mSetLengthSeq: "qsetlen"
+  of mLengthOpenArray: "olen"
+  of mLengthStr: "slen"
+  of mLengthArray: "alen"
+  of mLengthSeq: "qlen"
+  else:
+    let s = $m
+    if s.endsWith"F64":
+      s.substr(1, s.len-4).toLowerAscii
+    else:
+      s.substr(1, s.len-1).toLowerAscii
+
+proc magicCall(m: TMagic; n: PNode; c: var TranslationContext) =
+  c.b.addTree(magicToKind(m))
+  for i in 1..<n.len:
+    toNif(n[i], n, c)
+  c.b.endTree
+
 proc toNif*(n, parent: PNode; c: var TranslationContext) =
   case n.kind
   of nkNone, nkEmpty:
@@ -443,6 +482,15 @@ proc toNif*(n, parent: PNode; c: var TranslationContext) =
   of nkSym:
     relLineInfo(n, parent, c)
     symToNif(n, parent, c)
+  of nkCommand, nkCall, nkCallStrLit, nkInfix, nkPrefix, nkPostfix, nkHiddenCallConv:
+    relLineInfo(n, parent, c)
+    if n.len > 0 and n[0].kind == nkSym and n[0].sym.magic != mNone:
+      magicCall n[0].sym.magic, n, c
+    else:
+      c.b.addTree(nodeKindTranslation(n.kind))
+      for i in 0..<n.len:
+        toNif(n[i], n, c)
+      c.b.endTree
   of nkNilLit:
     relLineInfo(n, parent, c)
     c.b.addKeyw "nil"
