@@ -192,7 +192,7 @@ ExportMarker ::= Empty | 'x'
 
 ReturnType ::= Type
 
-Effect ::= (raises Type+) | (sideeffect) | (nosideeffect) | (tags Type+) |
+Effect ::= (raises Type+) | (side) | (noside) | (tags Type+) |
            (gcsafe) | (effectsof Symbol)
 Effects ::= Empty | (effects Effect+)
 
@@ -207,14 +207,16 @@ VarDecl ::= (var SymbolDef ExportMarker Pragmas Type Expr)
 LetDecl ::= (var SymbolDef ExportMarker Pragmas Type Expr)
 ConstDecl ::= (var SymbolDef ExportMarker Pragmas Type Expr)
 
-Type ::= Symbol | (ref Type) | (ptr Type) | (refobj Type) | (ptrobj Type) |
+Type ::= Symbol | (ref Type) | (ptr Type) |
          (seq Type) | (string) | (i IntBits) | (u IntBits) | (f IntBits) |
-         (c 8) | (bool) | (uarray Type) | (lent Type) |
+         (c 8) | (b 8) | (uarray Type) | (lent Type) |
+         (nilt) |
          (p Symbol Number) | # position annotation for a typevar
          (array Type [Type Expr | (range Type Expr Expr)]) |
-         (mut Type) | (sink Type) | (out Type) | (stat Type) | # type modifiers
+         (mut Type) | (sink Type) | (out Type) | # type modifiers
+         (stat Type Expr) |
          (invok Type Type (Type+)) | # tyGenericInvokation
-         (inst Type Type (Type+)) | # tyGenericInst
+         (inst Type+) | # tyGenericInst
 
 BaseClass ::= Empty | Symbol
 FieldValue ::= Empty | Expr # default value for object field
@@ -227,7 +229,9 @@ BranchRanges ::= (ranges BranchRange+)
 CaseObj ::= (case Field (of BranchRanges FieldList)+ (else FieldList)?)
 ObjBody ::= Field | CaseObj
 FieldList ::= (discard) | ObjBody+
-ObjDecl ::= (object BaseClass ObjBody*)
+ObjDecl ::= (object BaseClass ObjBody*) |
+            (ptrobj BaseClass ObjBody*) |
+            (refobj BaseClass ObjBody*)
 
 TypeBody ::= ObjDecl | EnumDecl | (distinct Type) | Type
 

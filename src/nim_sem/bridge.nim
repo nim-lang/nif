@@ -9,6 +9,8 @@
 when defined(nifBench):
   import std / monotimes
 
+import std / [strutils]
+
 import "$nim" / compiler / [
   ast, options, pathutils, renderer, lineinfos,
   parser, llstream, idents, msgs]
@@ -178,21 +180,261 @@ proc relLineInfo(n, parent: PNode; c: var TranslationContext;
   let lineDiff = int32(i.line) - int32(p.line)
   c.b.addLineInfo colDiff, lineDiff, ""
 
-proc toNif*(t: PType; c: var TranslationContext) =
-  discard "XXX to implement"
-
-proc symUse(n: PNode; c: var TranslationContext) =
-  let s {.cursor.} = n.sym
+proc symToNif(s: PSym; c: var TranslationContext; isDef = false) =
   var m = s.name.s & '.' & $s.disamb
   if s.skipGenericOwner().kind == skModule:
     m.add '.'
     m.add moduleSuffix(toFullPath(c.conf, s.info.fileIndex))
-  if n.typ != s.typ:
-    c.b.withTree "hsubconv":
-      toNif n.typ, c
-      c.b.addSymbol m
+  if isDef:
+    c.b.addSymbolDef m
   else:
     c.b.addSymbol m
+
+proc toNif*(n, parent: PNode; c: var TranslationContext)
+proc toNif*(t: PType; parent: PNode; c: var TranslationContext)
+
+proc symToNif(n: PNode; parent: PNode; c: var TranslationContext; isDef = false) =
+  if n.typ != n.sym.typ:
+    c.b.withTree "hconv":
+      toNif n.typ, parent, c
+      symToNif n.sym, c, isDef
+  else:
+    symToNif n.sym, c, isDef
+
+proc isNominalRef(t: PType): bool {.inline.} =
+  let e = t.elementType
+  t.sym != nil and e.kind == tyObject and (e.sym == nil or sfAnon in e.sym.flags)
+
+template singleElement(keyw: string) {.dirty.} =
+  c.b.withTree keyw:
+    if t.hasElementType:
+      toNif t.elementType, parent, c
+    else:
+      c.b.addEmpty
+
+proc toNif*(t: PType; parent: PNode; c: var TranslationContext) =
+  case t.kind
+  of tyNone: c.b.addKeyw "err"
+  of tyBool: c.b.addKeyw "b 8"
+  of tyChar: c.b.addKeyw "c 8"
+  of tyEmpty: c.b.addEmpty
+  of tyInt: c.b.addKeyw "i M"
+  of tyInt8: c.b.addKeyw "i 8"
+  of tyInt16: c.b.addKeyw "i 16"
+  of tyInt32: c.b.addKeyw "i 32"
+  of tyInt64: c.b.addKeyw "i 64"
+  of tyUInt: c.b.addKeyw "u M"
+  of tyUInt8: c.b.addKeyw "u 8"
+  of tyUInt16: c.b.addKeyw "u 16"
+  of tyUInt32: c.b.addKeyw "u 32"
+  of tyUInt64: c.b.addKeyw "u 64"
+  of tyFloat, tyFloat64: c.b.addKeyw "f 64"
+  of tyFloat32: c.b.addKeyw "f 32"
+  of tyFloat128: c.b.addKeyw "f 128"
+  of tyAlias:
+    # XXX Generic aliases are no aliases
+    toNif t.skipModifier, parent, c
+  of tyNil: c.b.addKeyw "nilt"
+  of tyUntyped: c.b.addKeyw "untyped"
+  of tyTyped: c.b.addKeyw "typed"
+  of tyTypeDesc:
+    c.b.withTree "typedesc":
+      if t.kidsLen == 0 or t.elementType.kind == tyNone:
+        c.b.addEmpty
+      else:
+        toNif t.elementType, parent, c
+  of tyGenericParam:
+    # See the nim-sem spec:
+    c.b.withTree "p":
+      symToNif t.sym, c
+      c.b.addIntLit t.sym.position
+
+  of tyGenericInst:
+    c.b.withTree "inst":
+      toNif t.genericHead, parent, c
+      for _, a in t.genericInstParams:
+        toNif a, parent, c
+  of tyGenericInvocation:
+    c.b.withTree "invok":
+      toNif t.genericHead, parent, c
+      for _, a in t.genericInvocationParams:
+        toNif a, parent, c
+  of tyGenericBody:
+    toNif t.last, parent, c
+    # Alternatively something with `genericBodyParams`...
+  of tyDistinct, tyEnum:
+    symToNif t.sym, c
+  of tyPtr:
+    if isNominalRef(t):
+      symToNif t.sym, c
+    else:
+      c.b.withTree "ptr":
+        toNif t.elementType, parent, c
+  of tyRef:
+    if isNominalRef(t):
+      symToNif t.sym, c
+    else:
+      c.b.withTree "ref":
+        toNif t.elementType, parent, c
+  of tyVar:
+    c.b.withTree(if isOutParam(t): "out" else: "mut"):
+      toNif t.elementType, parent, c
+  of tyAnd:
+    c.b.withTree "and":
+      for _, son in t.ikids: toNif son, parent, c
+  of tyOr:
+    c.b.withTree "or":
+      for _, son in t.ikids: toNif son, parent, c
+  of tyNot:
+    c.b.withTree "not": toNif t.elementType, parent, c
+
+  of tyFromExpr:
+    if t.n == nil:
+      c.b.addKeyw "err"
+    else:
+      c.b.withTree "typeof":
+        toNif t.n, parent, c
+
+  of tyArray:
+    c.b.withTree "array":
+      if t.hasElementType:
+        toNif t.elementType, parent, c
+        toNif t.indexType, parent, c
+      else:
+        c.b.addEmpty 2
+  of tyUncheckedArray:
+    c.b.withTree "uarray":
+      if t.hasElementType:
+        toNif t.elementType, parent, c
+      else:
+        c.b.addEmpty
+
+  of tySequence:
+    singleElement "seq"
+
+  of tyOrdinal:
+    c.b.withTree "ordinal":
+      if t.hasElementType:
+        toNif t.skipModifier, parent, c
+      else:
+        c.b.addEmpty
+
+  of tySet: singleElement "set"
+  of tyOpenArray: singleElement "oarray"
+  of tyIterable: singleElement "iterable"
+  of tyLent: singleElement "lent"
+
+  of tyTuple:
+    c.b.withTree "tuple":
+      if t.n != nil:
+        for i in 0..<t.n.len:
+          assert(t.n[i].kind == nkSym)
+          c.b.withTree "kv":
+            c.b.addIdent t.n[i].sym.name.s
+            toNif t.n[i].sym.typ, parent, c
+      else:
+        for _, son in t.ikids: toNif son, parent, c
+
+  of tyRange:
+    c.b.withTree "range":
+      toNif t.elementType, parent, c
+      if t.n != nil and t.n.kind == nkRange and t.n.len == 2:
+        toNif t.n[0], parent, c
+        toNif t.n[1], parent, c
+      else:
+        c.b.addEmpty 2
+
+  of tyProc:
+    let kind = if tfIterator in t.flags: "iteratortype"
+               else: "proctype"
+    c.b.withTree kind:
+
+      c.b.addEmpty # name
+      for i, a in t.paramTypes:
+        let j = paramTypeToNodeIndex(i)
+        if t.n != nil and j < t.n.len and t.n[j].kind == nkSym:
+          c.b.addIdent(t.n[j].sym.name.s)
+          toNif a, parent, c
+      if tfUnresolved in t.flags:
+        c.b.addRaw "[*missing parameters*]"
+      if t.returnType != nil:
+        toNif t.returnType, parent, c
+      else:
+        c.b.addEmpty
+
+      c.b.withTree "effects":
+        # XXX model explicit .raises and .tags annotations
+        if tfNoSideEffect in t.flags:
+          c.b.addKeyw "noside"
+        if tfThread in t.flags:
+          c.b.addKeyw "gcsafe"
+
+      c.b.withTree "pragmas":
+        if t.callConv == ccNimCall and tfExplicitCallConv notin t.flags:
+          discard "no calling convention to generate"
+        else:
+          c.b.addKeyw ($t.callConv).toLowerAscii.substr(2)
+
+  of tyVarargs:
+    c.b.withTree "varargs":
+      if t.hasElementType:
+        toNif t.elementType, parent, c
+      else:
+        c.b.addEmpty
+      if t.n != nil:
+        toNif t.n, parent, c
+      else:
+        c.b.addEmpty
+
+  of tySink: singleElement "sink"
+  of tyOwned: singleElement "owned"
+  of tyVoid: c.b.addKeyw "void"
+  of tyPointer: c.b.addKeyw "pointer"
+  of tyString: c.b.addKeyw "str"
+  of tyCstring: c.b.addKeyw "cstr"
+  of tyObject: symToNif t.sym, c
+  of tyForward: c.b.addKeyw "forward"
+  of tyProxy: c.b.addKeyw "err"
+  of tyBuiltInTypeClass:
+    # XXX See what to do with this.
+    c.b.withTree "typeclass":
+      if t.kidsLen == 0 or t.genericHead.kind == tyNone:
+        c.b.addEmpty
+      else:
+        toNif t.genericHead, parent, c
+
+  of tyUserTypeClass, tyConcept:
+    # ^ old style concept.  ^ new style concept.
+    if t.sym != nil:
+      symToNif t.sym, c
+    else:
+      c.b.addKeyw "err"
+  of tyUserTypeClassInst:
+    # "instantiated" old style concept. Whatever that even means.
+    if t.sym != nil:
+      symToNif t.sym, c
+    else:
+      c.b.addKeyw "err"
+  of tyCompositeTypeClass: toNif t.last, parent, c
+  of tyInferred: toNif t.skipModifier, parent, c
+  of tyAnything: c.b.addKeyw "any"
+  of tyStatic:
+    c.b.withTree "stat":
+      if t.hasElementType:
+        toNif t.skipModifier, parent, c
+      else:
+        c.b.addEmpty
+      if t.n != nil:
+        toNif t.n, parent, c
+      else:
+        c.b.addEmpty
+
+proc toNifDecl(n, parent: PNode; c: var TranslationContext) =
+  if n.kind == nkSym:
+    relLineInfo(n, parent, c)
+    symToNif(n, parent, c, true)
+  else:
+    toNif n, parent, c
 
 proc toNif*(n, parent: PNode; c: var TranslationContext) =
   case n.kind
@@ -200,10 +442,10 @@ proc toNif*(n, parent: PNode; c: var TranslationContext) =
     c.b.addEmpty 1
   of nkSym:
     relLineInfo(n, parent, c)
-    symUse(n, c)
+    symToNif(n, parent, c)
   of nkNilLit:
     relLineInfo(n, parent, c)
-    c.b.addRaw "(nil)"
+    c.b.addKeyw "nil"
   of nkStrLit:
     relLineInfo(n, parent, c)
     c.b.addStrLit n.strVal, ""
@@ -280,10 +522,10 @@ proc toNif*(n, parent: PNode; c: var TranslationContext) =
     else:
       name = n[0]
 
-    toNif(name, n, c)
+    toNifDecl(name, n, c)
 
     if visibility != nil:
-      c.b.addRaw "x"
+      c.b.addIdent "x"
     else:
       c.b.addEmpty
 
@@ -352,10 +594,10 @@ proc toNif*(n, parent: PNode; c: var TranslationContext) =
       else:
         name = n[i]
 
-      toNif(name, n[i], c) # name
+      toNifDecl(name, n[i], c) # name
 
       if visibility != nil:
-        c.b.addRaw "x"
+        c.b.addIdent "x"
       else:
         c.b.addEmpty
 
@@ -364,13 +606,12 @@ proc toNif*(n, parent: PNode; c: var TranslationContext) =
       else:
         c.b.addEmpty
 
-
       toNif(n[last-1], n[i], c) # type
       toNif(n[last], n[i], c) # value
       c.b.endTree
   of nkDo:
     relLineInfo(n, parent, c)
-    c.b.addTree("paramsAndBody")
+    c.b.addTree("do")
 
     toNif(n[paramsPos], n, c)
     toNif(n[bodyPos], n, c)
@@ -387,7 +628,7 @@ proc toNif*(n, parent: PNode; c: var TranslationContext) =
   of nkOfBranch:
     relLineInfo(n, parent, c)
     c.b.addTree("of")
-    c.b.addTree("curlyConstr")
+    c.b.addTree("sconstr")
     for i in 0..<n.len-1:
       toNif(n[i], n, c)
     c.b.endTree
@@ -471,7 +712,7 @@ proc toNif*(n, parent: PNode; c: var TranslationContext) =
 
       c.b.addTree("efld")
       relLineInfo(it, n, c)
-      toNif name, it, c
+      toNifDecl name, it, c
       c.b.addEmpty # export marker
       if pragma == nil:
         c.b.addEmpty
@@ -497,7 +738,7 @@ proc toNif*(n, parent: PNode; c: var TranslationContext) =
     else:
       name = n[0]
 
-    toNif(name, n, c)
+    toNifDecl(name, n, c)
     if visibility != nil:
       c.b.addRaw "x"
     else:
@@ -510,12 +751,12 @@ proc toNif*(n, parent: PNode; c: var TranslationContext) =
   of nkVarTuple:
     relLineInfo(n, parent, c)
     assert n[n.len-2].kind == nkEmpty
-    c.b.addTree("unpackDecl")
+    c.b.addTree("unpackdecl")
     toNif(n[n.len-1], n, c)
-    c.b.addTree("unpackIntoTuple")
+    c.b.addTree("unpacktuple")
     for i in 0..<n.len-2:
       c.b.addTree(c.section)
-      toNif(n[i], n, c) # name
+      toNifDecl(n[i], n, c) # name
       c.b.addEmpty 4 # 1: export marker
       # 2: pragmas
       # 3: type
@@ -530,18 +771,18 @@ proc toNif*(n, parent: PNode; c: var TranslationContext) =
     toNif(n[n.len-2], n, c) # iterator
     if n[0].kind == nkVarTuple:
       let v = n[0]
-      c.b.addTree("unpackIntoTuple")
+      c.b.addTree("unpacktuple")
       for i in 0..<v.len:
         c.b.addTree("let")
-        toNif(v[i], n, c) # name
+        toNifDecl(v[i], n, c) # name
         c.b.addEmpty 4 # export marker, pragmas, type, value
         c.b.endTree # LetDecl
       c.b.endTree # UnpackIntoTuple
     else:
-      c.b.addTree("unpackIntoFlat")
+      c.b.addTree("unpackflat")
       for i in 0..<n.len-2:
         c.b.addTree("let")
-        toNif(n[i], n, c) # name
+        toNifDecl(n[i], n, c) # name
         c.b.addEmpty 4 # export marker, pragmas, type, value
         c.b.endTree # LetDecl
       c.b.endTree # UnpackIntoFlat
