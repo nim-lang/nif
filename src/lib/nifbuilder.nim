@@ -194,6 +194,13 @@ proc addLineInfo*(b: var Builder; col, line: int32; file = "") =
       else:
         b.put c
 
+proc addKeyw*(b: var Builder; keyw: string) =
+  ## Adds a complete compound node that has no children like `(nil)`.
+  drainPending b
+  b.put '('
+  b.put keyw
+  b.put ')'
+
 proc addTree*(b: var Builder; kind: string) =
   ## Starts a new compound node. Must be closed with `endTree`.
   ## See also `withTree`.
