@@ -8,6 +8,11 @@ and is so extensible that other programming languages will work well with it too
 A NIF file corresponds to a "module" in the source language. The module is stored as an AST.
 The AST consists of "atoms" and "compound nodes".
 
+Documentation
+-------------
+
+Docs are here: https://github.com/nim-lang/nif/blob/master/doc/nif-spec.md
+
 
 Design goals
 ------------
