@@ -1,7 +1,7 @@
-Nim-sem
-=======
+Nim-gear2
+=========
 
-`Nim-sem` is the name of a NIF dialect that describes Nim 2's AST after the compiler's
+`Nim-gear2` is the name of a NIF dialect that describes Nim 2's AST after the compiler's
 "semantic checking" phase. This means that type checking, symbol lookups, macro expansions
 compile-time evaluations and overloading resolution have been performed. It is the version
 of the AST that is most suitable for tooling and incremental compilation.
@@ -133,7 +133,7 @@ For example:
 (ginst (proc Symbol . TypeVars Params ReturnType))
 ```
 
-Note that generic **type** instances are not stored in the nim-sem file separately.
+Note that generic **type** instances are not stored in the gear2 file separately.
 The reason is that duplicated type instances are harmless.
 
 
@@ -147,7 +147,7 @@ This makes it easier to lookup hooks for hook synthesis and code generation.
 
 Calls into hooks are compressed. `(call =copy a b)` becomes `(cop a b)`.
 
-| hook name | Node kind in nim-sem |
+| hook name | Node kind in gear2 |
 | --------- | -------------- |
 | `=copy`   | `cop` |
 | `=sink`   | `snk` |
@@ -164,8 +164,8 @@ Synthesized hooks are stored like other generic instantiations.
 Expansions
 ----------
 
-nim-sem stores the AST after template and macro expansion. This would not allow for
-the operation "find all usages of template `>=`". To compensate for this use case nim-sem
+gear2 stores the AST after template and macro expansion. This would not allow for
+the operation "find all usages of template `>=`". To compensate for this use case gear2
 has a special section called `expansions` within `impl` that lists every usage/callsite
 of a template or macro.
 
@@ -173,7 +173,7 @@ of a template or macro.
 Grammar
 -------
 
-Generated nim-sem code must adhere to this grammar. For better readability `'('` and `')'` are written
+Generated gear2 code must adhere to this grammar. For better readability `'('` and `')'` are written
 without quotes and `[]` is used for grouping.
 
 Currently the grammar is simplified and work-in-progress:
