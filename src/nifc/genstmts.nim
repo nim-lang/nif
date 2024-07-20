@@ -159,10 +159,17 @@ proc genStmt(c: var GeneratedCode; t: Tree; n: NodePos) =
   of CallC:
     genCall c, t, n
     c.add Semicolon
-  of VarC: genVarDecl c, t, n, EmptyToken
+  of VarC:
+    genVarDecl c, t, n, IsLocal
+  of GvarC:
+    moveToDataSection:
+      genVarDecl c, t, n, IsGlobal
+  of TvarC:
+    moveToDataSection:
+      genVarDecl c, t, n, IsThreadlocal
   of ConstC:
     moveToDataSection:
-      genVarDecl c, t, n, ConstKeyword
+      genVarDecl c, t, n, IsConst
   of EmitC:
     genEmitStmt c, t, n
   of AsgnC:
@@ -173,6 +180,9 @@ proc genStmt(c: var GeneratedCode; t: Tree; n: NodePos) =
     c.add Semicolon
   of IfC: genIf c, t, n
   of WhileC: genWhile c, t, n
+  of BreakC:
+    c.add BreakKeyword
+    c.add Semicolon
   of CaseC: genSwitch c, t, n
   of LabC: genLabel c, t, n
   of JmpC: genGoto c, t, n

@@ -246,8 +246,6 @@ proc genVarPragmas(c: var GeneratedCode; t: Tree; n: NodePos) =
   elif t[n].kind == PragmasC:
     for ch in sons(t, n):
       case t[ch].kind
-      of TlsC:
-        c.add " __thread"
       of AlignC:
         c.add " NIM_ALIGN(" & toString(t, ch.firstSon, c.m) & ")"
       of AttrC:
@@ -261,13 +259,20 @@ proc genVarPragmas(c: var GeneratedCode; t: Tree; n: NodePos) =
 
 include genexprs
 
-proc genVarDecl(c: var GeneratedCode; t: Tree; n: NodePos; prefix: PredefinedToken) =
+type
+  VarKind = enum
+    IsLocal, IsGlobal, IsThreadlocal, IsConst
+
+proc genVarDecl(c: var GeneratedCode; t: Tree; n: NodePos; vk: VarKind) =
   let d = asVarDecl(t, n)
   if t[d.name].kind == SymDef:
     let lit = t[d.name].litId
     let name = mangle(c.m.lits.strings[lit])
-    c.add prefix
+    if vk == IsConst:
+      c.add ConstKeyword
     genType c, t, d.typ, name
+    if vk == IsThreadlocal:
+      c.add " __thread"
     genVarPragmas c, t, d.pragmas
     if t[d.value].kind != Empty:
       c.add AsgnOpr

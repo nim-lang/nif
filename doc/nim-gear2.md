@@ -259,7 +259,10 @@ IfaceDecl ::= Decl |
 Iface ::= (iface IfaceDecl*)
 Impl ::= (impl Toplevel*)
 
-Module ::= Iface Impl
+Dep ::= (mod Identifier StringLiteral StringLiteral)
+Deps ::= (deps Dep)
+
+Module ::= Iface Deps Impl
 
 ```
 
