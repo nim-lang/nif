@@ -163,6 +163,7 @@ proc decodeStr*(t: Token): string =
     let sentinel = p +! t.s.len
     while p < sentinel:
       if ^p == '\\':
+        inc p
         result.add handleHex(p)
         inc p, 2
       else:
