@@ -215,7 +215,7 @@ template singleElement(keyw: string) {.dirty.} =
 proc toNif*(t: PType; parent: PNode; c: var TranslationContext) =
   case t.kind
   of tyNone: c.b.addKeyw "err"
-  of tyBool: c.b.addKeyw "b 8"
+  of tyBool: c.b.addKeyw "bool"
   of tyChar: c.b.addKeyw "c 8"
   of tyEmpty: c.b.addEmpty
   of tyInt: c.b.addKeyw "i M"
