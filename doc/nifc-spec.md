@@ -120,7 +120,11 @@ BranchValue ::= Number | CharLiteral | Symbol
 BranchRange ::= BranchValue | (range BranchValue BranchValue)
 BranchRanges ::= (ranges BranchRange+)
 
-VarDecl ::= (var SymbolDef VarPragmas Type [Empty | Expr])
+VarDeclCommon ::= SymbolDef VarPragmas Type [Empty | Expr]
+VarDecl ::= (var VarDeclCommon) | # local variable
+            (gvar VarDeclCommon) | # global variable
+            (tvar VarDeclCommon) # thread local variable
+
 ConstDecl ::= (const SymbolDef VarPragmas Type Expr)
 EmitStmt ::= (emit Expr+)
 
@@ -131,6 +135,7 @@ Stmt ::= Call |
          (asgn Lvalue Expr) |
          (if (elif Expr StmtList)+ (else StmtList)? ) |
          (while Expr StmtList) |
+         (break) |
          (case Expr (of BranchRanges StmtList)* (else StmtList)?) |
          (lab SymbolDef) |
          (jmp Symbol) |
@@ -181,7 +186,7 @@ ProcTypePragmas ::= Empty | (pragmas ProcTypePragma+)
 ProcPragmas ::= Empty | (pragmas ProcPragma+)
 
 CommonPragma ::= (align Number) | (was Identifier) | Attribute
-VarPragma ::= CommonPragma | (tls)
+VarPragma ::= CommonPragma
 VarPragmas ::= Empty | (pragmas VarPragma+)
 
 ParamPragma ::= (was Identifier) | Attribute
@@ -224,8 +229,6 @@ Notes:
 - `varargs` is modelled as a pragma instead of a fancy special syntax for parameter
   declarations.
 - The type `flexarray` can only be used for a last field in an object declaration.
-- The pragma `tls` is used to denote thread local storage. It can only be used on
-  toplevel (aka "global") variables.
 - The pragma `selectany` can be used to merge proc bodies that have the same name.
   It is used for generic procs so that only one generic instances remains in the
   final executable file.
@@ -243,6 +246,8 @@ Notes:
   aliases for types **cannot** be used! Rationale: Implementation simplicity.
 - `nodecl` is an import mechanism like `imp` but the declarations come from a header file
   and are not to be declared in the resulting C/C++ code.
+- `var` is always a local variable, `gvar` is a global variable and `tvar` a thread local
+  variable.
 
 
 Inheritance
