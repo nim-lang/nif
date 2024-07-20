@@ -130,12 +130,10 @@ proc trIf(c: var Context; dest: var Tree; t: Tree; n: NodePos; tar: var Target) 
 
     of ElseX:
       let action = ch.firstSon
-      copyInto dest, ElseX, info:
-        copyInto dest, StmtsX, info:
-          if tar.m != IsIgnored:
-            trExprInto c, dest, t, action, tmp
-          else:
-            trStmt c, dest, t, action
+      if tar.m != IsIgnored:
+        trExprInto c, dest, t, action, tmp
+      else:
+        trStmt c, dest, t, action
     else:
       # Bug: just copy the thing around
       copyTree dest, t, n
@@ -252,7 +250,7 @@ proc trExpr(c: var Context; dest: var Tree; t: Tree; n: NodePos; tar: var Target
   # reason for xelim's existance.
   case t[n].kind
   of Empty, Ident, Sym, Symdef, IntLit, UIntLit, FloatLit, CharLit, StrLit, Tag:
-    copyTree dest, t, n
+    copyTree tar.t, t, n
   of ExprX:
     let (s, x) = sons2(t, n)
     trStmt c, dest, t, s

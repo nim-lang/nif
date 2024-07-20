@@ -182,8 +182,10 @@ proc toString(b: var Builder; tree: Tree; n: NodePos; lits: Literals) =
     b.addEmpty()
   of Ident:
     b.addIdent(lits.strings[tree[n].litId])
-  of Sym, Symdef, IntLit, UIntLit, FloatLit:
+  of Sym, IntLit, UIntLit, FloatLit:
     b.addSymbol(lits.strings[tree[n].litId])
+  of Symdef:
+    b.addSymbolDef(lits.strings[tree[n].litId])
   of CharLit:
     b.addCharLit char(tree[n].uoperand)
   of StrLit:
@@ -191,7 +193,7 @@ proc toString(b: var Builder; tree: Tree; n: NodePos; lits: Literals) =
   of Tag:
     b.addIdent(lits.tags[tree[n].tagId])
   of Other:
-    if not hasAtLeastXsons(tree, n, 1): return
+    assert hasAtLeastXsons(tree, n, 1)
     b.withTree lits.tags[tree[n.firstSon].tagId]:
       for ch in sonsFromX(tree, n):
         toString b, tree, ch, lits
