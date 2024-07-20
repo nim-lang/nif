@@ -60,7 +60,7 @@ or not!) are encoded via this table:
 | `~` | `tildeQ` |
 | `:` | `colonQ` |
 | `@` | `atQ` |
-| `| ` | `barQ` |
+| `\|` | `barQ` |
 | Other | `XxxQ` where `xx` is the hexadecimal value |
 
 
