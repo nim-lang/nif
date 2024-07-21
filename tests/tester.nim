@@ -162,7 +162,7 @@ proc testXelim() =
   var toRemove: seq[string] = @[]
   for k, f in walkDir("tests/xelim"):
     if f.endsWith(".nif") and not f.endsWith(".xelim.nif") and not f.endsWith(".expected.nif"):
-      exec "src/xelim/xelim".addFileExt(ExeExt) & " " & f
+      exec ("src" / "xelim" / "xelim").addFileExt(ExeExt) & " " & f
       let r = f.withExt(".xelim.nif")
       let e = f.withExt(".expected.nif")
       if not os.sameFileContent(r, e):
