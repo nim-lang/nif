@@ -489,3 +489,64 @@ Formally a module is simply a non-empty list of `CompoundNode`:
 ```
 NifModule ::= CompoundNode+
 ```
+
+
+NIF trees as identifiers
+------------------------
+
+In many cases it is useful to turn a NIF tree into a canonical string representation that also
+forms a valid identifier (for C code generation or otherwise). The following encoding scheme
+accomplishes this task:
+
+1. Line information and comments are ignored.
+2. The substring of trailing `)` is removed as there is nothing interesting about `))))`.
+3. Whitespace is canonicalized to a single space.
+4. The space after `)` and before `(` is removed.
+
+
+`(` is turned into `A`.
+`)` is turned into `Z`.
+A space that separates the children of a compound node is turned into `S`.
+
+The empty node (`.`) is encoded as `E`.
+
+Note that `.` within a symbol is **not** escaped!
+
+The N-th (where N > 1) occurance of a symbol or identifier
+is encoded as `R<x>` where `x` refers to the `x`'s symbol or identifier that already
+been emitted. But only if `R<x>` is still shorter than the symbol/identifier.
+
+For example:
+
+`(tag abcdef . abcdef)` is encoded as `AtagSabcdefSESR0`.
+
+Characters like `A` and `Z` that are used in the encoding must be
+escaped should they occur. The encoding is `X<xx>` where `xx` is the
+hexadecimal value of the character's byte value. Other characters that are not valid
+identifiers such as the space character or a newline are encoded as `X<xx>` too.
+
+In summary:
+
+| Letter | Used for |
+| --------- | -------------- |
+| `A`    | begin of a compound node `(` |
+| `Z`   | end of a compound node `)`  |
+| `E`   | the empty node |
+| `S`   | space; separator between a node's children |
+| `O`   | encodes the colon in a SymbolDef |
+| `U`   | encodes the `"` that is used to delimit string literals |
+| `X` | used to escape the letters used in this encoding and in general for characters that should not be used in an identifier |
+| `R` | reference to an identifier or a symbol that has already occured |
+| `K` | reference to a node kind that has already occured |
+
+For example:
+
+`(array (range 0 9) (array (range 0 4) (i 8))))`
+
+Becomes:
+
+`(array(range 0 9)(array(range 0 4)(i 8`
+
+Which then is turned into:
+
+`AarrayArangeS0S9ZAK0AK1S0S4ZAiS8`
