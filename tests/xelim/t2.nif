@@ -4,4 +4,5 @@
     (if (elif cond "action") (else "abc"))
   )))
   (while (expr (call echo "hi\00") (lt 4 5)) (call echo "body"))
+  (var :x.3 ... (try (expr (call echo "abc") 3) (except (as :e E.t) 90) (fin (call echo "90")) ))
 )

@@ -42,6 +42,9 @@ type
     WhileX = "while"
     CaseX = "case"
     OfX = "of"
+    TryX = "try"
+    ExceptX = "except"
+    FinallyX = "fin"
     ProcX = "proc"
 
     StmtsX = "stmts"
