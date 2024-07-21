@@ -18,7 +18,7 @@ const
 
   (c) 2024 Andreas Rumpf
 Usage:
-  nifler [options] [command] [arguments]
+  nifc [options] [command] [arguments]
 Command:
   c|cpp file.nif [output.c]     convert the NIF file to C|C++
 

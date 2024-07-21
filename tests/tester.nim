@@ -1,4 +1,5 @@
 
+import std / [os, strutils]
 import "../src/lib" / [nifreader, nifbuilder, nif_linkedtree]
 
 const
@@ -145,3 +146,30 @@ proc testNifBuilder() =
   assert buildSomething(b) == ExpectedNifBuilderResult
 
 testNifBuilder()
+
+proc fatal(msg: string) = quit "FAILURE " & msg
+
+proc exec(cmd: string) =
+  if execShellCmd(cmd) != 0: fatal cmd
+
+proc withExt(f, ext: string): string =
+  result = f.changeFileExt(ext)
+  if not fileExists(result):
+    fatal "cannot find output file " & result
+
+proc testXelim() =
+  exec "nim c src/xelim/xelim"
+  var toRemove: seq[string] = @[]
+  for k, f in walkDir("tests/xelim"):
+    if f.endsWith(".nif") and not f.endsWith(".xelim.nif") and not f.endsWith(".expected.nif"):
+      exec ("src" / "xelim" / "xelim").addFileExt(ExeExt) & " " & f
+      let r = f.withExt(".xelim.nif")
+      let e = f.withExt(".expected.nif")
+      if not os.sameFileContent(r, e):
+        fatal "files have not the same content: " & e & " " & r
+      else:
+        toRemove.add r
+  for rem in toRemove:
+    removeFile rem
+
+testXelim()

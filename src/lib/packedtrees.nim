@@ -59,7 +59,7 @@ proc isAtom*[E](tree: PackedTree[E]; pos: int): bool {.inline.} =
   tree.nodes[pos].kind.isAtom
 
 type
-  PatchPos = distinct int
+  PatchPos* = distinct int
 
 proc prepare*[E](tree: var PackedTree[E]; kind: E; info: PackedLineInfo): PatchPos =
   result = PatchPos tree.nodes.len
@@ -100,15 +100,15 @@ iterator sons*[E](tree: PackedTree[E]; n: NodePos): NodePos =
     yield NodePos pos
     nextChild tree, pos
 
-iterator sons*[E](dest: var PackedTree[E]; tree: PackedTree[E]; n: NodePos): NodePos =
+iterator wsons*[E](dest: var PackedTree[E]; tree: PackedTree[E]; n: NodePos): NodePos =
   let patchPos = prepare(dest, tree, n)
   for x in sons(tree, n): yield x
   patch dest, patchPos
 
-iterator isons*[E](dest: var PackedTree[E]; tree: PackedTree[E];
-                n: NodePos): (int, NodePos) =
+iterator wisons*[E](dest: var PackedTree[E]; tree: PackedTree[E];
+                    n: NodePos): (int, NodePos) =
   var i = 0
-  for ch0 in sons(dest, tree, n):
+  for ch0 in wsons(dest, tree, n):
     yield (i, ch0)
     inc i
 
@@ -229,7 +229,7 @@ proc firstSon*(n: NodePos): NodePos {.inline.} = NodePos(n.int+1)
 
 proc currentPos*[E](tree: PackedTree[E]): NodePos {.inline.} = NodePos(tree.nodes.len)
 
-template copyIntoFrom*(dest, n, body) =
+template copyIntoFrom*(dest, tree, n, body) =
   let patchPos = prepare(dest, tree, n)
   body
   patch dest, patchPos
@@ -238,6 +238,46 @@ template copyInto*(dest, kind, info, body) =
   let patchPos = prepare(dest, kind, info)
   body
   patch dest, patchPos
+
+template copyInto*(dest, kind, info) =
+  let patchPos = prepare(dest, kind, info)
+  patch dest, patchPos
+
+proc copyTree*[E](dest: var PackedTree[E]; tree: PackedTree[E]; n: NodePos) =
+  let pos = n.int
+  let L = span(tree, pos)
+  assert L > 0
+  let d = dest.nodes.len
+  dest.nodes.setLen(d + L)
+  assert tree.nodes.len > 0
+  for i in 0..<L:
+    dest.nodes[d+i] = tree.nodes[pos+i]
+
+proc isLastSon*[E](tree: PackedTree[E]; parent, n: NodePos): bool {.inline.} =
+  # A node is a the last son of a parent node if its span
+  # falls onto the end of the parent's span:
+  let last = n.int + span(tree, n.int)
+  result = last == parent.int + span(tree, parent.int)
+
+proc addEmpty*[E](dest: var PackedTree[E]; howMany = 1) =
+  mixin Empty
+  for i in 0 ..< howMany:
+    dest.nodes.add PackedNode[E](x: toX(Empty, 0'u32), info: NoLineInfo)
+
+template hasNodeWithProperty*[E](tree: PackedTree[E]; n: NodePos;
+                                 declarativeNodes: set[E]; prop: untyped) =
+  # no need for a recursion here:
+  let last = n.int + span(tree, n.int)
+  var pos = n.int
+  while pos < last:
+    let node = tree.nodes[pos]
+    if prop(node, NodePos(pos)):
+      return true
+    elif node.kind in declarativeNodes:
+      nextChild tree, pos
+    else:
+      inc pos
+  return false
 
 iterator allNodes*[E](tree: PackedTree[E]): NodePos =
   var p = 0

@@ -209,7 +209,7 @@ ConstDecl ::= (var SymbolDef ExportMarker Pragmas Type Expr)
 
 Type ::= Symbol | (ref Type) | (ptr Type) |
          (seq Type) | (string) | (i IntBits) | (u IntBits) | (f IntBits) |
-         (c 8) | (b 8) | (uarray Type) | (lent Type) |
+         (c 8) | (bool) | (uarray Type) | (lent Type) |
          (nilt) |
          (p Symbol Number) | # position annotation for a typevar
          (array Type [Type Expr | (range Type Expr Expr)]) |
