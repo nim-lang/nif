@@ -63,12 +63,7 @@ proc genLvalue(c: var GeneratedCode; t: Tree; n: NodePos) =
     let name = mangle(c.m.lits.strings[lit])
     c.add name
     c.requestedSyms.incl name
-  of DerefC:
-    let arg = n.firstSon
-    c.add ParLe
-    c.add "*"
-    genx c, t, arg
-    c.add ParRi
+  of DerefC: unop "*"
   of AtC:
     let (a, i) = sons2(t, n)
     genx c, t, a
@@ -148,12 +143,7 @@ proc genx(c: var GeneratedCode; t: Tree; n: NodePos) =
     c.add ParLe
     genx c, t, arg
     c.add ParRi
-  of AddrC:
-    let arg = n.firstSon
-    c.add ParLe
-    c.add "&"
-    genx c, t, arg
-    c.add ParRi
+  of AddrC: unop "&"
   of SizeofC:
     let arg = n.firstSon
     c.add "sizeof"
@@ -175,6 +165,7 @@ proc genx(c: var GeneratedCode; t: Tree; n: NodePos) =
   of AndC: cmpop " && "
   of OrC: cmpop " || "
   of NotC: unOp " !"
+  of NegC: unOp " -"
   of EqC: cmpop " == "
   of LeC: cmpop " <= "
   of LtC: cmpop " < "
