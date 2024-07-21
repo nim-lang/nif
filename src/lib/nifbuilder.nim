@@ -124,7 +124,7 @@ proc addStrLit*(b: var Builder; s: string; suffix = "") =
   addSep b
   b.put '"'
   for c in s:
-    if c in ControlChars:
+    if needsEscape c:
       b.escape c
     else:
       b.put c
