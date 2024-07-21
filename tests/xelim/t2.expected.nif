@@ -42,4 +42,15 @@
      (lt 4 5)
      (call echo "body"))
     (else
-     (break))))))
+     (break)))))
+ (var :tmp.3.01 . .
+  (auto) .)
+ (try
+  (call echo "abc")
+  (asgn tmp.3.01 3)
+  (except
+   (as :e E.t)
+   (asgn tmp.3.01 90))
+  (fin
+   (call echo "90")))
+ (var :x.3 . . . tmp.3.01))

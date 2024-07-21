@@ -180,6 +180,40 @@ proc trCase(c: var Context; dest: var Tree; t: Tree; n: NodePos; tar: var Target
   if tar.m != IsIgnored:
     tar.t.addAtom Sym, tmp, info
 
+proc trTry(c: var Context; dest: var Tree; t: Tree; n: NodePos; tar: var Target) =
+  let info = t[n].info
+  var tmp = StrId(0)
+
+  if tar.m != IsIgnored:
+    tmp = declareTemp(c, dest, info, AutoX)
+
+  copyIntoFrom(dest, t, n):
+    if tar.m != IsIgnored:
+      trExprInto c, dest, t, n.firstSon, tmp
+
+    for ch in sonsFromX(t, n):
+      case t[ch].kind
+      of ExceptX:
+        copyIntoFrom(dest, t, ch):
+          for e in sons(t, ch):
+            if isLastSon(t, ch, e):
+              if tar.m != IsIgnored:
+                trExprInto c, dest, t, e, tmp
+              else:
+                trStmt c, dest, t, e
+            else:
+              copyTree dest, t, e
+      of FinallyX:
+        # The `finally` section never produces a value!
+        copyIntoFrom(dest, t, ch):
+          let action = ch.firstSon
+          trStmt c, dest, t, action
+      else:
+        # Bug: just copy the thing around
+        copyTree dest, t, n
+  if tar.m != IsIgnored:
+    tar.t.addAtom Sym, tmp, info
+
 proc trStmt(c: var Context; dest: var Tree; t: Tree; n: NodePos) =
   case t[n].kind
   of Empty, Tag:
@@ -193,6 +227,9 @@ proc trStmt(c: var Context; dest: var Tree; t: Tree; n: NodePos) =
   of CaseX:
     var tar = Target(m: IsIgnored)
     trCase c, dest, t, n, tar
+  of TryX:
+    var tar = Target(m: IsIgnored)
+    trTry c, dest, t, n, tar
 
   of RetX, DiscardX, RaiseX, YieldX:
     var tar = Target(m: IsEmpty)
@@ -259,6 +296,8 @@ proc trExpr(c: var Context; dest: var Tree; t: Tree; n: NodePos; tar: var Target
     trIf c, dest, t, n, tar
   of CaseX:
     trCase c, dest, t, n, tar
+  of TryX:
+    trTry c, dest, t, n, tar
   of AndX:
     trAnd c, dest, t, n, tar
   of OrX:
