@@ -26,6 +26,7 @@ type
     AndC = "and"
     OrC = "or"
     NotC = "not"
+    NegC = "neg"
     SizeofC = "sizeof"
     OconstrC = "oconstr"
     AconstrC = "aconstr"
