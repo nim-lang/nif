@@ -157,15 +157,15 @@ proc nodeKindTranslation(k: TNodeKind): string =
 
 
 type
-  TranslationContext = object
+  Context = object
     conf: ConfigRef
     section: string
     b: Builder
 
-proc absLineInfo(i: TLineInfo; c: var TranslationContext) =
+proc absLineInfo(i: TLineInfo; c: var Context) =
   c.b.addLineInfo int32(i.col), int32(i.line), toFullPath(c.conf, i.fileIndex)
 
-proc relLineInfo(n, parent: PNode; c: var TranslationContext;
+proc relLineInfo(n, parent: PNode; c: var Context;
                  emitSpace = false) =
   let i = n.info
   if parent == nil:
@@ -180,7 +180,7 @@ proc relLineInfo(n, parent: PNode; c: var TranslationContext;
   let lineDiff = int32(i.line) - int32(p.line)
   c.b.addLineInfo colDiff, lineDiff, ""
 
-proc symToNif(s: PSym; c: var TranslationContext; isDef = false) =
+proc symToNif(s: PSym; c: var Context; isDef = false) =
   var m = s.name.s & '.' & $s.disamb
   if s.skipGenericOwner().kind == skModule:
     m.add '.'
@@ -190,10 +190,10 @@ proc symToNif(s: PSym; c: var TranslationContext; isDef = false) =
   else:
     c.b.addSymbol m
 
-proc toNif*(n, parent: PNode; c: var TranslationContext)
-proc toNif*(t: PType; parent: PNode; c: var TranslationContext)
+proc toNif*(n, parent: PNode; c: var Context)
+proc toNif*(t: PType; parent: PNode; c: var Context)
 
-proc symToNif(n: PNode; parent: PNode; c: var TranslationContext; isDef = false) =
+proc symToNif(n: PNode; parent: PNode; c: var Context; isDef = false) =
   if n.typ != n.sym.typ:
     c.b.withTree "hconv":
       toNif n.typ, parent, c
@@ -212,7 +212,7 @@ template singleElement(keyw: string) {.dirty.} =
     else:
       c.b.addEmpty
 
-proc toNif*(t: PType; parent: PNode; c: var TranslationContext) =
+proc toNif*(t: PType; parent: PNode; c: var Context) =
   case t.kind
   of tyNone: c.b.addKeyw "err"
   of tyBool: c.b.addKeyw "bool"
@@ -429,7 +429,7 @@ proc toNif*(t: PType; parent: PNode; c: var TranslationContext) =
       else:
         c.b.addEmpty
 
-proc toNifDecl(n, parent: PNode; c: var TranslationContext) =
+proc toNifDecl(n, parent: PNode; c: var Context) =
   if n.kind == nkSym:
     relLineInfo(n, parent, c)
     symToNif(n, parent, c, true)
@@ -469,13 +469,13 @@ proc magicToKind(m: TMagic): string =
     else:
       s.substr(1, s.len-1).toLowerAscii
 
-proc magicCall(m: TMagic; n: PNode; c: var TranslationContext) =
+proc magicCall(m: TMagic; n: PNode; c: var Context) =
   c.b.addTree(magicToKind(m))
   for i in 1..<n.len:
     toNif(n[i], n, c)
   c.b.endTree
 
-proc toNif*(n, parent: PNode; c: var TranslationContext) =
+proc toNif*(n, parent: PNode; c: var Context) =
   case n.kind
   of nkNone, nkEmpty:
     c.b.addEmpty 1
@@ -853,10 +853,10 @@ proc toNif*(n, parent: PNode; c: var TranslationContext) =
       toNif(n[i], n, c)
     c.b.endTree
 
-proc initTranslationContext*(conf: ConfigRef): TranslationContext =
-  result = TranslationContext(conf: conf)
+proc initTranslationContext*(conf: ConfigRef): Context =
+  result = Context(conf: conf)
 
-proc moduleToIr*(n: PNode; c: var TranslationContext) =
+proc moduleToIr*(n: PNode; c: var Context) =
   c.b = nifbuilder.open(100)
   c.b.addHeader "Nifler", "nim-sem"
   toNif(n, nil, c)

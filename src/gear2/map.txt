@@ -1,4 +1,5 @@
-# nodekinds
+# TNodeKind | enum
+nkError | err
 nkCommand | cmd
 nkCall | call
 nkCallStrLit | callstrlit
@@ -25,15 +26,21 @@ nkForStmt | for
 nkDiscardStmt | discard
 nkBreakStmt | brk
 nkReturnStmt | ret
-nkElifExpr, nkElifBranch | elif
-nkElseExpr, nkElse | else
+nkElifBranch, nkElifExpr | elif
+nkElse, nkElseExpr | else
 nkOfBranch | of
 nkCast | cast
 nkLambda | proc
 nkAccQuoted | quoted
 nkTableConstr | tableconstr
-nkStmtListType, nkStmtListExpr, nkStmtList, nkRecList, nkArgList | stmts
-nkBlockStmt, nkBlockExpr, nkBlockType | block
+nkStmtList | stmts
+nkRecList | reclist
+nkStmtListType | stmtListType
+nkStmtListExpr | expr
+nkArgList | arglist
+nkBlockStmt | block
+nkBlockExpr | blockexpr
+nkBlockType | blocktype
 nkStaticStmt | static
 nkBind, nkBindStmt | bind
 nkMixinStmt | mixin
@@ -77,12 +84,12 @@ nkDistinctTy | distinct
 nkIteratorTy | itert
 nkEnumTy | enum
 nkTupleConstr | tupleconstr
-nkOutTy | outTy
-nkType | <error> # should follow n.typ instead
+nkOutTy | out
+nkType | err
 nkComesFrom | comesfrom
 nkDotCall | dotcall
 nkPostfix | postfix
-nkIdentDefs | <error> # eliminated in nim-sem
+nkIdentDefs | err
 nkVarTuple | vartuple
 nkRange | range
 nkCheckedFieldExpr | xdot
@@ -105,7 +112,7 @@ nkStringToCString | tocstr
 nkCStringToString | tostr
 nkOfInherit | ofh
 nkParForStmt | parfor
-nkTypeSection, nkVarSection, nkLetSection, nkConstSection |  <error>
+nkTypeSection, nkVarSection, nkLetSection, nkConstSection |  err
 nkConstDef | const
 nkTypeDef | type
 nkWith | with
@@ -120,12 +127,11 @@ nkClosure | closure
 nkGotoState | gotostate
 nkState | state
 nkBreakState | brstate
-nkError | err
 nkModuleRef | modref
 nkReplayAction | replay
 nkNilRodNode | nilrod
-# magics
-mNone | <impossible>
+# TMagic | enum
+mNone | err
 mDefined | defined
 mDeclared | declared
 mDeclaredInScope | declaredInScope
@@ -293,20 +299,20 @@ mVoid, mVoidType | void
 mTuple | tuple
 mOrdinal | ordinal
 mIterableType | iterable
-mInt | int
-mInt8 | int8
-mInt16 | int16
-mInt32 | int32
-mInt64 | int64
-mUInt | uint
-mUInt8 | uint8
-mUInt16 | uint16
-mUInt32 | uint32
-mUInt64 | uint64
-mFloat | float
-mFloat32 | float32
-mFloat64 | float64
-mFloat128 | float128
+mInt | i
+mInt8 | i
+mInt16 | i
+mInt32 | i
+mInt64 | i
+mUInt | u
+mUInt8 | u
+mUInt16 | u
+mUInt32 | u
+mUInt64 | u
+mFloat | f
+mFloat32 | f
+mFloat64 | f
+mFloat128 | f
 mBool | bool
 mChar | char
 mString | string
@@ -396,24 +402,24 @@ mSymIsInstantiationOf | symIsInstantiationOf
 mNodeId | nodeId
 mPrivateAccess | privateAccess
 mZeroDefault | zeroDefault
-# typekinds
+# TTypeKind | enum
 tyNone | err
 tyBool | bool
-tyChar | c 8
+tyChar | c
 tyEmpty | empty | override
-tyInt | i M
-tyInt8 | i 8
-tyInt16 | i 16
-tyInt32 | i 32
-tyInt64 | i 64
-tyUInt | u M
-tyUInt8 | u 8
-tyUInt16 | u 16
-tyUInt32 | u 32
-tyUInt64 | u 64
-tyFloat, tyFloat64 | f 64
-tyFloat32 | f 32
-tyFloat128 | f 128
+tyInt | i
+tyInt8 | i
+tyInt16 | i
+tyInt32 | i
+tyInt64 | i
+tyUInt | u
+tyUInt8 | u
+tyUInt16 | u
+tyUInt32 | u
+tyUInt64 | u
+tyFloat, tyFloat64 | f
+tyFloat32 | f
+tyFloat128 | f
 tyAlias | err | skipModifier
 tyNil | nilt
 tyUntyped | untyped
@@ -427,6 +433,7 @@ tyDistinct, tyEnum | err | sym
 tyPtr | ptr | override
 tyRef | ref | override
 tyVar | mut | override
+tyVar | out | override
 tyAnd | and
 tyOr | or
 tyNot | not
@@ -454,13 +461,13 @@ tyForward | forward
 tyProxy | err
 tyBuiltInTypeClass | typeclass | genericHead
 tyUserTypeClass, tyConcept | err | sym
-tyUserTypeClassInst | err | sym
+tyUserTypeClassInst | err | sym
 tyCompositeTypeClass | err | last
 tyInferred | err | skipModifier
 tyAnything | any
 tyStatic | stat | withnode
 
-# typeflags
+# TTypeFlags | set
 tfNoSideEffect | noside
 tfFinal | final
 tfInheritable | inheritable
@@ -508,7 +515,7 @@ tfEffectSystemWorkaround | effectSystemWorkaround | ignore
 tfIsOutParam | isOutParam | typekind
 tfSendable | sendable
 tfImplicitStatic | implicitStatic | ignore
-# symflags
+# TSymFlags | set
 sfExported | exported | ignore
 sfFromGeneric | fromGeneric | ignore
 sfGlobal | global
@@ -521,7 +528,7 @@ sfVolatile | volatile
 sfAllUntyped | alluntyped | ignore
 sfDirty | dirty
 sfAnon | anon | ignore
-sfGoto | statem
+sfGoto | statemachine
 sfBase | base
 sfCustomPragma | custompragma
 sfTemplateRedefinition | templateredef | ignore
@@ -570,7 +577,7 @@ sfByCopy | bycopy
 sfMember | member
 sfCodegenDecl | sfCodegenDecl
 sfWasGenSym | wasGenSym | ignore
-# options
+# TOptions | set
 optObjCheck | objcheck
 optFieldCheck | fcheck
 optRangeCheck | rcheck
