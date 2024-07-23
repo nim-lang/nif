@@ -92,6 +92,14 @@ proc genLvalue(c: var GeneratedCode; t: Tree; n: NodePos) =
   else:
     error c.m, "expected expression but got: ", t, n
 
+proc objConstrType(c: var GeneratedCode; t: Tree; n: NodePos) =
+  # C99 is strange, it requires (T){} for struct construction but not for
+  # consts.
+  if c.inSimpleInit == 0:
+    c.add ParLe
+    genType(c, t, n)
+    c.add ParRi
+
 proc genx(c: var GeneratedCode; t: Tree; n: NodePos) =
   case t[n].kind
   of IntLit:
@@ -113,6 +121,7 @@ proc genx(c: var GeneratedCode; t: Tree; n: NodePos) =
   of NilC:
     c.add NullPtr
   of AconstrC:
+    c.objConstrType(t, n.firstSon)
     c.add CurlyLe
     c.add ".a = "
     c.add CurlyLe
@@ -124,15 +133,20 @@ proc genx(c: var GeneratedCode; t: Tree; n: NodePos) =
     c.add CurlyRi
     c.add CurlyRi
   of OconstrC:
+    c.objConstrType(t, n.firstSon)
     c.add CurlyLe
     var i = 0
     for ch in sonsFromX(t, n):
       if i > 0: c.add Comma
       if t[ch].kind == OconstrC:
         # inheritance
+        c.add Dot
+        c.add "Q"
+        c.add AsgnOpr
         c.genx t, ch
       else:
         let (k, v) = sons2(t, ch)
+        c.add Dot
         c.genx t, k
         c.add AsgnOpr
         c.genx t, v

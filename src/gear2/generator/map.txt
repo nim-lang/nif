@@ -1,0 +1,600 @@
+# TNodeKind | enum
+nkError | err
+nkNone | err
+nkEmpty | err
+nkIdent, nkSym, nkCharLit, nkIntLit, nkInt8Lit, nkInt16Lit, nkInt32Lit, nkInt64Lit, nkUIntLit, nkUInt8Lit, nkUInt16Lit, nkUInt32Lit, nkUInt64Lit, nkFloatLit, nkFloat32Lit, nkFloat64Lit, nkFloat128Lit, nkStrLit, nkRStrLit, nkTripleStrLit | err
+nkNilLit | nil
+nkCommand | cmd
+nkCall | call
+nkCallStrLit | callstrlit
+nkInfix | infix
+nkPrefix | prefix
+nkHiddenCallConv | hcall
+nkExprEqExpr | vv
+nkExprColonExpr | kv
+nkPar | par
+nkObjConstr | oconstr
+nkCurly | sconstr
+nkCurlyExpr | curlyexpr
+nkBracket | aconstr
+nkBracketExpr | at
+nkPragmaBlock, nkPragmaExpr | pragmaexpr
+nkDotExpr | dot
+nkAsgn | asgn
+nkFastAsgn | fasgn
+nkIfExpr, nkIfStmt | if
+nkWhenStmt, nkRecWhen | when
+nkWhileStmt | while
+nkCaseStmt, nkRecCase | case
+nkForStmt | for
+nkDiscardStmt | discard
+nkBreakStmt | brk
+nkReturnStmt | ret
+nkElifBranch, nkElifExpr | elif
+nkElse, nkElseExpr | else
+nkOfBranch | of
+nkCast | cast
+nkLambda | proc
+nkAccQuoted | quoted
+nkTableConstr | tableconstr
+nkStmtList | stmts
+nkRecList | reclist
+nkStmtListType | stmtListType
+nkStmtListExpr | expr
+nkArgList | arglist
+nkBlockStmt | block
+nkBlockExpr | blockexpr
+nkBlockType | blocktype
+nkStaticStmt | static
+nkBind, nkBindStmt | bind
+nkMixinStmt | mixin
+nkAddr | addr
+nkGenericParams | typevars
+nkFormalParams | params
+nkImportAs | importAs
+nkRaiseStmt | raise
+nkContinueStmt | continue
+nkYieldStmt | yield
+nkProcDef | proc
+nkFuncDef | func
+nkMethodDef | method
+nkConverterDef | converter
+nkMacroDef | macro
+nkTemplateDef | template
+nkIteratorDef | iterator
+nkExceptBranch | except
+nkTypeOfExpr | typeof
+nkFinally | fin
+nkTryStmt | try
+nkImportStmt | import
+nkImportExceptStmt | importexcept
+nkIncludeStmt | include
+nkExportStmt | export
+nkExportExceptStmt | exportexcept
+nkFromStmt | from
+nkPragma | pragmas
+nkAsmStmt | asm
+nkDefer | defer
+nkUsingStmt | using
+nkCommentStmt | comment
+nkObjectTy | object
+nkTupleTy, nkTupleClassTy | tuple
+nkTypeClassTy | concept
+nkStaticTy | stat
+nkRefTy | ref
+nkPtrTy | ptr
+nkVarTy | mut
+nkDistinctTy | distinct
+nkIteratorTy | itert
+nkEnumTy | enum
+nkTupleConstr | tupleconstr
+nkOutTy | out
+nkType | err
+nkComesFrom | comesfrom
+nkDotCall | dotcall
+nkPostfix | postfix
+nkIdentDefs | err
+nkVarTuple | vartuple
+nkRange | range
+nkCheckedFieldExpr | xdot
+nkDerefExpr | deref
+nkDo | do
+nkClosedSymChoice | cchoice
+nkOpenSymChoice | ochoice
+nkHiddenStdConv | hstdconv
+nkHiddenSubConv | hsubconv
+nkConv | conv
+nkStaticExpr | static
+nkHiddenAddr | haddr
+nkHiddenDeref | hderef
+nkObjDownConv | downconv
+nkObjUpConv | upconv
+nkChckRangeF | xrangef
+nkChckRange64 | xrange64
+nkChckRange | xrange
+nkStringToCString | tocstr
+nkCStringToString | tostr
+nkOfInherit | ofh
+nkParForStmt | parfor
+nkTypeSection, nkVarSection, nkLetSection, nkConstSection |  err
+nkConstDef | const
+nkTypeDef | type
+nkWith | with
+nkWithout | without
+nkConstTy | ro
+nkProcTy | proctype
+nkSinkAsgn | snk
+nkEnumFieldDef | efld
+nkPattern | trpattern
+nkHiddenTryStmt | htry
+nkClosure | closure
+nkGotoState | gotostate
+nkState | state
+nkBreakState | brstate
+nkModuleRef | modref
+nkReplayAction | replay
+nkNilRodNode | nilrod
+# TMagic | enum
+mNone | err
+mDefined | defined
+mDeclared | declared
+mDeclaredInScope | declaredInScope
+mCompiles | compiles
+mArrGet | arrGet
+mArrPut | arrPut
+mAsgn | asgn
+mLow | low
+mHigh | high
+mSizeOf | sizeof
+mAlignOf | alignof
+mOffsetOf | offsetof
+mTypeTrait | typetrait
+mIs | is
+mOf | objof
+mAddr | addr
+mTypeOf, mType | typeOf
+mPlugin | plugin
+mEcho | echo
+mShallowCopy | shallowCopy
+mSlurp | slurp
+mStaticExec | staticExec
+mStatic | static
+mParseExprToAst | parseExpr
+mParseStmtToAst | parseStmt
+mExpandToAst | expandToAst
+mQuoteAst | quote
+mInc | inc
+mDec | dec
+mOrd | ord
+mNew | new
+mNewFinalize | newFinalize
+mNewSeq | newSeq
+mNewSeqOfCap | newSeqOfCap
+mLengthSeq, mLengthOpenArray, mLengthStr, mLengthArray | len
+mIncl | incl
+mExcl | excl
+mCard | card
+mChr | chr
+mGCref | GCref
+mGCunref | GCunref
+mAddI | add
+mSubI | sub
+mMulI | mul
+mDivI | div
+mModI | mod
+mSucc | succ
+mPred | pred
+mAddF64 | addf
+mSubF64 | subf
+mMulF64 | mulf
+mDivF64 | divf
+mShrI | shr
+mShlI | shl
+mAshrI | ashr
+mBitandI | bitand
+mBitorI | bitor
+mBitxorI | bitxor
+mMinI | min
+mMaxI | max
+mAddU | addu
+mSubU | subu
+mMulU | mulu
+mDivU | divu
+mModU | modu
+mEqI | eq
+mLeI | le
+mLtI | lt
+mEqF64 | eqf
+mLeF64 | lef
+mLtF64 | ltf
+mLeU | leu
+mLtU | ltu
+mEqEnum | eqe
+mLeEnum | lee
+mLtEnum | lte
+mEqCh | eqc
+mLeCh | lec
+mLtCh | ltc
+mEqB | eqb
+mLeB | leb
+mLtB | ltb
+mEqRef | eqr
+mLePtr | lep
+mLtPtr | ltp
+mXor | xor
+mEqCString | eqcs
+mEqProc | eqproc
+mUnaryMinusI | neg
+mUnaryMinusI64 | neg
+mAbsI | abs
+mNot | not
+mUnaryPlusI | unaryplus
+mBitnotI | bitnot
+mUnaryPlusF64 | unaryplusf
+mUnaryMinusF64 | negf
+mCharToStr | dollarc
+mBoolToStr | dollarb
+mCStrToStr | dollarcs
+mStrToStr | dollarnop
+mEnumToStr | dollare
+mAnd | and
+mOr | or
+mImplies | implies
+mIff | iff
+mExists | exists
+mForall | forall
+mOld | old
+mEqStr | eqs
+mLeStr | les
+mLtStr | lts
+mEqSet | eqset
+mLeSet | leset
+mLtSet | ltset
+mMulSet | mulset
+mPlusSet | addset
+mMinusSet | subset
+mConStrStr | conc
+mSlice | slice
+mDotDot | dotdot
+mFields | fields
+mFieldPairs | fieldPairs
+mOmpParFor | parFor
+mAppendStrCh | addc
+mAppendStrStr | adds
+mAppendSeqElem | adde
+mInSet | contains
+mRepr | repr
+mExit | exit
+mSetLengthStr | setlens
+mSetLengthSeq | setlenq
+mIsPartOf | isPartOf
+mAstToStr | astToStr
+mParallel | parallel
+mSwap | swap
+mIsNil | isnil
+mArrToSeq | arrToSeq
+mOpenArrayToSeq | openArrayToSeq
+mNewString | newString
+mNewStringOfCap | newStringOfCap
+mParseBiggestFloat | parseBiggestFloat
+mMove | move
+mEnsureMove | ensureMove
+mWasMoved | wasMoved
+mDup | dup
+mDestroy | destroy
+mTrace | trace
+mDefault | default
+mUnown | unown
+mFinished | finished
+mIsolate | isolate
+mAccessEnv | accessEnv
+mAccessTypeField | accessTypeField
+mArray | array
+mOpenArray | oarray
+mRange | range
+mSet | set
+mSeq | seq
+mVarargs | varargs
+mRef | ref
+mPtr | ptr
+mVar | mut
+mDistinct | distinct
+mVoid, mVoidType | void
+mTuple | tuple
+mOrdinal | ordinal
+mIterableType | iterable
+mInt | i
+mInt8 | i
+mInt16 | i
+mInt32 | i
+mInt64 | i
+mUInt | u
+mUInt8 | u
+mUInt16 | u
+mUInt32 | u
+mUInt64 | u
+mFloat | f
+mFloat32 | f
+mFloat64 | f
+mFloat128 | f
+mBool | bool
+mChar | char
+mString | string
+mCstring | cstring
+mPointer | pointer
+mNil | nil
+mExpr | expr
+mStmt | stmt
+mTypeDesc | typedesc
+mPNimrodNode | nimNode
+mSpawn | spawn
+mDeepCopy | deepcopy
+mIsMainModule | isMainModule
+mCompileDate | compileDate
+mCompileTime | compileTime
+mProcCall | procCall
+mCpuEndian | cpuEndian
+mHostOS | hostOS
+mHostCPU | hostCPU
+mBuildOS | buildOS
+mBuildCPU | buildCPU
+mAppType | appType
+mCompileOption | compileOption
+mCompileOptionArg | compileOptionArg
+mNLen | nLen
+mNChild | nChild
+mNSetChild | nSetChild
+mNAdd | nAdd
+mNAddMultiple | nAddMultiple
+mNDel | nDel
+mNKind | nKind
+mNSymKind | nSymKind
+mNccValue | nccValue
+mNccInc | nccInc
+mNcsAdd | ncsAdd
+mNcsIncl | ncsIncl
+mNcsLen | ncsLen
+mNcsAt | ncsAt
+mNctPut | nctPut
+mNctLen | nctLen
+mNctGet | nctGet
+mNctHasNext | nctHasNext
+mNctNext | nctNext
+mNIntVal | nIntVal
+mNFloatVal | nFloatVal
+mNSymbol | nSymbol
+mNIdent | nIdent
+mNGetType | nGetType
+mNStrVal | nStrVal
+mNSetIntVal | nSetIntVal
+mNSetFloatVal | nSetFloatVal
+mNSetSymbol | nSetSymbol
+mNSetIdent | nSetIdent
+mNSetStrVal | nSetStrVal
+mNLineInfo | nLineInfo
+mNNewNimNode | nNewNimNode
+mNCopyNimNode | nCopyNimNode
+mNCopyNimTree | nCopyNimTree
+mStrToIdent | nStrToIdent
+mNSigHash | nSigHash
+mNSizeOf | nSizeOf
+mNBindSym | nBindSym
+mNCallSite | nCallSite
+mEqIdent | eqIdent
+mEqNimrodNode | eqNimNode
+mSameNodeType | sameNodeType
+mGetImpl | getImpl
+mNGenSym | nGenSym
+mNHint | nHint
+mNWarning | nWarning
+mNError | nError
+mInstantiationInfo | instantiationInfo
+mGetTypeInfo | getTypeInfo
+mGetTypeInfoV2 | getTypeInfoV2
+mNimvm | nimvm
+mIntDefine | definei
+mStrDefine | defines
+mBoolDefine | defineb
+mGenericDefine | defineg
+mRunnableExamples | runnableExamples
+mException | exception
+mBuiltinType | builtinType
+mSymOwner | symOwner
+mUncheckedArray | uarray
+mGetImplTransf | getImplTransf
+mSymIsInstantiationOf | symIsInstantiationOf
+mNodeId | nodeId
+mPrivateAccess | privateAccess
+mZeroDefault | zeroDefault
+# TTypeKind | enum
+tyNone | err
+tyBool | bool
+tyChar | c
+tyEmpty | empty | override
+tyInt | i
+tyInt8 | i
+tyInt16 | i
+tyInt32 | i
+tyInt64 | i
+tyUInt | u
+tyUInt8 | u
+tyUInt16 | u
+tyUInt32 | u
+tyUInt64 | u
+tyFloat, tyFloat64 | f
+tyFloat32 | f
+tyFloat128 | f
+tyAlias | err | skipModifier
+tyNil | nilt
+tyUntyped | untyped
+tyTyped | typed
+tyTypeDesc | typedesc | override
+tyGenericParam | p | override
+tyGenericInst | inst | override
+tyGenericInvocation | invok | override
+tyGenericBody | err | last
+tyDistinct, tyEnum | err | sym
+tyPtr | ptr | override
+tyRef | ref | override
+tyVar | mut | override
+tyVar | out | override
+tyAnd | and
+tyOr | or
+tyNot | not
+tyFromExpr | typeof | override
+tyArray | array | override
+tyUncheckedArray | uarray
+tySequence | seq
+tyOrdinal | ordinal
+tySet | set
+tyOpenArray | oarray
+tyIterable | iterable
+tyLent | lent
+tyTuple | tuple | override
+tyRange | range | override
+tyProc | proctype | override
+tyVarargs | varargs | withnode
+tySink | sink
+tyOwned | owned
+tyVoid | void
+tyPointer | pointer
+tyString | str
+tyCstring | cstr
+tyObject | err | sym
+tyForward | forward
+tyProxy | err
+tyBuiltInTypeClass | typeclass | genericHead
+tyUserTypeClass, tyConcept | err | sym
+tyUserTypeClassInst | err | sym
+tyCompositeTypeClass | err | last
+tyInferred | err | skipModifier
+tyAnything | any
+tyStatic | stat | withnode
+
+# TTypeFlags | set
+tfNoSideEffect | noside
+tfFinal | final
+tfInheritable | inheritable
+tfHasOwned | hasOwned | ignore
+tfEnumHasHoles | enumh | typekind
+tfShallow | shallow
+tfThread | thread
+tfFromGeneric | fromGeneric | ignore
+tfUnresolved | unresolved | ignore
+tfResolved | resolved | ignore
+tfRetType | retType | ignore
+tfCapturesEnv | captures | ignore
+tfByCopy | bycopy
+tfByRef | byref
+tfIterator | iterator | typekind
+tfPartial | partial
+tfNotNil | notnil
+tfRequiresInit | requiresInit
+tfNeedsFullInit | needsFullInit | ignore
+tfVarIsPtr | varIsPtr | ignore
+tfHasMeta | hasMeta | ignore
+tfHasGCedMem | hasGCedMem | ignore
+tfPacked | packed
+tfHasStatic | hasStatic | ignore
+tfGenericTypeParam | genericTypeParam | ignore
+tfImplicitTypeParam | implicitTypeParam | ignore
+tfInferrableStatic | inferrableStatic | ignore
+tfConceptMatchedTypeSym | conceptMatchedTypeSym | ignore
+tfExplicit | explicit | ignore
+tfWildcard | wildcard | ignore
+tfHasAsgn | hasAsgn | ignore
+tfBorrowDot | borrowDot
+tfTriggersCompileTime | triggersCompileTime | ignore
+tfRefsAnonObj | refsAnonObj | typekind
+tfCovariant | covariant
+tfWeakCovariant | weakCovariant
+tfContravariant | contravariant
+tfCheckedForDestructor | checkedForDestructor | ignore
+tfAcyclic | acyclic
+tfIncompleteStruct | incompleteStruct
+tfCompleteStruct | completeStruct
+tfExplicitCallConv | explicitCallConv | ignore
+tfIsConstructor | isSetConstructor | ignore
+tfEffectSystemWorkaround | effectSystemWorkaround | ignore
+tfIsOutParam | isOutParam | typekind
+tfSendable | sendable
+tfImplicitStatic | implicitStatic | ignore
+# TSymFlags | set
+sfExported | exported | ignore
+sfFromGeneric | fromGeneric | ignore
+sfGlobal | global
+sfForward | forward | ignore
+sfWasForwarded | wasForwarded | ignore
+sfImportc | importc
+sfExportc | exportc
+sfMangleCpp | sfMangleCpp | ignore
+sfVolatile | volatile
+sfAllUntyped | alluntyped | ignore
+sfDirty | dirty
+sfAnon | anon | ignore
+sfGoto | statemachine
+sfBase | base
+sfCustomPragma | custompragma
+sfTemplateRedefinition | templateredef | ignore
+sfRegister | register
+sfPure | pure
+sfNoSideEffect | noside
+sfSideEffect | side
+sfNoInit | noinit
+sfSystemModule | systemModule | ignore
+sfNoReturn | noret
+sfAddrTaken | addrTaken | ignore
+sfCompilerProc | compilerProc
+sfEscapes | escapes | ignore
+sfDiscriminant | discriminant | ignore
+sfRequiresInit | requiresInit
+sfDeprecated | deprecated
+sfExplain | explain
+sfError | disabled
+sfShadowed | shadowed | ignore
+sfThread | threadvar | symkind
+sfCppNonPod | cppNonPod
+sfCompileTime | compileTime
+sfConstructor | cppconstr
+sfDispatcher | dispatcher | ignore
+sfBorrow | borrow
+sfInfixCall | cppCall
+sfNamedParamCall | objcCall
+sfDiscardable | discardable
+sfOverridden | overridden
+sfCallsite | callsite
+sfGenSym | genSym
+sfNonReloadable | nonReloadable
+sfGeneratedOp | nodestroy
+sfTemplateParam | templateParam | ignore
+sfCursor | cursor | nodekind
+sfInjectDestructors | injectDestructors | ignore
+sfNeverRaises | noraises
+sfSystemRaisesDefect | raisesDefect
+sfUsedInFinallyOrExcept | usedInFinallyOrExcept | ignore
+sfSingleUsedTemp | singleUsedTemp | ignore
+sfNoalias | noalias
+sfEffectsDelayed | effectsDelayed | ignore
+sfGeneratedType | generatedType | ignore
+sfVirtual | virtual
+sfByCopy | bycopy
+sfMember | member
+sfCodegenDecl | sfCodegenDecl
+sfWasGenSym | wasGenSym | ignore
+# TOptions | set
+optObjCheck | objcheck
+optFieldCheck | fcheck
+optRangeCheck | rcheck
+optBoundsCheck | bcheck
+optOverflowCheck | ofcheck
+optRefCheck | nilcheck
+optNaNCheck | nancheck
+optInfCheck | infcheck
+optLineDir | optLineDir
+optOptimizeSpeed | optspeed
+optOptimizeSize | optsize
+optStackTrace | stackTrace
+optLineTrace | lineTrace
+optByRef | byref
+optProfiler | profile
+optQuirky | quirky

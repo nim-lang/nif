@@ -255,7 +255,7 @@ proc trStmt(c: var Context; dest: var Tree; t: Tree; n: NodePos) =
     else:
       dest.copyTree t, n
   of AsgnX, CallX:
-    # IMPORTANT: Stores into `tar` helper t!
+    # IMPORTANT: Stores into `tar` helper!
     var tar = Target(m: IsAppend)
     tar.t.copyIntoFrom t, n:
       for ch in sons(t, n):
