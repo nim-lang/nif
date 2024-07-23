@@ -1,5 +1,9 @@
 # TNodeKind | enum
 nkError | err
+nkNone | err
+nkEmpty | err
+nkIdent, nkSym, nkCharLit, nkIntLit, nkInt8Lit, nkInt16Lit, nkInt32Lit, nkInt64Lit, nkUIntLit, nkUInt8Lit, nkUInt16Lit, nkUInt32Lit, nkUInt64Lit, nkFloatLit, nkFloat32Lit, nkFloat64Lit, nkFloat128Lit, nkStrLit, nkRStrLit, nkTripleStrLit | err
+nkNilLit | nil
 nkCommand | cmd
 nkCall | call
 nkCallStrLit | callstrlit
