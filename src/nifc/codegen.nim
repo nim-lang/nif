@@ -76,6 +76,7 @@ type
     code: seq[Token]
     init: seq[Token]
     tokens: BiTable[Token, string]
+    inSimpleInit: int
     headerFile: seq[Token]
     generatedTypes: IntSet
     requestedSyms: HashSet[string]
@@ -276,7 +277,9 @@ proc genVarDecl(c: var GeneratedCode; t: Tree; n: NodePos; vk: VarKind) =
     genVarPragmas c, t, d.pragmas
     if t[d.value].kind != Empty:
       c.add AsgnOpr
+      if vk != IsLocal: inc c.inSimpleInit
       genx c, t, d.value
+      if vk != IsLocal: dec c.inSimpleInit
     c.add Semicolon
   else:
     error c.m, "expected SymbolDef but got: ", t, n
