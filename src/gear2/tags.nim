@@ -97,7 +97,7 @@ proc nodeKindToTag*(k: TNodeKind): string =
   of nkDotCall: "dotcall"
   of nkPostfix: "postfix"
   of nkIdentDefs: "err"
-  of nkVarTuple: "vartuple"
+  of nkVarTuple: "unpackdecl"
   of nkRange: "range"
   of nkCheckedFieldExpr: "xdot"
   of nkDerefExpr: "deref"
@@ -417,7 +417,7 @@ proc typeFlagsToKeyw*(f: TTypeFlags; b: var Builder) =
   if tfFinal in f: b.addKeyw "final"
   if tfInheritable in f: b.addKeyw "inheritable"
   if tfShallow in f: b.addKeyw "shallow"
-  if tfThread in f: b.addKeyw "thread"
+  if tfThread in f: b.addKeyw "gcsafe"
   if tfByCopy in f: b.addKeyw "bycopy"
   if tfByRef in f: b.addKeyw "byref"
   if tfPartial in f: b.addKeyw "partial"
@@ -648,7 +648,7 @@ proc toNodeKind*(tag: string): TNodeKind =
   of "comesfrom": nkComesFrom
   of "dotcall": nkDotCall
   of "postfix": nkPostfix
-  of "vartuple": nkVarTuple
+  of "unpackdecl": nkVarTuple
   of "range": nkRange
   of "xdot": nkCheckedFieldExpr
   of "deref": nkDerefExpr
@@ -957,7 +957,7 @@ proc inclTypeFlags*(res: var TTypeFlags; f: string) =
   of "final": res.incl tfFinal
   of "inheritable": res.incl tfInheritable
   of "shallow": res.incl tfShallow
-  of "thread": res.incl tfThread
+  of "gcsafe": res.incl tfThread
   of "bycopy": res.incl tfByCopy
   of "byref": res.incl tfByRef
   of "partial": res.incl tfPartial

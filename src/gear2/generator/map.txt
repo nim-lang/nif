@@ -478,7 +478,7 @@ tfInheritable | inheritable
 tfHasOwned | hasOwned | ignore
 tfEnumHasHoles | enumh | typekind
 tfShallow | shallow
-tfThread | thread
+tfThread | gcsafe
 tfFromGeneric | fromGeneric | ignore
 tfUnresolved | unresolved | ignore
 tfResolved | resolved | ignore
