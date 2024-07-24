@@ -94,7 +94,7 @@ nkComesFrom | comesfrom
 nkDotCall | dotcall
 nkPostfix | postfix
 nkIdentDefs | err
-nkVarTuple | vartuple
+nkVarTuple | unpackdecl
 nkRange | range
 nkCheckedFieldExpr | xdot
 nkDerefExpr | deref

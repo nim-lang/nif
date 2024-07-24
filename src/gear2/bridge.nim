@@ -4,7 +4,7 @@
 # See the file "license.txt", included in this
 # distribution, for details about the copyright.
 
-## Implements the mapping from Nim sem's AST to NIF ("nim-sem").
+## Implements the mapping from Nim sem's AST to NIF ("gear2").
 
 when defined(nifBench):
   import std / monotimes
@@ -78,8 +78,8 @@ template singleElement(keyw: string) {.dirty.} =
 
 proc toNif*(t: PType; parent: PNode; c: var Context) =
   case t.kind
-  of tyNone: c.b.addKeyw "err"
-  of tyBool: c.b.addKeyw "bool"
+  of tyNone: c.b.addKeyw typeKindToTag(t.kind)
+  of tyBool: c.b.addKeyw typeKindToTag(t.kind)
   of tyChar: c.b.addKeyw "c 8"
   of tyEmpty: c.b.addEmpty
   of tyInt: c.b.addKeyw "i M"
@@ -98,28 +98,28 @@ proc toNif*(t: PType; parent: PNode; c: var Context) =
   of tyAlias:
     # XXX Generic aliases are no aliases
     toNif t.skipModifier, parent, c
-  of tyNil: c.b.addKeyw "nilt"
-  of tyUntyped: c.b.addKeyw "untyped"
-  of tyTyped: c.b.addKeyw "typed"
+  of tyNil: c.b.addKeyw typeKindToTag(t.kind)
+  of tyUntyped: c.b.addKeyw typeKindToTag(t.kind)
+  of tyTyped: c.b.addKeyw typeKindToTag(t.kind)
   of tyTypeDesc:
-    c.b.withTree "typedesc":
+    c.b.withTree typeKindToTag(t.kind):
       if t.kidsLen == 0 or t.elementType.kind == tyNone:
         c.b.addEmpty
       else:
         toNif t.elementType, parent, c
   of tyGenericParam:
     # See the nim-sem spec:
-    c.b.withTree "p":
+    c.b.withTree typeKindToTag(t.kind):
       symToNif t.sym, c
       c.b.addIntLit t.sym.position
 
   of tyGenericInst:
-    c.b.withTree "inst":
+    c.b.withTree typeKindToTag(t.kind):
       toNif t.genericHead, parent, c
       for _, a in t.genericInstParams:
         toNif a, parent, c
   of tyGenericInvocation:
-    c.b.withTree "invok":
+    c.b.withTree typeKindToTag(t.kind):
       toNif t.genericHead, parent, c
       for _, a in t.genericInvocationParams:
         toNif a, parent, c
@@ -132,64 +132,64 @@ proc toNif*(t: PType; parent: PNode; c: var Context) =
     if isNominalRef(t):
       symToNif t.sym, c
     else:
-      c.b.withTree "ptr":
+      c.b.withTree typeKindToTag(t.kind):
         toNif t.elementType, parent, c
   of tyRef:
     if isNominalRef(t):
       symToNif t.sym, c
     else:
-      c.b.withTree "ref":
+      c.b.withTree typeKindToTag(t.kind):
         toNif t.elementType, parent, c
   of tyVar:
     c.b.withTree(if isOutParam(t): "out" else: "mut"):
       toNif t.elementType, parent, c
   of tyAnd:
-    c.b.withTree "and":
+    c.b.withTree typeKindToTag(t.kind):
       for _, son in t.ikids: toNif son, parent, c
   of tyOr:
-    c.b.withTree "or":
+    c.b.withTree typeKindToTag(t.kind):
       for _, son in t.ikids: toNif son, parent, c
   of tyNot:
-    c.b.withTree "not": toNif t.elementType, parent, c
+    c.b.withTree typeKindToTag(t.kind): toNif t.elementType, parent, c
 
   of tyFromExpr:
     if t.n == nil:
       c.b.addKeyw "err"
     else:
-      c.b.withTree "typeof":
+      c.b.withTree typeKindToTag(t.kind):
         toNif t.n, parent, c
 
   of tyArray:
-    c.b.withTree "array":
+    c.b.withTree typeKindToTag(t.kind):
       if t.hasElementType:
         toNif t.elementType, parent, c
         toNif t.indexType, parent, c
       else:
         c.b.addEmpty 2
   of tyUncheckedArray:
-    c.b.withTree "uarray":
+    c.b.withTree typeKindToTag(t.kind):
       if t.hasElementType:
         toNif t.elementType, parent, c
       else:
         c.b.addEmpty
 
   of tySequence:
-    singleElement "seq"
+    singleElement typeKindToTag(t.kind)
 
   of tyOrdinal:
-    c.b.withTree "ordinal":
+    c.b.withTree typeKindToTag(t.kind):
       if t.hasElementType:
         toNif t.skipModifier, parent, c
       else:
         c.b.addEmpty
 
-  of tySet: singleElement "set"
-  of tyOpenArray: singleElement "oarray"
-  of tyIterable: singleElement "iterable"
-  of tyLent: singleElement "lent"
+  of tySet: singleElement typeKindToTag(t.kind)
+  of tyOpenArray: singleElement typeKindToTag(t.kind)
+  of tyIterable: singleElement typeKindToTag(t.kind)
+  of tyLent: singleElement typeKindToTag(t.kind)
 
   of tyTuple:
-    c.b.withTree "tuple":
+    c.b.withTree typeKindToTag(t.kind):
       if t.n != nil:
         for i in 0..<t.n.len:
           assert(t.n[i].kind == nkSym)
@@ -200,7 +200,7 @@ proc toNif*(t: PType; parent: PNode; c: var Context) =
         for _, son in t.ikids: toNif son, parent, c
 
   of tyRange:
-    c.b.withTree "range":
+    c.b.withTree typeKindToTag(t.kind):
       toNif t.elementType, parent, c
       if t.n != nil and t.n.kind == nkRange and t.n.len == 2:
         toNif t.n[0], parent, c
@@ -240,7 +240,7 @@ proc toNif*(t: PType; parent: PNode; c: var Context) =
           c.b.addKeyw ($t.callConv).toLowerAscii.substr(2)
 
   of tyVarargs:
-    c.b.withTree "varargs":
+    c.b.withTree typeKindToTag(t.kind):
       if t.hasElementType:
         toNif t.elementType, parent, c
       else:
@@ -250,18 +250,18 @@ proc toNif*(t: PType; parent: PNode; c: var Context) =
       else:
         c.b.addEmpty
 
-  of tySink: singleElement "sink"
-  of tyOwned: singleElement "owned"
-  of tyVoid: c.b.addKeyw "void"
-  of tyPointer: c.b.addKeyw "pointer"
-  of tyString: c.b.addKeyw "str"
-  of tyCstring: c.b.addKeyw "cstr"
+  of tySink: singleElement typeKindToTag(t.kind)
+  of tyOwned: singleElement typeKindToTag(t.kind)
+  of tyVoid: c.b.addKeyw typeKindToTag(t.kind)
+  of tyPointer: c.b.addKeyw typeKindToTag(t.kind)
+  of tyString: c.b.addKeyw typeKindToTag(t.kind)
+  of tyCstring: c.b.addKeyw typeKindToTag(t.kind)
   of tyObject: symToNif t.sym, c
-  of tyForward: c.b.addKeyw "forward"
-  of tyProxy: c.b.addKeyw "err"
+  of tyForward: c.b.addKeyw typeKindToTag(t.kind)
+  of tyProxy: c.b.addKeyw typeKindToTag(t.kind)
   of tyBuiltInTypeClass:
     # XXX See what to do with this.
-    c.b.withTree "typeclass":
+    c.b.withTree typeKindToTag(t.kind):
       if t.kidsLen == 0 or t.genericHead.kind == tyNone:
         c.b.addEmpty
       else:
@@ -281,9 +281,9 @@ proc toNif*(t: PType; parent: PNode; c: var Context) =
       c.b.addKeyw "err"
   of tyCompositeTypeClass: toNif t.last, parent, c
   of tyInferred: toNif t.skipModifier, parent, c
-  of tyAnything: c.b.addKeyw "any"
+  of tyAnything: c.b.addKeyw typeKindToTag(t.kind)
   of tyStatic:
-    c.b.withTree "stat":
+    c.b.withTree typeKindToTag(t.kind):
       if t.hasElementType:
         toNif t.skipModifier, parent, c
       else:
@@ -517,7 +517,7 @@ proc toNif*(n, parent: PNode; c: var Context) =
 
   of nkStmtListType, nkStmtListExpr:
     relLineInfo(n, parent, c)
-    c.b.addTree("expr")
+    c.b.addTree(nodeKindToTag(n.kind))
 
     c.b.addEmpty # type information of StmtListExpr
     c.b.addTree("stmts")
@@ -630,7 +630,7 @@ proc toNif*(n, parent: PNode; c: var Context) =
   of nkVarTuple:
     relLineInfo(n, parent, c)
     assert n[n.len-2].kind == nkEmpty
-    c.b.addTree("unpackdecl")
+    c.b.addTree(nodeKindToTag(n.kind))
     toNif(n[n.len-1], n, c)
     c.b.addTree("unpacktuple")
     for i in 0..<n.len-2:
@@ -646,7 +646,7 @@ proc toNif*(n, parent: PNode; c: var Context) =
 
   of nkForStmt:
     relLineInfo(n, parent, c)
-    c.b.addTree("for")
+    c.b.addTree(nodeKindToTag(n.kind))
     toNif(n[n.len-2], n, c) # iterator
     if n[0].kind == nkVarTuple:
       let v = n[0]
