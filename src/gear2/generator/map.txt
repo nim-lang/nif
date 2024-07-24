@@ -94,7 +94,7 @@ nkComesFrom | comesfrom
 nkDotCall | dotcall
 nkPostfix | postfix
 nkIdentDefs | err
-nkVarTuple | vartuple
+nkVarTuple | unpackdecl
 nkRange | range
 nkCheckedFieldExpr | xdot
 nkDerefExpr | deref
@@ -478,7 +478,7 @@ tfInheritable | inheritable
 tfHasOwned | hasOwned | ignore
 tfEnumHasHoles | enumh | typekind
 tfShallow | shallow
-tfThread | thread
+tfThread | gcsafe
 tfFromGeneric | fromGeneric | ignore
 tfUnresolved | unresolved | ignore
 tfResolved | resolved | ignore

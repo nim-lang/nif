@@ -4,7 +4,7 @@
 # See the file "license.txt", included in this
 # distribution, for details about the copyright.
 
-## Implements the mapping from Nim sem's AST to NIF ("nim-sem").
+## Implements the mapping from Nim sem's AST to NIF ("gear2").
 
 when defined(nifBench):
   import std / monotimes
@@ -21,15 +21,15 @@ import modnames
 include tags
 
 type
-  Context = object
+  WContext = object # writer context
     conf: ConfigRef
     section: string
     b: Builder
 
-proc absLineInfo(i: TLineInfo; c: var Context) =
+proc absLineInfo(i: TLineInfo; c: var WContext) =
   c.b.addLineInfo int32(i.col), int32(i.line), toFullPath(c.conf, i.fileIndex)
 
-proc relLineInfo(n, parent: PNode; c: var Context;
+proc relLineInfo(n, parent: PNode; c: var WContext;
                  emitSpace = false) =
   let i = n.info
   if parent == nil:
@@ -44,7 +44,7 @@ proc relLineInfo(n, parent: PNode; c: var Context;
   let lineDiff = int32(i.line) - int32(p.line)
   c.b.addLineInfo colDiff, lineDiff, ""
 
-proc symToNif(s: PSym; c: var Context; isDef = false) =
+proc symToNif(s: PSym; c: var WContext; isDef = false) =
   var m = s.name.s & '.' & $s.disamb
   if s.skipGenericOwner().kind == skModule:
     m.add '.'
@@ -54,10 +54,10 @@ proc symToNif(s: PSym; c: var Context; isDef = false) =
   else:
     c.b.addSymbol m
 
-proc toNif*(n, parent: PNode; c: var Context)
-proc toNif*(t: PType; parent: PNode; c: var Context)
+proc toNif*(n, parent: PNode; c: var WContext)
+proc toNif*(t: PType; parent: PNode; c: var WContext)
 
-proc symToNif(n: PNode; parent: PNode; c: var Context; isDef = false) =
+proc symToNif(n: PNode; parent: PNode; c: var WContext; isDef = false) =
   if n.typ != n.sym.typ:
     c.b.withTree "hconv":
       toNif n.typ, parent, c
@@ -65,248 +65,43 @@ proc symToNif(n: PNode; parent: PNode; c: var Context; isDef = false) =
   else:
     symToNif n.sym, c, isDef
 
-proc isNominalRef(t: PType): bool {.inline.} =
-  let e = t.elementType
-  t.sym != nil and e.kind == tyObject and (e.sym == nil or sfAnon in e.sym.flags)
+include typebridge
 
-template singleElement(keyw: string) {.dirty.} =
-  c.b.withTree keyw:
-    if t.hasElementType:
-      toNif t.elementType, parent, c
-    else:
-      c.b.addEmpty
-
-proc toNif*(t: PType; parent: PNode; c: var Context) =
-  case t.kind
-  of tyNone: c.b.addKeyw "err"
-  of tyBool: c.b.addKeyw "bool"
-  of tyChar: c.b.addKeyw "c 8"
-  of tyEmpty: c.b.addEmpty
-  of tyInt: c.b.addKeyw "i M"
-  of tyInt8: c.b.addKeyw "i 8"
-  of tyInt16: c.b.addKeyw "i 16"
-  of tyInt32: c.b.addKeyw "i 32"
-  of tyInt64: c.b.addKeyw "i 64"
-  of tyUInt: c.b.addKeyw "u M"
-  of tyUInt8: c.b.addKeyw "u 8"
-  of tyUInt16: c.b.addKeyw "u 16"
-  of tyUInt32: c.b.addKeyw "u 32"
-  of tyUInt64: c.b.addKeyw "u 64"
-  of tyFloat, tyFloat64: c.b.addKeyw "f 64"
-  of tyFloat32: c.b.addKeyw "f 32"
-  of tyFloat128: c.b.addKeyw "f 128"
-  of tyAlias:
-    # XXX Generic aliases are no aliases
-    toNif t.skipModifier, parent, c
-  of tyNil: c.b.addKeyw "nilt"
-  of tyUntyped: c.b.addKeyw "untyped"
-  of tyTyped: c.b.addKeyw "typed"
-  of tyTypeDesc:
-    c.b.withTree "typedesc":
-      if t.kidsLen == 0 or t.elementType.kind == tyNone:
-        c.b.addEmpty
-      else:
-        toNif t.elementType, parent, c
-  of tyGenericParam:
-    # See the nim-sem spec:
-    c.b.withTree "p":
-      symToNif t.sym, c
-      c.b.addIntLit t.sym.position
-
-  of tyGenericInst:
-    c.b.withTree "inst":
-      toNif t.genericHead, parent, c
-      for _, a in t.genericInstParams:
-        toNif a, parent, c
-  of tyGenericInvocation:
-    c.b.withTree "invok":
-      toNif t.genericHead, parent, c
-      for _, a in t.genericInvocationParams:
-        toNif a, parent, c
-  of tyGenericBody:
-    toNif t.last, parent, c
-    # Alternatively something with `genericBodyParams`...
-  of tyDistinct, tyEnum:
-    symToNif t.sym, c
-  of tyPtr:
-    if isNominalRef(t):
-      symToNif t.sym, c
-    else:
-      c.b.withTree "ptr":
-        toNif t.elementType, parent, c
-  of tyRef:
-    if isNominalRef(t):
-      symToNif t.sym, c
-    else:
-      c.b.withTree "ref":
-        toNif t.elementType, parent, c
-  of tyVar:
-    c.b.withTree(if isOutParam(t): "out" else: "mut"):
-      toNif t.elementType, parent, c
-  of tyAnd:
-    c.b.withTree "and":
-      for _, son in t.ikids: toNif son, parent, c
-  of tyOr:
-    c.b.withTree "or":
-      for _, son in t.ikids: toNif son, parent, c
-  of tyNot:
-    c.b.withTree "not": toNif t.elementType, parent, c
-
-  of tyFromExpr:
-    if t.n == nil:
-      c.b.addKeyw "err"
-    else:
-      c.b.withTree "typeof":
-        toNif t.n, parent, c
-
-  of tyArray:
-    c.b.withTree "array":
-      if t.hasElementType:
-        toNif t.elementType, parent, c
-        toNif t.indexType, parent, c
-      else:
-        c.b.addEmpty 2
-  of tyUncheckedArray:
-    c.b.withTree "uarray":
-      if t.hasElementType:
-        toNif t.elementType, parent, c
-      else:
-        c.b.addEmpty
-
-  of tySequence:
-    singleElement "seq"
-
-  of tyOrdinal:
-    c.b.withTree "ordinal":
-      if t.hasElementType:
-        toNif t.skipModifier, parent, c
-      else:
-        c.b.addEmpty
-
-  of tySet: singleElement "set"
-  of tyOpenArray: singleElement "oarray"
-  of tyIterable: singleElement "iterable"
-  of tyLent: singleElement "lent"
-
-  of tyTuple:
-    c.b.withTree "tuple":
-      if t.n != nil:
-        for i in 0..<t.n.len:
-          assert(t.n[i].kind == nkSym)
-          c.b.withTree "kv":
-            c.b.addIdent t.n[i].sym.name.s
-            toNif t.n[i].sym.typ, parent, c
-      else:
-        for _, son in t.ikids: toNif son, parent, c
-
-  of tyRange:
-    c.b.withTree "range":
-      toNif t.elementType, parent, c
-      if t.n != nil and t.n.kind == nkRange and t.n.len == 2:
-        toNif t.n[0], parent, c
-        toNif t.n[1], parent, c
-      else:
-        c.b.addEmpty 2
-
-  of tyProc:
-    let kind = if tfIterator in t.flags: "iteratortype"
-               else: "proctype"
-    c.b.withTree kind:
-
-      c.b.addEmpty # name
-      for i, a in t.paramTypes:
-        let j = paramTypeToNodeIndex(i)
-        if t.n != nil and j < t.n.len and t.n[j].kind == nkSym:
-          c.b.addIdent(t.n[j].sym.name.s)
-          toNif a, parent, c
-      if tfUnresolved in t.flags:
-        c.b.addRaw "[*missing parameters*]"
-      if t.returnType != nil:
-        toNif t.returnType, parent, c
-      else:
-        c.b.addEmpty
-
-      c.b.withTree "effects":
-        # XXX model explicit .raises and .tags annotations
-        if tfNoSideEffect in t.flags:
-          c.b.addKeyw "noside"
-        if tfThread in t.flags:
-          c.b.addKeyw "gcsafe"
-
-      c.b.withTree "pragmas":
-        if t.callConv == ccNimCall and tfExplicitCallConv notin t.flags:
-          discard "no calling convention to generate"
-        else:
-          c.b.addKeyw ($t.callConv).toLowerAscii.substr(2)
-
-  of tyVarargs:
-    c.b.withTree "varargs":
-      if t.hasElementType:
-        toNif t.elementType, parent, c
-      else:
-        c.b.addEmpty
-      if t.n != nil:
-        toNif t.n, parent, c
-      else:
-        c.b.addEmpty
-
-  of tySink: singleElement "sink"
-  of tyOwned: singleElement "owned"
-  of tyVoid: c.b.addKeyw "void"
-  of tyPointer: c.b.addKeyw "pointer"
-  of tyString: c.b.addKeyw "str"
-  of tyCstring: c.b.addKeyw "cstr"
-  of tyObject: symToNif t.sym, c
-  of tyForward: c.b.addKeyw "forward"
-  of tyProxy: c.b.addKeyw "err"
-  of tyBuiltInTypeClass:
-    # XXX See what to do with this.
-    c.b.withTree "typeclass":
-      if t.kidsLen == 0 or t.genericHead.kind == tyNone:
-        c.b.addEmpty
-      else:
-        toNif t.genericHead, parent, c
-
-  of tyUserTypeClass, tyConcept:
-    # ^ old style concept.  ^ new style concept.
-    if t.sym != nil:
-      symToNif t.sym, c
-    else:
-      c.b.addKeyw "err"
-  of tyUserTypeClassInst:
-    # "instantiated" old style concept. Whatever that even means.
-    if t.sym != nil:
-      symToNif t.sym, c
-    else:
-      c.b.addKeyw "err"
-  of tyCompositeTypeClass: toNif t.last, parent, c
-  of tyInferred: toNif t.skipModifier, parent, c
-  of tyAnything: c.b.addKeyw "any"
-  of tyStatic:
-    c.b.withTree "stat":
-      if t.hasElementType:
-        toNif t.skipModifier, parent, c
-      else:
-        c.b.addEmpty
-      if t.n != nil:
-        toNif t.n, parent, c
-      else:
-        c.b.addEmpty
-
-proc toNifDecl(n, parent: PNode; c: var Context) =
+proc toNifDecl(n, parent: PNode; c: var WContext) =
   if n.kind == nkSym:
     relLineInfo(n, parent, c)
     symToNif(n, parent, c, true)
   else:
     toNif n, parent, c
 
-proc magicCall(m: TMagic; n: PNode; c: var Context) =
+proc magicCall(m: TMagic; n: PNode; c: var WContext) =
   c.b.addTree(magicToTag(m))
   for i in 1..<n.len:
     toNif(n[i], n, c)
   c.b.endTree
 
-proc toNif*(n, parent: PNode; c: var Context) =
+proc toNifPragmas(n, name, parent: PNode; c: var WContext) =
+  var b2 = nifbuilder.open(30)
+  b2.withTree "pragmas":
+    if name.kind == nkSym:
+      let flags = name.sym.flags
+      if sfImportc in flags:
+        b2.withTree "importc":
+          b2.addIdent name.sym.loc.snippet
+      elif sfExportc in flags:
+        b2.withTree "exportc":
+          b2.addIdent name.sym.loc.snippet
+      symFlagsToKeyw(flags - {sfImportc, sfExportc}, b2)
+    else:
+      for ch in n:
+        toNif ch, n, c
+  let s = b2.extract()
+  if s.len > len("(pragmas)"):
+    c.b.addRaw s
+  else:
+    c.b.addEmpty
+
+proc toNif*(n, parent: PNode; c: var WContext) =
   case n.kind
   of nkNone, nkEmpty:
     c.b.addEmpty 1
@@ -408,10 +203,7 @@ proc toNif*(n, parent: PNode; c: var Context) =
     else:
       c.b.addEmpty
 
-    if pragma != nil:
-      toNif(pragma, n, c)
-    else:
-      c.b.addEmpty
+    toNifPragmas(pragma, name, n, c)
 
     for i in 1..<n.len:
       toNif(n[i], n, c)
@@ -480,10 +272,7 @@ proc toNif*(n, parent: PNode; c: var Context) =
       else:
         c.b.addEmpty
 
-      if pragma != nil:
-        toNif(pragma, n[i], c)
-      else:
-        c.b.addEmpty
+      toNifPragmas(pragma, name, n[i], c)
 
       toNif(n[last-1], n[i], c) # type
       toNif(n[last], n[i], c) # value
@@ -517,7 +306,7 @@ proc toNif*(n, parent: PNode; c: var Context) =
 
   of nkStmtListType, nkStmtListExpr:
     relLineInfo(n, parent, c)
-    c.b.addTree("expr")
+    c.b.addTree(nodeKindToTag(n.kind))
 
     c.b.addEmpty # type information of StmtListExpr
     c.b.addTree("stmts")
@@ -593,10 +382,7 @@ proc toNif*(n, parent: PNode; c: var Context) =
       relLineInfo(it, n, c)
       toNifDecl name, it, c
       c.b.addEmpty # export marker
-      if pragma == nil:
-        c.b.addEmpty
-      else:
-        toNif(pragma, it, c)
+      toNifPragmas(pragma, name, it, c)
       c.b.addEmpty # type (filled by sema)
       if val == nil:
         c.b.addEmpty
@@ -630,7 +416,7 @@ proc toNif*(n, parent: PNode; c: var Context) =
   of nkVarTuple:
     relLineInfo(n, parent, c)
     assert n[n.len-2].kind == nkEmpty
-    c.b.addTree("unpackdecl")
+    c.b.addTree(nodeKindToTag(n.kind))
     toNif(n[n.len-1], n, c)
     c.b.addTree("unpacktuple")
     for i in 0..<n.len-2:
@@ -646,7 +432,7 @@ proc toNif*(n, parent: PNode; c: var Context) =
 
   of nkForStmt:
     relLineInfo(n, parent, c)
-    c.b.addTree("for")
+    c.b.addTree(nodeKindToTag(n.kind))
     toNif(n[n.len-2], n, c) # iterator
     if n[0].kind == nkVarTuple:
       let v = n[0]
@@ -684,10 +470,10 @@ proc toNif*(n, parent: PNode; c: var Context) =
       toNif(n[i], n, c)
     c.b.endTree
 
-proc initTranslationContext*(conf: ConfigRef): Context =
-  result = Context(conf: conf)
+proc initTranslationContext*(conf: ConfigRef): WContext =
+  result = WContext(conf: conf)
 
-proc moduleToIr*(n: PNode; c: var Context) =
+proc moduleToIr*(n: PNode; c: var WContext) =
   c.b = nifbuilder.open(100)
   c.b.addHeader "Nifler", "nim-sem"
   toNif(n, nil, c)
