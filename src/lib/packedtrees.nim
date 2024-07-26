@@ -253,6 +253,9 @@ proc copyTree*[E](dest: var PackedTree[E]; tree: PackedTree[E]; n: NodePos) =
   for i in 0..<L:
     dest.nodes[d+i] = tree.nodes[pos+i]
 
+proc copyNode*[E](dest: var PackedTree[E]; node: PackedNode[E]) {.inline.} =
+  dest.nodes.add node
+
 proc isLastSon*[E](tree: PackedTree[E]; parent, n: NodePos): bool {.inline.} =
   # A node is a the last son of a parent node if its span
   # falls onto the end of the parent's span:
