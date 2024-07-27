@@ -4,7 +4,7 @@
 ## `let tmp; if cond: tmp = 3 else: temp = 4; let x = tmp`
 
 import ".." / lib / [packedtrees, lineinfos, bitabs]
-import xelim_model
+import xelim_model, xelim_typenav
 
 proc isComplex(t: Tree; n: NodePos): bool =
   template prop(n: Node; ch: NodePos): bool =
@@ -19,7 +19,7 @@ type
     t: Tree
   Context = object
     counter: int
-    lits: Literals
+    m: Module
 
 proc copy(dest: var Tree; tar: Target) =
   copyTree dest, tar.t, StartPos
@@ -27,14 +27,26 @@ proc copy(dest: var Tree; tar: Target) =
 proc trExpr(c: var Context; dest: var Tree; t: Tree; n: NodePos; tar: var Target)
 proc trStmt(c: var Context; dest: var Tree; t: Tree; n: NodePos)
 
-proc declareTemp(c: var Context; dest: var Tree; info: PackedLineInfo; typ: XelimKind): StrId =
+proc declareTemp(c: var Context; dest: var Tree; t: Tree; n: NodePos): StrId =
+  let info = t[n].info
+  let typ = getType(c.m, t, n)
   let s = "tmp." & $c.counter & ".01"
   inc c.counter
-  result = c.lits.strings.getOrIncl(s)
+  result = c.m.lits.strings.getOrIncl(s)
   copyInto dest, VarX, info:
     dest.addAtom SymDef, result, info
     dest.addEmpty 2 # export, pragmas
-    copyInto dest, typ, info # type
+    copyType dest, t, typ # type
+    dest.addEmpty # value
+
+proc declareTempBool(c: var Context; dest: var Tree; info: PackedLineInfo): StrId =
+  let s = "tmp." & $c.counter & ".01"
+  inc c.counter
+  result = c.m.lits.strings.getOrIncl(s)
+  copyInto dest, VarX, info:
+    dest.addAtom SymDef, result, info
+    dest.addEmpty 2 # export, pragmas
+    copyInto dest, BoolX, info # type
     dest.addEmpty # value
 
 proc trExprInto(c: var Context; dest: var Tree; t: Tree; n: NodePos; v: StrId) =
@@ -51,7 +63,7 @@ proc trOr(c: var Context; dest: var Tree; t: Tree; n: NodePos; tar: var Target) 
     let (a, b) = sons2(t, n)
     # `x or y`  <=> `if x: true else: y` <=> `if x: tmp = true else: tmp = y`
     let info = t[n].info
-    var tmp = declareTemp(c, dest, info, BoolX)
+    var tmp = declareTempBool(c, dest, info)
 
     var aa = Target(m: IsEmpty)
     trExpr c, dest, t, a, aa
@@ -75,7 +87,7 @@ proc trAnd(c: var Context; dest: var Tree; t: Tree; n: NodePos; tar: var Target)
     let (a, b) = sons2(t, n)
     # `x and y` <=> `if x: y else: false` <=> `if x: tmp = y else: tmp = false`
     let info = t[n].info
-    var tmp = declareTemp(c, dest, info, BoolX)
+    var tmp = declareTempBool(c, dest, info)
 
     var aa = Target(m: IsEmpty)
     trExpr c, dest, t, a, aa
@@ -103,7 +115,7 @@ proc trIf(c: var Context; dest: var Tree; t: Tree; n: NodePos; tar: var Target) 
   var tmp = StrId(0)
 
   if tar.m != IsIgnored:
-    tmp = declareTemp(c, dest, info, AutoX)
+    tmp = declareTemp(c, dest, t, n)
 
   var positions: seq[PatchPos] = @[]
   for ch in sons(t, n):
@@ -149,7 +161,7 @@ proc trCase(c: var Context; dest: var Tree; t: Tree; n: NodePos; tar: var Target
   var tmp = StrId(0)
 
   if tar.m != IsIgnored:
-    tmp = declareTemp(c, dest, info, AutoX)
+    tmp = declareTemp(c, dest, t, n)
 
   var t0 = Target(m: IsEmpty)
   trExpr c, dest, t, n.firstSon, t0
@@ -185,7 +197,7 @@ proc trTry(c: var Context; dest: var Tree; t: Tree; n: NodePos; tar: var Target)
   var tmp = StrId(0)
 
   if tar.m != IsIgnored:
-    tmp = declareTemp(c, dest, info, AutoX)
+    tmp = declareTemp(c, dest, t, n)
 
   copyIntoFrom(dest, t, n):
     if tar.m != IsIgnored:
@@ -310,6 +322,6 @@ proc transformCode*(inp, outp: string) =
   var m = load(inp)
   # assume 1% code size increase:
   var dest = createPackedTree[XelimKind](m.code.len * 11 div 10)
-  var c = Context(lits: ensureMove(m.lits))
-  trStmt c, dest, m.code, StartPos
-  writeFile outp, toString(dest, StartPos, c.lits)
+  var c = Context(m: ensureMove(m))
+  trStmt c, dest, c.m.code, StartPos
+  writeFile outp, toString(dest, StartPos, c.m.lits)

@@ -23,7 +23,7 @@
   (else
    (stmts
     (var :tmp.2.01 . .
-     (auto) .)
+     (str) .)
     (if
      (elif cond
       (stmts
@@ -44,7 +44,7 @@
     (else
      (break)))))
  (var :tmp.3.01 . .
-  (auto) .)
+  (i M) .)
  (try
   (call echo "abc")
   (asgn tmp.3.01 3)

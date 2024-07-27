@@ -579,7 +579,7 @@ sfGeneratedType | generatedType | ignore
 sfVirtual | virtual
 sfByCopy | bycopy
 sfMember | member
-sfCodegenDecl | sfCodegenDecl
+sfCodegenDecl | codegenDecl
 sfWasGenSym | wasGenSym | ignore
 # TOptions | set
 optObjCheck | objcheck

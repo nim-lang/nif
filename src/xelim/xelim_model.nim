@@ -30,6 +30,7 @@ type
     VarX = "var"
     CursorX = "cursor"
     ConstX = "const"
+    ParamX = "param"
 
     RetX = "ret"
     DiscardX = "discard"
@@ -50,7 +51,8 @@ type
     StmtsX = "stmts"
 
 const
-  DeclarativeNodes* = {TypeofX}
+  DeclarativeNodes* = {TypeofX, ParamX}
+  ReturnTypePos* = 2
 
 declareMatcher whichXelimKeyword, XelimKind, ord(TrueX)
 
@@ -78,6 +80,9 @@ type
 
 proc addAtom*[L](dest: var Tree; kind: XelimKind; lit: L; info: PackedLineInfo) =
   packedtrees.addAtom dest, kind, uint32(lit), info
+
+proc createAtom*[L](kind: XelimKind; lit: L): Node =
+  packedtrees.createAtom kind, uint32(lit)
 
 proc parse*(r: var Reader; m: var Module; parentInfo: PackedLineInfo): bool =
   let t = next(r)

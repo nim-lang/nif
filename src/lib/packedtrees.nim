@@ -253,6 +253,9 @@ proc copyTree*[E](dest: var PackedTree[E]; tree: PackedTree[E]; n: NodePos) =
   for i in 0..<L:
     dest.nodes[d+i] = tree.nodes[pos+i]
 
+proc copyNode*[E](dest: var PackedTree[E]; node: PackedNode[E]) {.inline.} =
+  dest.nodes.add node
+
 proc isLastSon*[E](tree: PackedTree[E]; parent, n: NodePos): bool {.inline.} =
   # A node is a the last son of a parent node if its span
   # falls onto the end of the parent's span:
@@ -263,6 +266,9 @@ proc addEmpty*[E](dest: var PackedTree[E]; howMany = 1) =
   mixin Empty
   for i in 0 ..< howMany:
     dest.nodes.add PackedNode[E](x: toX(Empty, 0'u32), info: NoLineInfo)
+
+proc createAtom*[E](kind: E; operand = 0'u32): PackedNode[E] {.inline.} =
+  PackedNode[E](x: toX(kind, operand), info: NoLineInfo)
 
 template hasNodeWithProperty*[E](tree: PackedTree[E]; n: NodePos;
                                  declarativeNodes: set[E]; prop: untyped) =

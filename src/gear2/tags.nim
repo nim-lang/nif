@@ -472,7 +472,7 @@ proc symFlagsToKeyw*(f: TSymFlags; b: var Builder) =
   if sfVirtual in f: b.addKeyw "virtual"
   if sfByCopy in f: b.addKeyw "bycopy"
   if sfMember in f: b.addKeyw "member"
-  if sfCodegenDecl in f: b.addKeyw "sfCodegenDecl"
+  if sfCodegenDecl in f: b.addKeyw "codegenDecl"
 
 proc optionsToKeyw*(f: TOptions; b: var Builder) = 
   if optObjCheck in f: b.addKeyw "objcheck"
@@ -1013,7 +1013,7 @@ proc inclSymFlags*(res: var TSymFlags; f: string) =
   of "virtual": res.incl sfVirtual
   of "bycopy": res.incl sfByCopy
   of "member": res.incl sfMember
-  of "sfCodegenDecl": res.incl sfCodegenDecl
+  of "codegenDecl": res.incl sfCodegenDecl
 
 proc inclOptions*(res: var TOptions; f: string) = 
   case f
