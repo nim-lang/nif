@@ -51,6 +51,7 @@ type
 
 const
   DeclarativeNodes* = {TypeofX}
+  ReturnTypePos* = 5
 
 declareMatcher whichXelimKeyword, XelimKind, ord(TrueX)
 
@@ -78,6 +79,9 @@ type
 
 proc addAtom*[L](dest: var Tree; kind: XelimKind; lit: L; info: PackedLineInfo) =
   packedtrees.addAtom dest, kind, uint32(lit), info
+
+proc createAtom*[L](kind: XelimKind; lit: L): Node =
+  packedtrees.createAtom kind, uint32(lit)
 
 proc parse*(r: var Reader; m: var Module; parentInfo: PackedLineInfo): bool =
   let t = next(r)

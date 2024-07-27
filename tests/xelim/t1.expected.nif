@@ -13,7 +13,7 @@
   (else
    (stmts
     (var :tmp.1.01 . .
-     (auto) .)
+     (str) .)
     (if
      (elif cond
       (stmts
