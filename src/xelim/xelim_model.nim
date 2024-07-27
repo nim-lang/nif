@@ -30,6 +30,7 @@ type
     VarX = "var"
     CursorX = "cursor"
     ConstX = "const"
+    ParamX = "param"
 
     RetX = "ret"
     DiscardX = "discard"
@@ -50,8 +51,8 @@ type
     StmtsX = "stmts"
 
 const
-  DeclarativeNodes* = {TypeofX}
-  ReturnTypePos* = 5
+  DeclarativeNodes* = {TypeofX, ParamX}
+  ReturnTypePos* = 2
 
 declareMatcher whichXelimKeyword, XelimKind, ord(TrueX)
 

@@ -74,7 +74,7 @@ proc getType*(m: var Module; t: Tree; n: NodePos): TypeDesc =
       result = getType(m, t, d)
     else:
       result = errorType()
-  of LetX, VarX, CursorX, ConstX: #, ParamX:
+  of LetX, VarX, CursorX, ConstX, ParamX:
     let i = ithSon(t, n, 3)
     result = TypeDesc(p: i)
   of IntLit: result = integralType(m, t, n, "i")
