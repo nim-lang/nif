@@ -158,7 +158,7 @@ proc firstSon*[E](tree: PackedTree[E]; n: NodePos): NodePos {.inline.} =
   NodePos(n.int+1)
 
 template check[E](a: int; tree: PackedTree[E]; n: NodePos) =
-  assert a  < int(n) + int(n) + tree[n].rawSpan
+  assert a < int(n) + tree[n].rawSpan
 
 proc kind*[E](tree: PackedTree[E]; n: NodePos): E {.inline.} =
   tree.nodes[n.int].kind
