@@ -6,7 +6,7 @@
 
 ## Parse NIF into a packed tree representation.
 
-import bitabs, lineinfos, stringviews, packedtrees, nifreader
+import bitabs, lineinfos, stringviews, packedtrees, nifreader, nifbuilder
 
 type
   NifKind* = enum
@@ -14,17 +14,17 @@ type
     Tag,
     Err, # must not be an atom!
     Suffixed,
-    Compound
+    Other
 
 type
   StrId* = distinct uint32
   IntId* = distinct uint32
   UIntId* = distinct uint32
   FloatId* = distinct uint32
-  KindId* = distinct uint32
+  TagId* = distinct uint32
   Literals* = object
     man*: LineInfoManager
-    kinds*: BiTable[KindId, string]
+    tags*: BiTable[TagId, string]
     files*: BiTable[FileId, string] # we cannot use StringView here as it may have unexpanded backslashes!
     strings*: BiTable[StrId, string]
     integers*: BiTable[IntId, int64]
@@ -41,6 +41,9 @@ template withSuffix(body) =
       dest.addAtom StrLit, lits.strings.getOrInclFromView(t.suffix), currentInfo
   else:
     body
+
+const
+  LastTag = 255'u32
 
 proc parse*(r: var Reader; dest: var PackedTree[NifKind]; lits: var Literals;
             parentInfo: PackedLineInfo): bool =
@@ -62,10 +65,10 @@ proc parse*(r: var Reader; dest: var PackedTree[NifKind]; lits: var Literals;
     result = false
   of ParLe:
     #let kind = whichKind(t.s, Err)
-    let ka = lits.kinds.getOrInclFromView(t.s).uint32 + ord(Compound).uint32
-    let kb = if ka > 255'u32: ord(Compound).uint32 else: ka
+    let ka = lits.tags.getOrInclFromView(t.s).uint32 + ord(Other).uint32
+    let kb = if ka > LastTag: ord(Other).uint32 else: ka
     copyInto(dest, cast[NifKind](kb), currentInfo):
-      if ka > 255'u32:
+      if ka > LastTag:
         # handle overflow:
         dest.addAtom Tag, ka, currentInfo
       while true:
@@ -98,15 +101,88 @@ proc parse*(r: var Reader; dest: var PackedTree[NifKind]; lits: var Literals;
     withSuffix:
       dest.addAtom FloatLit, lits.floats.getOrIncl(decodeFloat t), currentInfo
 
-proc litId*(n: PackedNode[NifKind]): StrId {.inline.} =
+type
+  Tree* = PackedTree[NifKind]
+  Node* = PackedNode[NifKind]
+
+proc litId*(n: Node): StrId {.inline.} =
   assert n.kind in {Ident, Sym, Symdef, StrLit}
   StrId(n.uoperand)
 
-proc tagId*(n: PackedNode[NifKind]): TagId {.inline.} =
+proc intId*(n: Node): IntId {.inline.} =
+  assert n.kind == IntLit
+  IntId(n.uoperand)
+
+proc uintId*(n: Node): UIntId {.inline.} =
+  assert n.kind == UIntLit
+  UIntId(n.uoperand)
+
+proc floatId*(n: Node): FloatId {.inline.} =
+  assert n.kind == FloatLit
+  FloatId(n.uoperand)
+
+proc tagId*(n: Node): TagId {.inline.} =
   assert n.kind == Tag, $n.kind
   TagId(n.uoperand)
 
 #proc tagAsStr*(n: )
+
+proc toString(b: var Builder; tree: Tree; n: NodePos; lits: Literals) =
+  let k = tree[n].kind
+  case k
+  of Empty:
+    b.addEmpty()
+  of Ident:
+    b.addIdent(lits.strings[tree[n].litId])
+  of Sym:
+    b.addSymbol(lits.strings[tree[n].litId])
+  of Suffixed:
+    let (val, suf) = sons2(tree, n)
+    if tree[suf].kind == StrLit:
+      case tree[val].kind
+      of StrLit:
+        b.addStrLit(lits.strings[tree[val].litId], lits.strings[tree[suf].litId])
+      of IntLit:
+        b.addIntLit(lits.integers[tree[val].intId], lits.strings[tree[suf].litId])
+      of UIntLit:
+        b.addUIntLit(lits.uintegers[tree[val].uintId], lits.strings[tree[suf].litId])
+      of FloatLit:
+        b.addFloatLit(lits.floats[tree[val].floatId], lits.strings[tree[suf].litId])
+      else:
+        b.addIdent "<wrong Suffixed node (first child)>"
+    else:
+      b.addIdent "<wrong Suffixed node (second child)>"
+  of IntLit:
+    b.addIntLit(lits.integers[tree[n].intId])
+  of UIntLit:
+    b.addUIntLit(lits.uintegers[tree[n].uintId])
+  of FloatLit:
+    b.addFloatLit(lits.floats[tree[n].floatId])
+  of Symdef:
+    b.addSymbolDef(lits.strings[tree[n].litId])
+  of CharLit:
+    b.addCharLit char(tree[n].uoperand)
+  of StrLit:
+    b.addStrLit(lits.strings[tree[n].litId])
+  of Tag:
+    b.addIdent(lits.tags[tree[n].tagId])
+  else:
+    if k == Other:
+      assert hasAtLeastXsons(tree, n, 1)
+      b.withTree lits.tags[tree[n.firstSon].tagId]:
+        for ch in sonsFromX(tree, n):
+          toString b, tree, ch, lits
+    else:
+      let tagId = cast[TagId](k)
+      b.withTree lits.tags[tagId]:
+        for ch in sons(tree, n):
+          toString b, tree, ch, lits
+
+proc toString*(tree: Tree; n: NodePos; lits: Literals): string =
+  var b = nifbuilder.open(tree.len * 20)
+  toString b, tree, n, lits
+  result = b.extract()
+
 
 type
   Module* = object
@@ -122,7 +198,7 @@ proc parse*(r: var Reader): Module =
 proc memSizes*(m: Module) =
   echo "Tree ", m.t.len # * sizeof(PackedNode[NifKind])
   echo "Man ", m.lits.man.memSize
-  echo "Kinds ", m.lits.kinds.memSize
+  echo "Tags ", m.lits.tags.memSize
   echo "Files ", m.lits.files.memSize
   echo "Strings ", m.lits.strings.memSize
   echo "Ints ", m.lits.integers.memSize
