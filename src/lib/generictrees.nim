@@ -127,6 +127,14 @@ proc tagId*(n: Node): TagId {.inline.} =
 
 #proc tagAsStr*(n: )
 
+proc tag*(tree: Tree; n: NodePos): TagId =
+  let k = tree[n].kind
+  if k == Other:
+    assert hasAtLeastXsons(tree, n, 1)
+    result = tree[n.firstSon].tagId
+  else:
+    result = cast[TagId](k)
+
 proc toString(b: var Builder; tree: Tree; n: NodePos; lits: Literals) =
   let k = tree[n].kind
   case k

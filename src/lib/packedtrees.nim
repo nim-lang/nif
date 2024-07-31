@@ -91,6 +91,9 @@ proc nextChild[E](tree: PackedTree[E]; pos: var int) {.inline.} =
   else:
     inc pos
 
+proc next*[E](tree: PackedTree[E]; pos: var NodePos) {.inline.} =
+  nextChild tree, pos.int
+
 iterator sons*[E](tree: PackedTree[E]; n: NodePos): NodePos =
   var pos = n.int
   assert tree.nodes[pos].kind.isTree
@@ -124,6 +127,12 @@ iterator sonsFromX*[E](tree: PackedTree[E]; n: NodePos; x = 1): NodePos =
     else:
       dec x
     nextChild tree, pos
+
+proc hasFirst*[E](tree: PackedTree[E]; n: NodePos): bool =
+  var pos = n.int
+  assert tree.nodes[pos].kind.isTree
+  let last = pos + tree.nodes[pos].rawSpan
+  result = pos+1 < last
 
 iterator sonsWithoutLastX*[E](tree: PackedTree[E]; n: NodePos; x = 1): NodePos =
   var count = 0
@@ -261,6 +270,9 @@ proc isLastSon*[E](tree: PackedTree[E]; parent, n: NodePos): bool {.inline.} =
   # falls onto the end of the parent's span:
   let last = n.int + span(tree, n.int)
   result = last == parent.int + span(tree, parent.int)
+
+proc hasNext*[E](tree: PackedTree[E]; parent, n: NodePos): bool {.inline.} =
+  not isLastSon(tree, parent, n)
 
 proc addEmpty*[E](dest: var PackedTree[E]; howMany = 1) =
   mixin Empty
