@@ -11,7 +11,9 @@ import bitabs, lineinfos, stringviews, packedtrees, nifreader
 type
   NifKind* = enum
     Empty, Ident, Sym, Symdef, IntLit, UIntLit, FloatLit, CharLit, StrLit,
+    Tag,
     Err, # must not be an atom!
+    Suffixed,
     Compound
 
 type
@@ -32,7 +34,16 @@ type
 proc addAtom*[L](dest: var PackedTree[NifKind]; kind: NifKind; lit: L; info: PackedLineInfo) =
   packedtrees.addAtom dest, kind, uint32(lit), info
 
-proc parse*(r: var Reader; dest: var PackedTree[NifKind]; lits: var Literals; parentInfo: PackedLineInfo): bool =
+template withSuffix(body) =
+  if t.suffix.len > 0:
+    copyInto(dest, Suffixed, currentInfo):
+      body
+      dest.addAtom StrLit, lits.strings.getOrInclFromView(t.suffix), currentInfo
+  else:
+    body
+
+proc parse*(r: var Reader; dest: var PackedTree[NifKind]; lits: var Literals;
+            parentInfo: PackedLineInfo): bool =
   let t = next(r)
   var currentInfo = parentInfo
   if t.filename.len == 0:
@@ -56,7 +67,7 @@ proc parse*(r: var Reader; dest: var PackedTree[NifKind]; lits: var Literals; pa
     copyInto(dest, cast[NifKind](kb), currentInfo):
       if ka > 255'u32:
         # handle overflow:
-        dest.addAtom Ident, ka, currentInfo
+        dest.addAtom Tag, ka, currentInfo
       while true:
         let progress = parse(r, dest, lits, currentInfo)
         if not progress: break
@@ -72,20 +83,30 @@ proc parse*(r: var Reader; dest: var PackedTree[NifKind]; lits: var Literals; pa
     dest.addAtom Sym, lits.strings.getOrIncl(decodeStr t), currentInfo
   of SymbolDef:
     dest.addAtom Symdef, lits.strings.getOrIncl(decodeStr t), currentInfo
-  of StringLit:
-    dest.addAtom StrLit, lits.strings.getOrIncl(decodeStr t), currentInfo
-    # XXX handle suffixes
   of CharLit:
     dest.addAtom CharLit, uint32 decodeChar(t), currentInfo
+  of StringLit:
+    withSuffix:
+      dest.addAtom StrLit, lits.strings.getOrIncl(decodeStr t), currentInfo
   of IntLit:
-    dest.addAtom IntLit, lits.integers.getOrIncl(decodeInt t), currentInfo
-    # XXX handle suffixes
+    withSuffix:
+      dest.addAtom IntLit, lits.integers.getOrIncl(decodeInt t), currentInfo
   of UIntLit:
-    dest.addAtom UIntLit, lits.uintegers.getOrIncl(decodeUInt t), currentInfo
-    # XXX handle suffixes
+    withSuffix:
+      dest.addAtom UIntLit, lits.uintegers.getOrIncl(decodeUInt t), currentInfo
   of FloatLit:
-    dest.addAtom FloatLit, lits.floats.getOrIncl(decodeFloat t), currentInfo
-    # XXX handle suffixes
+    withSuffix:
+      dest.addAtom FloatLit, lits.floats.getOrIncl(decodeFloat t), currentInfo
+
+proc litId*(n: PackedNode[NifKind]): StrId {.inline.} =
+  assert n.kind in {Ident, Sym, Symdef, StrLit}
+  StrId(n.uoperand)
+
+proc tagId*(n: PackedNode[NifKind]): TagId {.inline.} =
+  assert n.kind == Tag, $n.kind
+  TagId(n.uoperand)
+
+#proc tagAsStr*(n: )
 
 type
   Module* = object
