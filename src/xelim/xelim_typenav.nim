@@ -96,7 +96,7 @@ proc getType*(m: var Module; t: Tree; n: NodePos): TypeDesc =
       result = procType # propagate error
   of Other:
     case m.lits.tags[t[n.firstSon].tagId]
-    of "at":
+    of "at", "pat":
       let (_, arr, _) = sons3(t, n)
       let arrayType = getType(m, t, arr)
       result = elemType(t, arrayType)
