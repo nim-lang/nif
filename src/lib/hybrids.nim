@@ -57,6 +57,19 @@ proc nextSon*(t: Tree; n: LinkedNode): LinkedNode =
   else:
     result = n.next[]
 
+proc hasFirst*(t: Tree; n: LinkedNode): bool =
+  if n.p != NodePos(0):
+    result = hasFirst(t, n.p)
+  else:
+    result = n.down != nil
+
+proc hasNext*(t: Tree; parent, n: LinkedNode): bool =
+  if parent.p != NodePos(0):
+    assert n.p != NodePos(0)
+    result = hasNext(t, parent.p, n.p)
+  else:
+    result = n.next != nil
+
 proc wrap*(head: var LinkedNode; tail: LinkedNode) =
   var child = newNode()
   child[] = tail
@@ -67,3 +80,15 @@ proc wrap*(head: var LinkedNode; tail: LinkedNode) =
     while it.next != nil:
       it = it.next
     it.next = child
+
+proc tag*(tree: Tree; n: LinkedNode): TagId =
+  if n.p != NodePos(0):
+    result = tag(tree, n.p)
+  elif n.a.kind == Other:
+    result = TagId(n.a.uoperand)
+  else:
+    result = cast[TagId](n.a.kind)
+
+proc atom*(a: Node): LinkedNode =
+  result = LinkedNode(p: NodePos(0), a: a)
+  #if a.k == Other:
