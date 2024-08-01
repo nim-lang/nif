@@ -50,7 +50,7 @@ type
     f: MemFile
     buf: string
     line: int32 # file position within the NIF file, not affected by '@' annotations
-    err: bool
+    err*: bool
     trackDefs*: bool
     isubs, ksubs: Table[StringView, (TokenKind, StringView)]
     defs: Table[string, pchar]

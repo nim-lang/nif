@@ -92,3 +92,53 @@ proc tag*(tree: Tree; n: LinkedNode): TagId =
 proc atom*(a: Node): LinkedNode =
   result = LinkedNode(p: NodePos(0), a: a)
   #if a.k == Other:
+
+proc createEmpty*(): LinkedNode =
+  result = LinkedNode(p: NodePos(0), a: createAtom(Empty))
+
+proc fromTreeAppend*(t: Tree): LinkedNode =
+  LinkedNode(p: NodePos(t.len))
+
+type
+  Local* = object
+    name*, ex*, pragmas*, typ*, value*: LinkedNode
+
+proc asLocal*(tree: Tree; n: LinkedNode): Local =
+  assert hasFirst(tree, n)
+  let a = firstSon(tree, n)
+  let b = nextSon(tree, a)
+  let c = nextSon(tree, b)
+  let d = nextSon(tree, c)
+  let e = nextSon(tree, d)
+  result = Local(name: a, ex: b, pragmas: c, typ: d, value: e)
+
+type
+  TypeDeclaration* = object
+    name*, ex*, pragmas*, generics*, body*: LinkedNode
+
+proc asTypeDeclaration*(tree: Tree; n: LinkedNode): TypeDeclaration =
+  assert hasFirst(tree, n)
+  let a = firstSon(tree, n)
+  let b = nextSon(tree, a)
+  let c = nextSon(tree, b)
+  let d = nextSon(tree, c)
+  let e = nextSon(tree, d)
+  result = TypeDeclaration(name: a, ex: b, pragmas: c, generics: d, body: e)
+
+type
+  Routine* = object
+    name*, ex*, pat*, generics*, retType*, params*, pragmas*, exc*, body*: LinkedNode
+
+proc asRoutine*(tree: Tree; n: LinkedNode): Routine =
+  assert hasFirst(tree, n)
+  let a = firstSon(tree, n)
+  let b = nextSon(tree, a)
+  let c = nextSon(tree, b)
+  let d = nextSon(tree, c)
+  let e = nextSon(tree, d)
+  let f = nextSon(tree, e)
+  let g = nextSon(tree, f)
+  let h = nextSon(tree, g)
+  let i = nextSon(tree, h)
+  result = Routine(name: a, ex: b, pat: c, generics: d,
+                   retType: e, params: f, pragmas: g, exc: h, body: i)
