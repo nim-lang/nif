@@ -31,6 +31,12 @@ type
     uintegers*: BiTable[UIntId, uint64]
     floats*: BiTable[FloatId, float64]
 
+proc `==`*(a, b: StrId): bool {.borrow.}
+proc `==`*(a, b: IntId): bool {.borrow.}
+proc `==`*(a, b: UIntId): bool {.borrow.}
+proc `==`*(a, b: FloatId): bool {.borrow.}
+proc `==`*(a, b: TagId): bool {.borrow.}
+
 proc addAtom*[L](dest: var PackedTree[NifKind]; kind: NifKind; lit: L; info: PackedLineInfo) =
   packedtrees.addAtom dest, kind, uint32(lit), info
 

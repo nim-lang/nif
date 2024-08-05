@@ -282,6 +282,9 @@ proc addEmpty*[E](dest: var PackedTree[E]; howMany = 1) =
 proc createAtom*[E](kind: E; operand = 0'u32): PackedNode[E] {.inline.} =
   PackedNode[E](x: toX(kind, operand), info: NoLineInfo)
 
+proc createNode*[E](kind: E; operand: uint32; info: PackedLineInfo): PackedNode[E] {.inline.} =
+  PackedNode[E](x: toX(kind, operand), info: info)
+
 template hasNodeWithProperty*[E](tree: PackedTree[E]; n: NodePos;
                                  declarativeNodes: set[E]; prop: untyped) =
   # no need for a recursion here:
