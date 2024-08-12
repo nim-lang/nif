@@ -47,12 +47,13 @@ type
   Reader* = object
     p: pchar
     eof: pchar
-    lineStart: pchar
     f: MemFile
     buf: string
-    err: bool
+    line: int32 # file position within the NIF file, not affected by '@' annotations
+    err*: bool
+    trackDefs*: bool
     isubs, ksubs: Table[StringView, (TokenKind, StringView)]
-    nifPos: FilePos # file position within the NIF file, not affected by '@' annotations
+    defs: Table[string, pchar]
     meta: MetaInfo
 
 proc `$`*(t: Token): string =
@@ -87,7 +88,6 @@ proc open*(filename: string): Reader =
   if not err:
     result.p = cast[pchar](result.f.mem)
     result.eof = result.p +! result.f.size
-    result.lineStart = result.p
 
 proc openFromBuffer*(buf: sink string): Reader =
   result = Reader(f: default(MemFile), err: true, buf: ensureMove buf)
@@ -95,7 +95,6 @@ proc openFromBuffer*(buf: sink string): Reader =
   result.eof = result.p +! result.buf.len
   result.f.mem = result.p
   result.f.size = result.buf.len
-  result.lineStart = result.p
 
 proc close*(r: var Reader) =
   if not r.err: close r.f
@@ -114,8 +113,7 @@ proc skipWhitespace(r: var Reader) =
         inc p
       of '\n':
         inc p
-        r.lineStart = p
-        inc r.nifPos.line
+        inc r.line
       else:
         break
 
@@ -127,8 +125,7 @@ proc skipComment(r: var Reader) {.inline.} =
         break
       elif ^p == '\n':
         inc p
-        r.lineStart = p
-        inc r.nifPos.line
+        inc r.line
       else:
         inc p
 
@@ -281,8 +278,7 @@ proc handleLineInfo(r: var Reader; result: var Token) =
         elif ch == '\\':
           result.flags.incl FilenameHasEscapes
         elif ch == '\n':
-          r.lineStart = p
-          inc r.nifPos.line
+          inc r.line
         inc result.filename.len
         inc p
 
@@ -343,8 +339,7 @@ proc next*(r: var Reader): Token =
           elif ch == '\\':
             result.flags.incl TokenHasEscapes
           elif ch == '\n':
-            r.lineStart = r.p
-            inc r.nifPos.line
+            inc r.line
           inc result.s.len
           inc p
 
@@ -375,6 +370,7 @@ proc next*(r: var Reader): Token =
 
     of ':':
       useCpuRegisters:
+        var start = p
         inc p
         result.s.p = p
         while p < eof and ^p notin ControlCharsOrWhite:
@@ -389,6 +385,11 @@ proc next*(r: var Reader): Token =
             result.s = repl[1]
           else:
             result.tk = UnknownToken # error
+        if r.trackDefs:
+          while start != r.f.mem:
+            if ^start == '(':
+              r.defs[decodeStr result] = start
+              break
 
     of '-':
       result.s.p = r.p
@@ -418,13 +419,47 @@ proc next*(r: var Reader): Token =
             result.tk = repl[0]
             result.s = repl[1]
 
-    r.nifPos.col = int32(r.p -! r.lineStart)
+type
+  RestorePoint* = object
+    p: pchar
+    line: int32
+
+proc success*(r: RestorePoint): bool {.inline.} = r.p != nil
+
+proc restore*(r: var Reader; rp: RestorePoint) {.inline.} =
+  r.p = rp.p
+  r.line = rp.line
+
+proc jumpTo*(r: var Reader; def: string): RestorePoint =
+  assert def.len > 0
+  assert r.trackDefs
+  #assert def[0] != ':' # not correct, could be an escaped ':'
+  var p = r.defs.getOrDefault(def)
+  result = RestorePoint(p: r.p, line: r.line)
+  if p != nil:
+    r.p = p
+    r.line = -1'i32 # unknown
+  else:
+    while true:
+      let t = next(r)
+      if t.tk == SymbolDef:
+        p = r.defs.getOrDefault(def)
+        if p != nil:
+          r.p = p
+          r.line = -1'i32 # unknown
+          return result
+      elif t.tk == EofToken:
+        break
+    # not found, reset position:
+    r.p = result.p
+    r.line = result.line
+    result.p = nil # not found
 
 when false:
   proc setPosition*(r: var Reader; s: StringView) {.inline.} =
     assert r.p >= cast[pchar](r.f.mem) and r.p < r.eof
     r.p = s.p +! s.len
-    r.lineStart = cast[pchar](r.f.mem)
+    r.line = -1'i32 # unknown
 
   proc span*(r: Reader; offset: int; s: StringView): int {.inline.} =
     assert s.p >= cast[pchar](r.f.mem) and s.p < r.eof

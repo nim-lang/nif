@@ -168,9 +168,9 @@ Type ::= Symbol |
          (c IntBits IntQualifier*) | # character types
          (bool IntQualifier*) |
          (void) |
-         (ptr Type PtrQualifier) | # pointer to a single object
+         (ptr Type PtrQualifier*) | # pointer to a single object
          (flexarray Type) |
-         (aptr Type PtrQualifier) | # pointer to an array of objects
+         (aptr Type PtrQualifier*) | # pointer to an array of objects
          ProcType
 ArrayDecl ::= (array Type Expr)
 TypeDecl ::= (type SymbolDef TypePragmas [ProcType | ObjDecl | UnionDecl | EnumDecl | ArrayDecl])
@@ -204,7 +204,7 @@ ExternDecl ::= (imp ProcDecl | VarDecl | ConstDecl)
 IgnoreDecl ::= (nodecl ProcDecl | VarDecl | ConstDecl)
 Include ::= (incl StringLiteral)
 
-TopLevelConstruct ::= ExternDecl | IngoreDecl | ProcDecl | VarDecl | ConstDecl |
+TopLevelConstruct ::= ExternDecl | IgnoreDecl | ProcDecl | VarDecl | ConstDecl |
                       TypeDecl | Include | EmitStmt
 Module ::= (stmts TopLevelConstruct*)
 

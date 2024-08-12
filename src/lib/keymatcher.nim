@@ -20,6 +20,9 @@ import stringviews
 proc strAtLe(s: StringView; idx: int; ch: char): bool {.inline.} =
   result = idx < s.len and s[idx] <= ch
 
+proc strAtLe(s: string; idx: int; ch: char): bool {.inline.} =
+  result = idx < s.len and s[idx] <= ch
+
 type
   Key = (string, string) # 2nd component is the enum field name as a string
 
@@ -178,7 +181,7 @@ macro declareMatcher*(name: untyped; e: typedesc; start: static[int]): untyped =
 
   #echo repr body
   template t(name, body, e: untyped): untyped {.dirty.} =
-    proc `name`(sel: StringView; onError = low(e)): e =
+    proc `name`*(sel: StringView|string; onError = low(e)): e =
       body
       return onError
   result = getAst t(name, body, e)

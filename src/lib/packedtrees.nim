@@ -91,6 +91,9 @@ proc nextChild[E](tree: PackedTree[E]; pos: var int) {.inline.} =
   else:
     inc pos
 
+proc next*[E](tree: PackedTree[E]; pos: var NodePos) {.inline.} =
+  nextChild tree, pos.int
+
 iterator sons*[E](tree: PackedTree[E]; n: NodePos): NodePos =
   var pos = n.int
   assert tree.nodes[pos].kind.isTree
@@ -125,6 +128,12 @@ iterator sonsFromX*[E](tree: PackedTree[E]; n: NodePos; x = 1): NodePos =
       dec x
     nextChild tree, pos
 
+proc hasFirst*[E](tree: PackedTree[E]; n: NodePos): bool =
+  var pos = n.int
+  assert tree.nodes[pos].kind.isTree
+  let last = pos + tree.nodes[pos].rawSpan
+  result = pos+1 < last
+
 iterator sonsWithoutLastX*[E](tree: PackedTree[E]; n: NodePos; x = 1): NodePos =
   var count = 0
   for child in sons(tree, n):
@@ -158,7 +167,7 @@ proc firstSon*[E](tree: PackedTree[E]; n: NodePos): NodePos {.inline.} =
   NodePos(n.int+1)
 
 template check[E](a: int; tree: PackedTree[E]; n: NodePos) =
-  assert a  < int(n) + int(n) + tree[n].rawSpan
+  assert a < int(n) + tree[n].rawSpan
 
 proc kind*[E](tree: PackedTree[E]; n: NodePos): E {.inline.} =
   tree.nodes[n.int].kind
@@ -262,6 +271,9 @@ proc isLastSon*[E](tree: PackedTree[E]; parent, n: NodePos): bool {.inline.} =
   let last = n.int + span(tree, n.int)
   result = last == parent.int + span(tree, parent.int)
 
+proc hasNext*[E](tree: PackedTree[E]; parent, n: NodePos): bool {.inline.} =
+  not isLastSon(tree, parent, n)
+
 proc addEmpty*[E](dest: var PackedTree[E]; howMany = 1) =
   mixin Empty
   for i in 0 ..< howMany:
@@ -269,6 +281,9 @@ proc addEmpty*[E](dest: var PackedTree[E]; howMany = 1) =
 
 proc createAtom*[E](kind: E; operand = 0'u32): PackedNode[E] {.inline.} =
   PackedNode[E](x: toX(kind, operand), info: NoLineInfo)
+
+proc createNode*[E](kind: E; operand: uint32; info: PackedLineInfo): PackedNode[E] {.inline.} =
+  PackedNode[E](x: toX(kind, operand), info: info)
 
 template hasNodeWithProperty*[E](tree: PackedTree[E]; n: NodePos;
                                  declarativeNodes: set[E]; prop: untyped) =

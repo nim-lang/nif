@@ -70,8 +70,10 @@ proc shouldIgnore(opt: EntryOption): bool = opt in {Ignore, typekind, symkind}
 proc genToNif(f: var File; data: seq[Entry]) =
   var a = default array[EntryKind, string]
   var cases = default array[EntryKind, HashSet[string]]
+  var nifEnum: seq[string] = @[]
   for d in data:
     if d.opt.shouldIgnore: continue
+    nifEnum.addUnique d.nif
     case d.t
     of IsEnum:
       if a[d.k].len == 0:
@@ -86,6 +88,13 @@ proc genToNif(f: var File; data: seq[Entry]) =
   for x in a:
     f.writeLine("")
     f.writeLine(x)
+
+  f.writeLine("\nconst")
+  for e in nifEnum:
+    var en = $toUpperAscii(e[0])
+    for i in 1 ..< e.len: en.add e[i]
+    en.add '2'
+    f.writeLine "  ", en, "* = ", escape(e)
 
 proc cleanNameU(s: string): string =
   result = $toUpperAscii(s[1])
