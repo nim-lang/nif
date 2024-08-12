@@ -220,6 +220,20 @@ proc addNode*(b: var TreeBuilder; a: Node) =
   b.current = n
   inc b.kids
 
+proc addNode*(b: var TreeBuilder; node: LinkedNode) =
+  var n = newNode()
+  n[] = node
+  if b.head == nil: b.head = n
+  if b.kids == 0:
+    b.current.down = n
+  else:
+    b.current.next = n
+  var it = n
+  while it.next != nil:
+    it = it.next
+  b.current = it
+  inc b.kids
+
 type
   PatchNode* = distinct LinkedNodeRef
 
@@ -275,7 +289,7 @@ proc addFloatLit*(b: var TreeBuilder; lits: var Literals; f: BiggestFloat; info:
 template withTree*[T: enum](b: var TreeBuilder; lits: var Literals; kind: T; info: PackedLineInfo; body: untyped) =
   ## Convenience template that wraps `body` around `addTree` and `endTree`
   ## calls.
-  let patch = addTree(b, kind, info)
+  let patch = addTree(b, lits, kind, info)
   body
   endTree b, patch
 
