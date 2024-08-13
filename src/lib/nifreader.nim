@@ -49,7 +49,7 @@ type
     eof: pchar
     f: MemFile
     buf: string
-    line: int32 # file position within the NIF file, not affected by '@' annotations
+    line*: int32 # file position within the NIF file, not affected by '@' annotations
     err*: bool
     trackDefs*: bool
     isubs, ksubs: Table[StringView, (TokenKind, StringView)]
