@@ -430,6 +430,9 @@ proc restore*(r: var Reader; rp: RestorePoint) {.inline.} =
   r.p = rp.p
   r.line = rp.line
 
+proc savePos*(r: Reader): RestorePoint {.inline.} =
+  result = RestorePoint(p: r.p, line: r.line)
+
 proc jumpTo*(r: var Reader; def: string): RestorePoint =
   assert def.len > 0
   assert r.trackDefs
