@@ -46,10 +46,11 @@ type
   Storage = ptr UncheckedArray[PackedToken]
   TokenBuf* = object
     data: Storage
-    len, cap: int
+    len, cap, readers: int
 
 proc `=copy`(dest: var TokenBuf; src: TokenBuf) {.error.}
 proc `=destroy`(dest: TokenBuf) {.inline.} =
+  assert dest.readers == 0, "TokenBuf still in use by some reader"
   if dest.data != nil: dealloc(dest.data)
 
 proc isMutable(b: TokenBuf): bool {.inline.} = b.cap >= 0
@@ -61,6 +62,16 @@ proc freeze*(b: var TokenBuf) {.inline.} =
 proc thaw*(b: var TokenBuf) =
   if not isMutable(b):
     b.cap = -(b.cap+1)
+
+proc beginRead*(b: var TokenBuf): Cursor =
+  if b.readers == 0: freeze(b)
+  inc b.readers
+  result = Cursor(p: addr(b.data[0]), rem: b.len)
+
+proc endRead*(b: var TokenBuf; c: Cursor) =
+  assert b.readers > 0, "unpaired endRead"
+  dec b.readers
+  if b.readers == 0: thaw(b)
 
 proc add*(b: var TokenBuf; item: PackedToken) {.inline.} =
   assert isMutable(b), "attempt to mutate frozen TokenBuf"
