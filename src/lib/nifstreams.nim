@@ -69,6 +69,12 @@ proc createLiterals*(): Literals =
 
 var pool* = createLiterals()
 
+proc registerTag*(tag: string; expected: TagId) =
+  ## Mostly useful for code generator like Nifgram.
+  let t = pool.tags.getOrIncl(tag)
+  assert t == expected, "tag " & tag & " expected Id " & $expected.uint32 &
+      " but it is already of value " & $t.uint32
+
 template copyInto*(dest: var seq[PackedToken]; tag: TagId; info: PackedLineInfo; body: untyped) =
   dest.addToken ParLe, tag, info
   body
