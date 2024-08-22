@@ -19,9 +19,10 @@ const
 
 type
   TokenKind* = enum
-    UnknownToken, EofToken, ParLe, ParRi,
+    UnknownToken, EofToken,
     DotToken, Ident, Symbol, SymbolDef,
-    StringLit, CharLit, IntLit, UIntLit, FloatLit
+    StringLit, CharLit, IntLit, UIntLit, FloatLit,
+    ParLe, ParRi
 
   FilePos* = object
     col*, line*: int32
