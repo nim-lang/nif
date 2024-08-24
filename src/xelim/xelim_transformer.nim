@@ -202,6 +202,8 @@ proc trTry(c: var Context; dest: var Tree; t: Tree; n: NodePos; tar: var Target)
   copyIntoFrom(dest, t, n):
     if tar.m != IsIgnored:
       trExprInto c, dest, t, n.firstSon, tmp
+    else:
+      trStmt c, dest, t, n.firstSon
 
     for ch in sonsFromX(t, n):
       case t[ch].kind
