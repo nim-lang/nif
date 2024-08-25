@@ -253,9 +253,9 @@ proc trStmt(c: var Context; dest: var Tree; t: Tree; n: NodePos) =
 
   of WhileX:
     let (cond, body) = sons2(t, n)
-    if isComplex(t, cond):
-      let info = t[n].info
-      dest.copyIntoFrom t, n:
+    let info = t[n].info
+    dest.copyIntoFrom t, n:
+      if isComplex(t, cond):
         dest.copyInto TrueX, info
         copyInto dest, StmtsX, info:
           var tar = Target(m: IsEmpty)
@@ -266,8 +266,11 @@ proc trStmt(c: var Context; dest: var Tree; t: Tree; n: NodePos) =
               trStmt c, dest, t, body
             dest.copyInto ElseX, info:
               dest.copyInto BreakX, info
-    else:
-      dest.copyTree t, n
+      else:
+        var tar = Target(m: IsEmpty)
+        trExpr c, dest, t, cond, tar
+        dest.copy tar
+        trStmt c, dest, t, body
   of AsgnX, CallX:
     # IMPORTANT: Stores into `tar` helper!
     var tar = Target(m: IsAppend)
