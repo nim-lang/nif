@@ -45,24 +45,6 @@ proc addIdent*(em: var Emitter; s: string) =
       r.add c
   emit em, r, r.len
 
-proc addStrLit*(em: var Emitter; s, suffix: string) =
-  var r = "\""
-  var l = em.lineLen + 1
-  var lastPart = 1
-  var afterNewline = false
-  for c in s:
-    if c in ControlChars:
-      r.escape c
-      inc l, 3
-      inc lastPart, 3
-    else:
-      r.add c
-      inc l, 1
-      inc lastPart, 1
-    afterNewline = false
-  r.add "\""
-  em.emit r, lastPart
-  em.emit suffix, suffix.len
 
 
 type
@@ -126,6 +108,45 @@ proc addEmpty*(em: var Emitter; count = 1) =
   for i in 1..count:
     em.emit ".", 1
 
+template addSuffixLit(em: var Emitter, suffix: string, body: typed) =
+  let suffixLit = '"' & suffix & '"'
+  var a = prepare(em, "suf")
+  em.addSep a
+  body
+  em.addSep a
+  em.emit suffixLit, suffixLit.len
+  em.patch(a)
+
+template addSuffixLitDispatch(em: var Emitter, suffix: string, body: typed) =
+  if suffix.len > 0:
+    addSuffixLit(em, suffix):
+      body
+  else:
+    body
+
+
+proc addStrLit*(em: var Emitter; s: string) =
+  var r = "\""
+  var l = em.lineLen + 1
+  var lastPart = 1
+  var afterNewline = false
+  for c in s:
+    if c in ControlChars:
+      r.escape c
+      inc l, 3
+      inc lastPart, 3
+    else:
+      r.add c
+      inc l, 1
+      inc lastPart, 1
+    afterNewline = false
+  r.add "\""
+  em.emit r, lastPart
+
+proc addStrLit*(em: var Emitter; s, suffix: string) =
+  addSuffixLitDispatch(em, suffix):
+    em.addStrLit s
+
 proc addCharLit*(em: var Emitter; c: char) =
   em.output.add '\''
   if c.needsEscape:
@@ -141,27 +162,36 @@ template upateLen(body) =
   body
   inc em.lineLen, em.output.len - oldLen
 
-proc addIntLit*(em: var Emitter; i: BiggestInt; suffix = "") =
+proc addIntLit*(em: var Emitter; i: BiggestInt) =
   upateLen:
     em.output.addInt i
-    em.output.add suffix
+
+proc addIntLit*(em: var Emitter; i: BiggestInt; suffix: string) =
+  addSuffixLitDispatch(em, suffix):
+    addIntLit(em, i)
 
 proc addLine*(em: var Emitter; i: int32) =
   upateLen:
     em.output.addInt i
 
-proc addUIntLit*(em: var Emitter; u: BiggestUInt; suffix = "") =
+proc addUIntLit*(em: var Emitter; u: BiggestUInt) =
   upateLen:
     em.output.add $u
-    em.output.add suffix
 
-proc addFloatLit*(em: var Emitter; f: BiggestFloat; suffix = "") =
+proc addUIntLit*(em: var Emitter; u: BiggestUInt; suffix: string) =
+  addSuffixLitDispatch(em, suffix):
+    addUIntLit(em, u)
+
+proc addFloatLit*(em: var Emitter; f: BiggestFloat) =
   let myLen = em.output.len
   upateLen:
     em.output.addFloat f
     for i in myLen ..< em.output.len:
       if em.output[i] == 'e': em.output[i] = 'E'
-    em.output.add suffix
+
+proc addFloatLit*(em: var Emitter; f: BiggestFloat; suffix: string) =
+  addSuffixLitDispatch(em, suffix):
+    addFloatLit(em, f)
 
 when isMainModule:
   var em = Emitter()
