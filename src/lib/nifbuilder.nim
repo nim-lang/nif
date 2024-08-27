@@ -120,7 +120,7 @@ proc addSymbolDef*(b: var Builder; s: string) =
     else:
       b.put c
 
-proc addStrLit*(b: var Builder; s: string; suffix = "") =
+proc addStrLit*(b: var Builder; s: string) =
   addSep b
   b.put '"'
   for c in s:
@@ -129,7 +129,6 @@ proc addStrLit*(b: var Builder; s: string; suffix = "") =
     else:
       b.put c
   b.put '"'
-  b.put suffix
 
 proc addEmpty*(b: var Builder; count = 1) =
   addSep b
@@ -145,17 +144,15 @@ proc addCharLit*(b: var Builder; c: char) =
     b.put c
   b.put '\''
 
-proc addIntLit*(b: var Builder; i: BiggestInt; suffix = "") =
+proc addIntLit*(b: var Builder; i: BiggestInt) =
   addSep b
   b.put $i
-  b.put suffix
 
-proc addUIntLit*(b: var Builder; u: BiggestUInt; suffix = "") =
+proc addUIntLit*(b: var Builder; u: BiggestUInt) =
   addSep b
   b.put $u
-  b.put suffix
 
-proc addFloatLit*(b: var Builder; f: BiggestFloat; suffix = "") =
+proc addFloatLit*(b: var Builder; f: BiggestFloat) =
   addSep b
   let myLen = b.buf.len
   drainPending b
@@ -165,7 +162,6 @@ proc addFloatLit*(b: var Builder; f: BiggestFloat; suffix = "") =
   if b.mode == UsesFile:
     b.f.write b.buf
     b.buf.setLen 0
-  b.put suffix
 
 proc addLineInfo*(b: var Builder; col, line: int32; file = "") =
   addSep b
@@ -228,6 +224,26 @@ template withTree*(b: var Builder; kind: string; body: untyped) =
   body
   endTree b
 
+proc addIntLit*(b: var Builder; i: BiggestInt; suffix: string) =
+  withTree(b, "suf"):
+    addIntLit(b, i)
+    addStrLit(b, suffix)
+
+proc addUIntLit*(b: var Builder; u: BiggestUInt; suffix: string) =
+  withTree(b, "suf"):
+    addUIntLit(b, u)
+    addStrLit(b, suffix)
+
+proc addFloatLit*(b: var Builder; f: BiggestFloat; suffix: string) =
+  withTree(b, "suf"):
+    addFloatLit(b, f)
+    addStrLit(b, suffix)
+
+proc addStrLit*(b: var Builder; s: string; suffix: string) =
+  withTree(b, "suf"):
+    addStrLit(b, s)
+    addStrLit(b, suffix)
+
 proc addHeader*(b: var Builder; vendor = "", dialect = "") =
   b.put "(.nif24)\n"
   if vendor.len > 0:
@@ -259,6 +275,8 @@ when isMainModule:
         b.addSymbol "foo.3.mymod"
         b.addIntLit 3423
         b.addFloatLit 50.4
+        b.addIntLit 3423, "u32"
+        b.addFloatLit 50.4, "f64"
 
     if b.attachedToFile:
       b.close
