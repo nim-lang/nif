@@ -312,7 +312,6 @@ proc next*(r: var Reader): Token =
       elif result.s == "suf":
         result = next(r)
         skipWhitespace(r)
-        echo result
         assert ^r.p == '"'
         inc r.p
         result.suffix.p = r.p
