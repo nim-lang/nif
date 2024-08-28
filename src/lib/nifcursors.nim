@@ -6,7 +6,7 @@
 
 ## Cursors into token streams. Suprisingly effective even for more complex algorithms.
 
-import nifstreams
+import nifstreams, lineinfos
 
 type
   Cursor* = object
@@ -133,6 +133,11 @@ proc shrink*(b: var TokenBuf; newLen: int) =
   assert isMutable(b), "attempt to mutate frozen TokenBuf"
   assert newLen >= 0 and newLen <= b.len
   b.len = newLen
+
+template buildTree*(dest: var TokenBuf; tag: TagId; info: PackedLineInfo; body: untyped) =
+  dest.add toToken ParLe, tag, info
+  body
+  dest.add toToken ParRi, 0'u32, info
 
 proc toString*(b: TokenBuf): string =
   result = nifstreams.toString(toOpenArray(b.data, 0, b.len-1))

@@ -7,7 +7,7 @@
 ## A NIF stream is simply a seq of tokens. It turns out to be useful
 ## for many different cases.
 
-import std / assertions
+import std / [assertions, hashes]
 
 import bitabs, stringviews, lineinfos, nifreader, nifbuilder
 
@@ -40,6 +40,7 @@ proc addToken*[L](tree: var seq[PackedToken]; kind: TokenKind; id: L; info: Pack
 
 type
   StrId* = distinct uint32
+  SymId* = distinct uint32
   IntId* = distinct uint32
   UIntId* = distinct uint32
   FloatId* = distinct uint32
@@ -48,23 +49,32 @@ type
     man*: LineInfoManager
     tags*: BiTable[TagId, string]
     files*: BiTable[FileId, string] # we cannot use StringView here as it may have unexpanded backslashes!
+    syms*: BiTable[SymId, string]
     strings*: BiTable[StrId, string]
     integers*: BiTable[IntId, int64]
     uintegers*: BiTable[UIntId, uint64]
     floats*: BiTable[FloatId, float64]
 
+proc `==`*(a, b: SymId): bool {.borrow.}
 proc `==`*(a, b: StrId): bool {.borrow.}
 proc `==`*(a, b: IntId): bool {.borrow.}
 proc `==`*(a, b: UIntId): bool {.borrow.}
 proc `==`*(a, b: FloatId): bool {.borrow.}
 proc `==`*(a, b: TagId): bool {.borrow.}
 
+proc hash*(x: SymId): Hash {.borrow.}
+proc hash*(x: StrId): Hash {.borrow.}
+proc hash*(x: IntId): Hash {.borrow.}
+proc hash*(x: UIntId): Hash {.borrow.}
+proc hash*(x: FloatId): Hash {.borrow.}
+proc hash*(x: TagId): Hash {.borrow.}
+
 const
   Suffixed* = TagId(1)
 
 proc createLiterals*(): Literals =
   result = default(Literals)
-  let t = result.tags.getOrIncl("suffixed")
+  let t = result.tags.getOrIncl("suf")
   assert t == Suffixed
 
 var pool* = createLiterals()
@@ -80,7 +90,7 @@ template copyInto*(dest: var seq[PackedToken]; tag: TagId; info: PackedLineInfo;
   body
   dest.addToken ParRi, 0'u32, info
 
-template copyInto*(dest: var seq[PackedToken]; tag: string; info: PackedLineInfo; body: untyped) =
+template copyIntoUnchecked*(dest: var seq[PackedToken]; tag: string; info: PackedLineInfo; body: untyped) =
   dest.addToken ParLe, pool.strings.getOrIncl(tag), info
   body
   dest.addToken ParRi, 0'u32, info
@@ -126,12 +136,12 @@ proc rawNext(s: var Stream; t: Token): PackedToken =
   of ParLe:
     let ka = pool.tags.getOrInclFromView(t.s)
     result = toToken(ParLe, ka, currentInfo)
-  of Ident, Symbol, SymbolDef:
+  of Ident, StringLit:
     result = toToken(t.tk, pool.strings.getOrIncl(decodeStr t), currentInfo)
+  of Symbol, SymbolDef:
+    result = toToken(t.tk, pool.syms.getOrIncl(decodeStr t), currentInfo)
   of CharLit:
     result = toToken(CharLit, uint32 decodeChar(t), currentInfo)
-  of StringLit:
-    result = toToken(StringLit, pool.strings.getOrIncl(decodeStr t), currentInfo)
   of IntLit:
     result = toToken(IntLit, pool.integers.getOrIncl(decodeInt t), currentInfo)
   of UIntLit:
@@ -183,14 +193,14 @@ proc parse*(r: var Reader; dest: var seq[PackedToken];
         if not progress: break
 
   of UnknownToken:
-    copyInto dest, "errtok", currentInfo:
+    copyIntoUnchecked dest, "errtok", currentInfo:
       dest.addToken StringLit, pool.strings.getOrIncl(decodeStr t), currentInfo
   of DotToken:
     dest.addToken DotToken, 0'u32, currentInfo
   of Ident:
     dest.addToken Ident, pool.strings.getOrIncl(decodeStr t), currentInfo
   of Symbol, SymbolDef:
-    dest.addToken t.tk, pool.strings.getOrIncl(decodeStr t), currentInfo
+    dest.addToken t.tk, pool.syms.getOrIncl(decodeStr t), currentInfo
   of CharLit:
     dest.addToken CharLit, uint32 decodeChar(t), currentInfo
   of StringLit:
@@ -207,8 +217,12 @@ proc parse*(r: var Reader; dest: var seq[PackedToken];
       dest.addToken FloatLit, pool.floats.getOrIncl(decodeFloat t), currentInfo
 
 proc litId*(n: PackedToken): StrId {.inline.} =
-  assert n.kind in {Ident, Symbol, SymbolDef, StringLit}
+  assert n.kind in {Ident, StringLit}
   StrId(n.uoperand)
+
+proc symId*(n: PackedToken): SymId {.inline.} =
+  assert n.kind in {Symbol, SymbolDef}
+  SymId(n.uoperand)
 
 proc intId*(n: PackedToken): IntId {.inline.} =
   assert n.kind == IntLit
@@ -258,7 +272,7 @@ proc toString*(tree: openArray[PackedToken]): string =
     of Ident:
       b.addIdent(pool.strings[tree[n].litId])
     of Symbol:
-      b.addSymbol(pool.strings[tree[n].litId])
+      b.addSymbol(pool.syms[tree[n].symId])
     of IntLit:
       b.addIntLit(pool.integers[tree[n].intId])
     of UIntLit:
@@ -266,7 +280,7 @@ proc toString*(tree: openArray[PackedToken]): string =
     of FloatLit:
       b.addFloatLit(pool.floats[tree[n].floatId])
     of SymbolDef:
-      b.addSymbolDef(pool.strings[tree[n].litId])
+      b.addSymbolDef(pool.syms[tree[n].symId])
     of CharLit:
       b.addCharLit char(tree[n].uoperand)
     of StringLit:
