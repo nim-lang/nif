@@ -309,25 +309,6 @@ proc next*(r: var Reader): Token =
         let repl = r.ksubs.getOrDefault(result.s)
         if repl[0] != UnknownToken:
           result.s = repl[1]
-      elif result.s == "suf":
-        result = next(r)
-        skipWhitespace(r)
-        assert ^r.p == '"'
-        inc r.p
-        result.suffix.p = r.p
-        if result.tk != StringLit:
-          if ^r.p == 'u':
-            result.tk = UIntLit
-          elif ^r.p == 'f':
-            result.tk = FloatLit
-
-        while true:
-          inc r.p
-          inc result.suffix.len
-          if r.p == eof or ^r.p == '"': break
-        inc r.p # skip '"'
-        skipWhitespace(r)
-        inc r.p # skip ')'
 
     of ')':
       result.tk = ParRi

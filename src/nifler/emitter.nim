@@ -125,7 +125,7 @@ template addSuffixLitDispatch(em: var Emitter, suffix: string, body: typed) =
     body
 
 
-proc addStrLit*(em: var Emitter; s: string) =
+proc addStrLitImpl(em: var Emitter; s: string) =
   var r = "\""
   var l = em.lineLen + 1
   var lastPart = 1
@@ -145,7 +145,7 @@ proc addStrLit*(em: var Emitter; s: string) =
 
 proc addStrLit*(em: var Emitter; s, suffix: string) =
   addSuffixLitDispatch(em, suffix):
-    em.addStrLit s
+    em.addStrLitImpl s
 
 proc addCharLit*(em: var Emitter; c: char) =
   em.output.add '\''
@@ -197,9 +197,9 @@ when isMainModule:
   var em = Emitter()
   var a = prepare(em, "proc")
   em.addSep a
-  em.addStrLit "#(escaped?)\n"
+  em.addStrLit "#(escaped?)\n", ""
   em.addSep a
-  em.addStrLit "more here"
+  em.addStrLit "more here", ""
   em.patch(a)
 
   echo em.output
