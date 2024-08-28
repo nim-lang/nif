@@ -194,7 +194,7 @@ Grammar:
 
 ```
 Digit ::= [0-9]
-NumberSuffix ::= '"' [a-z]+ [0-9a-z]* '"' # suffixes can only contain lowercase letters
+NumberSuffix ::= '"' u [0-9a-z]* '"' # suffixes can only contain lowercase letters
 FloatingPointPart ::= ('.' Digit+ ('E' '-'? Digit+)? ) | 'E' '-'? Digit+
 BasicNumber ::= '-'? Digit+ FloatingPointPart?
 NumberWithSuffix = '(' 'suf' BasicNumber NumberSuffix ')'
@@ -202,7 +202,7 @@ Number ::= BasicNumber | NumberWithSuffix
 ```
 
 Numbers must start with a digit (or a minus) and only their decimal notation is supported. Numbers can have
-a suffix that has to start with a lowercase letter. For example Nim's `0xff'i32` would become `(suf 0xff "i32")`.
+a suffix that has to start with the letter `u`. For example Nim's `0xff'u32` would become `(suf 0xff "u32")`.
 (The `x` encodes the fact that the number was originally written in hex.)
 
 
@@ -224,9 +224,11 @@ Char literals are enclosed in single quotes. The only supported escape sequence 
 Grammar:
 
 ```
-StringSuffix ::= Identifier
+StringSuffix ::= '"' Identifier "'"
 EscapedData ::= (VisibleChar | Escape | Whitespace)*
-StringLiteral ::= '"' EscapedData '"' StringSuffix?
+BasicStringLiteral ::= '"' EscapedData '"'
+StringLiteralWithSuffix ::= '(' 'suf' BasicStringLiteral StringSuffix ')'
+StringLiteral ::= BasicStringLiteral | StringLiteralWithSuffix
 ```
 
 String literals are enclosed in double quotes. The only supported escape sequence is `\xx`.
@@ -247,7 +249,7 @@ original format of the string. For example, Nim supports "raw string literals" a
 string literals". These could be modelled as `R` and `T` suffixes:
 
 ```nif
-  "This was a triple quoted Nim string"T
+  (suf "This was a triple quoted Nim string", "T")
 ```
 
 
