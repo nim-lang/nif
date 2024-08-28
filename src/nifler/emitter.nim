@@ -166,10 +166,6 @@ proc addIntLit*(em: var Emitter; i: BiggestInt) =
   upateLen:
     em.output.addInt i
 
-proc addIntLit*(em: var Emitter; i: BiggestInt; suffix: string) =
-  addSuffixLitDispatch(em, suffix):
-    addIntLit(em, i)
-
 proc addLine*(em: var Emitter; i: int32) =
   upateLen:
     em.output.addInt i
@@ -188,10 +184,6 @@ proc addFloatLit*(em: var Emitter; f: BiggestFloat) =
     em.output.addFloat f
     for i in myLen ..< em.output.len:
       if em.output[i] == 'e': em.output[i] = 'E'
-
-proc addFloatLit*(em: var Emitter; f: BiggestFloat; suffix: string) =
-  addSuffixLitDispatch(em, suffix):
-    addFloatLit(em, f)
 
 when isMainModule:
   var em = Emitter()

@@ -224,19 +224,9 @@ template withTree*(b: var Builder; kind: string; body: untyped) =
   body
   endTree b
 
-proc addIntLit*(b: var Builder; i: BiggestInt; suffix: string) =
-  withTree(b, "suf"):
-    addIntLit(b, i)
-    addStrLit(b, suffix)
-
 proc addUIntLit*(b: var Builder; u: BiggestUInt; suffix: string) =
   withTree(b, "suf"):
     addUIntLit(b, u)
-    addStrLit(b, suffix)
-
-proc addFloatLit*(b: var Builder; f: BiggestFloat; suffix: string) =
-  withTree(b, "suf"):
-    addFloatLit(b, f)
     addStrLit(b, suffix)
 
 proc addStrLit*(b: var Builder; s: string; suffix: string) =
@@ -275,8 +265,6 @@ when isMainModule:
         b.addSymbol "foo.3.mymod"
         b.addIntLit 3423
         b.addFloatLit 50.4
-        b.addIntLit 3423, "u32"
-        b.addFloatLit 50.4, "f64"
 
     if b.attachedToFile:
       b.close
