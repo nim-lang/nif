@@ -24,14 +24,11 @@ type
     nifdir: string
 
 proc extractModuleSuffix(p: Program; name: string): string =
-  var i = 0
-  var c = 3
-  while i < name.len:
+  var i = name.len - 1
+  while i >= 0:
     if name[i] == '.':
-      dec c
-      if c == 0:
-        return name.substr(i+1)
-    inc i
+      return name.substr(i+1)
+    dec i
   return p.thisModule
 
 proc fatal*(msg: string) =
