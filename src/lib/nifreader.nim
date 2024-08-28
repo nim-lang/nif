@@ -71,6 +71,9 @@ proc `$`*(t: Token): string =
 template inc(p: pchar; diff = 1) =
   p = cast[pchar](cast[int](p) + diff)
 
+template dec(p: pchar; diff = 1) =
+  p = cast[pchar](cast[int](p) - diff)
+
 template `+!`(p: pchar; diff: int): pchar =
   cast[pchar](cast[int](p) + diff)
 
@@ -391,6 +394,7 @@ proc next*(r: var Reader): Token =
             if ^start == '(':
               r.defs[decodeStr result] = start
               break
+            dec start
 
     of '-':
       result.s.p = r.p
