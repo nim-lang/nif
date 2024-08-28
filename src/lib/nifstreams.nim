@@ -105,7 +105,7 @@ template withSuffix(body) =
 
 type
   Stream* = object
-    r: Reader
+    r*: Reader
     parents: seq[PackedLineInfo]
 
 proc open*(filename: string): Stream =
@@ -132,7 +132,7 @@ proc rawNext(s: var Stream; t: Token): PackedToken =
 
   case t.tk
   of ParRi, EofToken, UnknownToken, DotToken:
-    result = toToken(ParRi, 0'u32, currentInfo)
+    result = toToken(t.tk, 0'u32, currentInfo)
   of ParLe:
     let ka = pool.tags.getOrInclFromView(t.s)
     result = toToken(ParLe, ka, currentInfo)

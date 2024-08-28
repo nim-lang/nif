@@ -139,5 +139,11 @@ template buildTree*(dest: var TokenBuf; tag: TagId; info: PackedLineInfo; body: 
   body
   dest.add toToken(ParRi, 0'u32, info)
 
+proc addParLe*(dest: var TokenBuf; tag: TagId; info = NoLineInfo) =
+  dest.add toToken(ParLe, tag, info)
+
+proc addParRi*(dest: var TokenBuf) =
+  dest.add toToken(ParRi, 0'u32, NoLineInfo)
+
 proc toString*(b: TokenBuf): string =
   result = nifstreams.toString(toOpenArray(b.data, 0, b.len-1))

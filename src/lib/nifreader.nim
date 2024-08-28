@@ -287,10 +287,10 @@ proc next*(r: var Reader): Token =
   # Returning a new Token is somewhat unusual but lets clients
   # create implicit trees on the stack.
   result = default(Token)
+  skipWhitespace r
   if r.p >= r.eof:
     result.tk = EofToken
   else:
-    skipWhitespace r
     if ^r.p == '@':
       # we have node prefix
       inc r.p
