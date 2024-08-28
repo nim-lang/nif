@@ -135,9 +135,9 @@ proc shrink*(b: var TokenBuf; newLen: int) =
   b.len = newLen
 
 template buildTree*(dest: var TokenBuf; tag: TagId; info: PackedLineInfo; body: untyped) =
-  dest.add toToken ParLe, tag, info
+  dest.add toToken(ParLe, tag, info)
   body
-  dest.add toToken ParRi, 0'u32, info
+  dest.add toToken(ParRi, 0'u32, info)
 
 proc toString*(b: TokenBuf): string =
   result = nifstreams.toString(toOpenArray(b.data, 0, b.len-1))
