@@ -9,7 +9,7 @@
 
 # We produce C code as a list of tokens.
 
-import std / [assertions, syncio, tables, sets, intsets, formatfloat]
+import std / [assertions, syncio, tables, sets, intsets, formatfloat, strutils]
 from std / strutils import parseBiggestInt, parseBiggestUInt, parseInt
 from std / os import changeFileExt
 

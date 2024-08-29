@@ -164,23 +164,11 @@ proc parse*(r: var Reader; dest: var PackedTree[NifcKind]; m: var Module; parent
     result = false
   of ParLe:
     let kind = whichNifcKeyword(t.s, Err)
-    if kind == SufC:
-      let t1 = next(r)
-      let t2 = next(r)
-      # currentInfo?
-      case t1.tk
-      of StringLit:
-        dest.addAtom StrLit, m.lits.strings.getOrIncl(decodeStr t1), currentInfo
-      else:
-        assert t2.decodeStr.startsWith("u")
-        dest.addAtom UIntLit, m.lits.strings.getOrIncl(decodeStr t1), currentInfo
-      discard next(r)
-    else:
-      var d = if kind == TypeC: addr(m.types) else: addr(dest)
-      copyInto(d[], kind, currentInfo):
-        while true:
-          let progress = parse(r, d[], m, currentInfo)
-          if not progress: break
+    var d = if kind == TypeC: addr(m.types) else: addr(dest)
+    copyInto(d[], kind, currentInfo):
+      while true:
+        let progress = parse(r, d[], m, currentInfo)
+        if not progress: break
   of UnknownToken:
     copyInto dest, Err, currentInfo:
       dest.addAtom StrLit, m.lits.strings.getOrIncl(decodeStr t), currentInfo
