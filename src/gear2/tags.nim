@@ -137,6 +137,7 @@ proc nodeKindToTag*(k: TNodeKind): string =
   of nkModuleRef: "modref"
   of nkReplayAction: "replay"
   of nkNilRodNode: "nilrod"
+  of nkOpenSym: "opensym"
 
 proc magicToTag*(k: TMagic): string = 
   case k
@@ -548,7 +549,7 @@ proc typeKindToTag*(k: TTypeKind): string =
   of tyCstring: "cstr"
   of tyObject: "err"
   of tyForward: "forward"
-  of tyProxy: "err"
+  of tyError: "err"
   of tyBuiltInTypeClass: "typeclass"
   of tyUserTypeClass, tyConcept: "err"
   of tyUserTypeClassInst: "err"
