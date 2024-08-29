@@ -13,7 +13,7 @@ type
     nesting, lineLen: int
 
 const
-  ControlChars* = {'(', ')', '[', ']', '{', '}', '@', '#', '\'', '"', '\\', ':'}
+  ControlChars* = {'(', ')', '[', ']', '{', '}', '~', '#', '\'', '"', '\\', ':'}
 
 proc lineBreak*(r: var string; l: var int; nesting: int) =
   r.add "\n"
@@ -164,15 +164,26 @@ template upateLen(body) =
 
 proc addIntLit*(em: var Emitter; i: BiggestInt) =
   upateLen:
+    if i >= 0: em.output.add '+'
     em.output.addInt i
+
+proc addIntLit*(em: var Emitter; u: BiggestInt; suffix: string) =
+  addSuffixLitDispatch(em, suffix):
+    addIntLit(em, u)
 
 proc addLine*(em: var Emitter; i: int32) =
   upateLen:
-    em.output.addInt i
+    if i < 0'i32:
+      em.output.add '~'
+      em.output.addInt(-i)
+    else:
+      em.output.addInt i
 
 proc addUIntLit*(em: var Emitter; u: BiggestUInt) =
   upateLen:
+    em.output.add '+'
     em.output.add $u
+    em.output.add 'u'
 
 proc addUIntLit*(em: var Emitter; u: BiggestUInt; suffix: string) =
   addSuffixLitDispatch(em, suffix):
@@ -181,9 +192,14 @@ proc addUIntLit*(em: var Emitter; u: BiggestUInt; suffix: string) =
 proc addFloatLit*(em: var Emitter; f: BiggestFloat) =
   let myLen = em.output.len
   upateLen:
+    if f >= 0.0: em.output.add '+'
     em.output.addFloat f
     for i in myLen ..< em.output.len:
       if em.output[i] == 'e': em.output[i] = 'E'
+
+proc addFloatLit*(em: var Emitter; f: BiggestFloat; suffix: string) =
+  addSuffixLitDispatch(em, suffix):
+    addFloatLit(em, f)
 
 when isMainModule:
   var em = Emitter()

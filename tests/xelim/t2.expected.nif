@@ -6,11 +6,11 @@
   (bool) .)
  (if
   (elif
-   (gt 4 5)
+   (gt +4 +5)
    (stmts
     (call echo "after and")
     (asgn tmp.1.01
-     (le 2 3))))
+     (le +2 +3))))
   (else
    (stmts
     (asgn tmp.1.01
@@ -39,7 +39,7 @@
    (call echo "hi\00")
    (if
     (elif
-     (lt 4 5)
+     (lt +4 +5)
      (call echo "body"))
     (else
      (break)))))
@@ -47,10 +47,10 @@
   (i M) .)
  (try
   (call echo "abc")
-  (asgn tmp.3.01 3)
+  (asgn tmp.3.01 +3)
   (except
    (as :e E.t)
-   (asgn tmp.3.01 90))
+   (asgn tmp.3.01 +90))
   (fin
    (call echo "90")))
  (var :x.3 . . . tmp.3.01))

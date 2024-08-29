@@ -1,0 +1,16 @@
+(.nif24)
+(index
+
+(public)
+
+(private
+ (kv MyObject.c +36)
+ (kv MyProc +50)
+ (kv MyEnum +51)
+ (kv ValueA +33)
+ (kv ValueB +22)
+ (kv ValueC +22)
+ (kv printf.c +37)
+ (kv f.1 +24)
+ (kv main.c +60))
+)

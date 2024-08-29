@@ -137,19 +137,19 @@ proc toNif*(n, parent: PNode; c: var WContext) =
     c.b.addIntLit n.intVal
   of nkInt8Lit:
     relLineInfo(n, parent, c, true)
-    c.b.addIntLit n.intVal
+    c.b.addIntLit n.intVal, "i8"
   of nkInt16Lit:
     relLineInfo(n, parent, c, true)
-    c.b.addIntLit n.intVal
+    c.b.addIntLit n.intVal, "i16"
   of nkInt32Lit:
     relLineInfo(n, parent, c, true)
-    c.b.addIntLit n.intVal
+    c.b.addIntLit n.intVal, "i32"
   of nkInt64Lit:
     relLineInfo(n, parent, c, true)
-    c.b.addIntLit n.intVal
+    c.b.addIntLit n.intVal, "i64"
   of nkUIntLit:
     relLineInfo(n, parent, c, true)
-    c.b.addUIntLit cast[BiggestUInt](n.intVal), "u"
+    c.b.addUIntLit cast[BiggestUInt](n.intVal)
   of nkUInt8Lit:
     relLineInfo(n, parent, c, true)
     c.b.addUIntLit cast[BiggestUInt](n.intVal), "u8"
@@ -167,13 +167,13 @@ proc toNif*(n, parent: PNode; c: var WContext) =
     c.b.addFloatLit n.floatVal
   of nkFloat32Lit:
     relLineInfo(n, parent, c, true)
-    c.b.addFloatLit n.floatVal
+    c.b.addFloatLit n.floatVal, "f32"
   of nkFloat64Lit:
     relLineInfo(n, parent, c, true)
-    c.b.addFloatLit n.floatVal
+    c.b.addFloatLit n.floatVal, "f64"
   of nkFloat128Lit:
     relLineInfo(n, parent, c, true)
-    c.b.addFloatLit n.floatVal
+    c.b.addFloatLit n.floatVal, "f128"
   of nkIdent:
     relLineInfo(n, parent, c, true)
     c.b.addIdent n.ident.s
