@@ -73,7 +73,7 @@ proc undoWhitespace(b: var Builder) =
 
 
 const
-  ControlChars* = {'(', ')', '[', ']', '{', '}', '@', '#', '\'', '"', '\\', ':'}
+  ControlChars* = {'(', ')', '[', ']', '{', '}', '~', '#', '\'', '"', '\\', ':'}
 
 proc escape(b: var Builder; c: char) =
   const HexChars = "0123456789ABCDEF"
@@ -147,11 +147,14 @@ proc addCharLit*(b: var Builder; c: char) =
 
 proc addIntLit*(b: var Builder; i: BiggestInt; suffix = "") =
   addSep b
+  if i >= 0:
+    b.buf.add '+'
   b.put $i
   b.put suffix
 
 proc addUIntLit*(b: var Builder; u: BiggestUInt; suffix = "") =
   addSep b
+  b.buf.add '+'
   b.put $u
   b.put suffix
 
@@ -159,6 +162,8 @@ proc addFloatLit*(b: var Builder; f: BiggestFloat; suffix = "") =
   addSep b
   let myLen = b.buf.len
   drainPending b
+  if f >= 0.0:
+    b.buf.add '+'
   b.buf.addFloat f
   for i in myLen ..< b.buf.len:
     if b.buf[i] == 'e': b.buf[i] = 'E'
@@ -167,26 +172,30 @@ proc addFloatLit*(b: var Builder; f: BiggestFloat; suffix = "") =
     b.buf.setLen 0
   b.put suffix
 
+proc addLine(s: var string; x: int32) =
+  if x < 0:
+    s.add '~'
+    s.addInt(-x)
+  else:
+    s.addInt(x)
+
 proc addLineInfo*(b: var Builder; col, line: int32; file = "") =
   addSep b
   var seps = 0
   if col != 0'i32:
     drainPending b
-    b.buf.add '@'
-    b.buf.addInt col
+    b.buf.addLine col
     inc seps
   if line != 0'i32:
     if seps == 0:
       drainPending b
-      b.buf.add '@'
     b.buf.add ','
-    b.buf.addInt line
+    b.buf.addLine line
     inc seps
   if file.len > 0:
     if seps == 0:
       drainPending b
-      b.buf.add "@,,"
-    elif seps == 1: b.buf.add "@,"
+      b.buf.add ",,"
     else: b.buf.add ','
     for c in file:
       if c.needsEscape:

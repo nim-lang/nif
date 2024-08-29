@@ -125,8 +125,8 @@ const
 (.vendor "tester")
 (.dialect "niftest")
 
-(stmts @4,5,mymodb.nim
- (call @1,3,mymod.nim foo.3.mymod 3423 50.4))"""
+(stmts 4,5,mymodb.nim
+ (call 1,3,mymod.nim foo.3.mymod +3423 +50.4))"""
 
 proc buildSomething(b: sink Builder): string =
   b.addHeader "tester", "niftest"

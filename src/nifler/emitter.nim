@@ -13,7 +13,7 @@ type
     nesting, lineLen: int
 
 const
-  ControlChars* = {'(', ')', '[', ']', '{', '}', '@', '#', '\'', '"', '\\', ':'}
+  ControlChars* = {'(', ')', '[', ']', '{', '}', '~', '#', '\'', '"', '\\', ':'}
 
 proc lineBreak*(r: var string; l: var int; nesting: int) =
   r.add "\n"
