@@ -3,14 +3,14 @@
 
 (public)
 
-(private @1,1,hello.nim
- (kv MyObject.c 36)
- (kv MyProc 50)
- (kv MyEnum 51)
- (kv ValueA 32)
- (kv ValueB 21)
- (kv ValueC 21)
- (kv printf.c 36)
- (kv f.1 24)
- (kv main.c 60))
+(private
+ (kv MyObject.c +36)
+ (kv MyProc +50)
+ (kv MyEnum +51)
+ (kv ValueA +33)
+ (kv ValueB +22)
+ (kv ValueC +22)
+ (kv printf.c +37)
+ (kv f.1 +24)
+ (kv main.c +60))
 )

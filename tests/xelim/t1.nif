@@ -1,7 +1,7 @@
 (.nif24)
 (stmts
-  (let :x.1 ... (if (elif (and (gt 4 5) (le 2 3)) (call bar)) (else
+  (let :x.1 ... (if (elif (and (gt +4 +5) (le +2 +3)) (call bar)) (else
     (if (elif cond "action") (else "abc"))
   )))
-  (while (expr (call echo "hi\00") (lt 4 5)) (call echo "body"))
+  (while (expr (call echo "hi\00") (lt +4 +5)) (call echo "body"))
 )
