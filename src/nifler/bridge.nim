@@ -105,7 +105,6 @@ type
     section: string
 
 proc absLineInfo(i: TLineInfo; em: var Emitter; c: var TranslationContext) =
-  em.addRaw "@"
   em.addLine int32 i.col
   em.addRaw ","
   em.addLine int32 i.line
@@ -122,25 +121,19 @@ proc relLineInfo(n, parent: PNode; em: var Emitter; c: var TranslationContext;
   let colDiff = int32(i.col) - int32(p.col)
   var seps = 0
   if colDiff != 0:
-    em.addRaw "@"
     em.addLine colDiff
     seps = 1
   let lineDiff = int32(i.line) - int32(p.line)
   if lineDiff != 0:
-    if seps != 1:
-      em.addRaw "@"
     seps = 2
     em.addRaw ","
     em.addLine lineDiff
   if i.fileIndex != p.fileIndex:
     case seps
     of 0:
-      em.addRaw "@,,"
-    of 1:
       em.addRaw ",,"
-    of 2:
+    else:
       em.addRaw ","
-    else: discard
     inc seps
     em.addIdent toFullPath(c.conf, i.fileIndex)
   if seps > 0 and emitSpace:
@@ -182,7 +175,7 @@ proc toNif*(n, parent: PNode; em: var Emitter; c: var TranslationContext) =
     em.addIntLit n.intVal, "i64"
   of nkUIntLit:
     relLineInfo(n, parent, em, c, true)
-    em.addUIntLit cast[BiggestUInt](n.intVal), "u"
+    em.addUIntLit cast[BiggestUInt](n.intVal)
   of nkUInt8Lit:
     relLineInfo(n, parent, em, c, true)
     em.addUIntLit cast[BiggestUInt](n.intVal), "u8"

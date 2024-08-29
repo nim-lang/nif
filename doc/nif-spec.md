@@ -194,14 +194,15 @@ Grammar:
 
 ```
 Digit ::= [0-9]
-NumberSuffix ::= [a-z]+ [0-9a-z]*  # suffixes can only contain lowercase letters
 FloatingPointPart ::= ('.' Digit+ ('E' '-'? Digit+)? ) | 'E' '-'? Digit+
-Number ::= ('+' | '-') Digit+ FloatingPointPart? NumberSuffix?
+Number ::= ('+' | '-') Digit+ (FloatingPointPart | 'u')?
 ```
 
-Numbers must start with a plus or a minus and only their decimal notation is supported. Numbers can have
-a suffix that has to start with a lowercase letter. For example Nim's `0xff'i32` would become `256i32x`.
-(The `x` encodes the fact that the number was originally written in hex.)
+Numbers must start with a plus or a minus and only their decimal notation is supported.
+For example Nim's `0xff` would become `256`.
+
+Unsigned numbers always have a `u` suffix. Floating point numbers must contain a dot or `E`.
+Every other number is interpreted as a signed integer.
 
 Note that numbers that do not start with a plus nor a minus are interpreted as "line information". See
 the corresponding section for more details.
@@ -225,9 +226,8 @@ Char literals are enclosed in single quotes. The only supported escape sequence 
 Grammar:
 
 ```
-StringSuffix ::= Identifier
 EscapedData ::= (VisibleChar | Escape | Whitespace)*
-StringLiteral ::= '"' EscapedData '"' StringSuffix?
+StringLiteral ::= '"' EscapedData '"'
 ```
 
 String literals are enclosed in double quotes. The only supported escape sequence is `\xx`.
@@ -242,14 +242,6 @@ For example:
 ```
 
 Produces: `"This is a single \n  literal string"`.
-
-A string literal can have a suffix that is usually ignored but can be used to store the
-original format of the string. For example, Nim supports "raw string literals" and "triple
-string literals". These could be modelled as `R` and `T` suffixes:
-
-```nif
-  "This was a triple quoted Nim string"T
-```
 
 
 <div style="page-break-after: always;"></div>

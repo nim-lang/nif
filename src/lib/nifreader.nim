@@ -233,13 +233,6 @@ proc handleNumber(r: var Reader; result: var Token) =
         while p < eof and ^p in Digits:
           inc p
           inc result.s.len
-      if p < eof and ^p in NumberSuffixChars:
-        result.suffix.p = p
-        if ^p == 'u': result.tk = UIntLit
-        elif ^p == 'f': result.tk = FloatLit
-        while p < eof and ^p in NumberSuffixChars:
-          inc p
-          inc result.suffix.len
 
 proc handleLineInfo(r: var Reader; result: var Token) =
   useCpuRegisters:
@@ -318,6 +311,7 @@ proc next*(r: var Reader): Token =
         let repl = r.ksubs.getOrDefault(result.s)
         if repl[0] != UnknownToken:
           result.s = repl[1]
+
     of ')':
       result.tk = ParRi
       result.s.p = r.p
@@ -345,13 +339,6 @@ proc next*(r: var Reader): Token =
             inc r.line
           inc result.s.len
           inc p
-
-        if p < eof and ^p in StringSuffixChars:
-          result.suffix.p = p
-          while true:
-            inc p
-            inc result.suffix.len
-            if p == eof or ^p notin StringSuffixChars: break
     of '\'':
       inc r.p
       result.s.p = r.p

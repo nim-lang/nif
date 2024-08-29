@@ -6,7 +6,7 @@
 
 ## Parse NIF into a packed tree representation.
 
-import std / [hashes, tables]
+import std / [hashes, tables, strutils]
 import "../lib" / [bitabs, lineinfos, stringviews, packedtrees, nifreader, keymatcher,
   nifbuilder]
 
@@ -112,6 +112,7 @@ type
     ImpC = "imp"
     NodeclC = "nodecl"
     InclC = "incl"
+    SufC = "suf"
 
 const
   CallingConventions* = {CdeclC..MemberC}
@@ -168,7 +169,6 @@ proc parse*(r: var Reader; dest: var PackedTree[NifcKind]; m: var Module; parent
       while true:
         let progress = parse(r, d[], m, currentInfo)
         if not progress: break
-
   of UnknownToken:
     copyInto dest, Err, currentInfo:
       dest.addAtom StrLit, m.lits.strings.getOrIncl(decodeStr t), currentInfo

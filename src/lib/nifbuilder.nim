@@ -120,7 +120,7 @@ proc addSymbolDef*(b: var Builder; s: string) =
     else:
       b.put c
 
-proc addStrLit*(b: var Builder; s: string; suffix = "") =
+proc addStrLit*(b: var Builder; s: string) =
   addSep b
   b.put '"'
   for c in s:
@@ -129,7 +129,6 @@ proc addStrLit*(b: var Builder; s: string; suffix = "") =
     else:
       b.put c
   b.put '"'
-  b.put suffix
 
 proc addEmpty*(b: var Builder; count = 1) =
   addSep b
@@ -145,20 +144,19 @@ proc addCharLit*(b: var Builder; c: char) =
     b.put c
   b.put '\''
 
-proc addIntLit*(b: var Builder; i: BiggestInt; suffix = "") =
+proc addIntLit*(b: var Builder; i: BiggestInt) =
   addSep b
   if i >= 0:
     b.buf.add '+'
   b.put $i
-  b.put suffix
 
-proc addUIntLit*(b: var Builder; u: BiggestUInt; suffix = "") =
+proc addUIntLit*(b: var Builder; u: BiggestUInt) =
   addSep b
   b.buf.add '+'
   b.put $u
-  b.put suffix
+  b.buf.add 'u'
 
-proc addFloatLit*(b: var Builder; f: BiggestFloat; suffix = "") =
+proc addFloatLit*(b: var Builder; f: BiggestFloat) =
   addSep b
   let myLen = b.buf.len
   drainPending b
@@ -170,7 +168,6 @@ proc addFloatLit*(b: var Builder; f: BiggestFloat; suffix = "") =
   if b.mode == UsesFile:
     b.f.write b.buf
     b.buf.setLen 0
-  b.put suffix
 
 proc addLine(s: var string; x: int32) =
   if x < 0:
@@ -236,6 +233,16 @@ template withTree*(b: var Builder; kind: string; body: untyped) =
   addTree b, kind
   body
   endTree b
+
+proc addUIntLit*(b: var Builder; u: BiggestUInt; suffix: string) =
+  withTree(b, "suf"):
+    addUIntLit(b, u)
+    addStrLit(b, suffix)
+
+proc addStrLit*(b: var Builder; s: string; suffix: string) =
+  withTree(b, "suf"):
+    addStrLit(b, s)
+    addStrLit(b, suffix)
 
 proc addHeader*(b: var Builder; vendor = "", dialect = "") =
   b.put "(.nif24)\n"
