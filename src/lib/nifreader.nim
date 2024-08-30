@@ -12,9 +12,7 @@ import stringviews
 const
   ControlChars = {'(', ')', '[', ']', '{', '}', '~', '#', '\'', '"', ':'}
   ControlCharsOrWhite = ControlChars + {' ', '\n', '\t', '\r'}
-  HexChars* = {'0'..'9', 'A'..'F'} # lowercase letters are not in the NIF spec!
-  StringSuffixChars = {'A'..'Z', 'a'..'z', '_', '0'..'9'}
-  NumberSuffixChars = {'a'..'z', '_', '0'..'9'}
+  HexChars = {'0'..'9', 'A'..'F'} # lowercase letters are not in the NIF spec!
   Digits = {'0'..'9'}
 
 type
@@ -36,7 +34,6 @@ type
     kind*: uint16   # for clients to fill in ("known node kinds")
     s*: StringView
     pos*: FilePos
-    suffix*: StringView
     filename*: StringView
 
   MetaInfo* = object
