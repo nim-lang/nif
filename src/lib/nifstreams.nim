@@ -71,11 +71,15 @@ proc hash*(x: TagId): Hash {.borrow.}
 
 const
   Suffixed* = TagId(1)
+  ErrT* = TagId(2)
 
 proc createLiterals*(): Literals =
   result = default(Literals)
   let t = result.tags.getOrIncl("suf")
   assert t == Suffixed
+
+  let t2 = result.tags.getOrIncl("err")
+  assert t == ErrT
 
 var pool* = createLiterals()
 
