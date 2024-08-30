@@ -79,7 +79,7 @@ proc createLiterals*(): Literals =
   assert t == Suffixed
 
   let t2 = result.tags.getOrIncl("err")
-  assert t == ErrT
+  assert t2 == ErrT
 
 var pool* = createLiterals()
 
