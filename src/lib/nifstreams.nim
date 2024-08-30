@@ -99,14 +99,6 @@ template copyIntoUnchecked*(dest: var seq[PackedToken]; tag: string; info: Packe
   body
   dest.addToken ParRi, 0'u32, info
 
-template withSuffix(body) =
-  if t.suffix.len > 0:
-    copyInto(dest, Suffixed, currentInfo):
-      body
-      dest.addToken StringLit, pool.strings.getOrInclFromView(t.suffix), currentInfo
-  else:
-    body
-
 type
   Stream* = object
     r*: Reader
@@ -208,17 +200,13 @@ proc parse*(r: var Reader; dest: var seq[PackedToken];
   of CharLit:
     dest.addToken CharLit, uint32 decodeChar(t), currentInfo
   of StringLit:
-    withSuffix:
-      dest.addToken StringLit, pool.strings.getOrIncl(decodeStr t), currentInfo
+    dest.addToken StringLit, pool.strings.getOrIncl(decodeStr t), currentInfo
   of IntLit:
-    withSuffix:
-      dest.addToken IntLit, pool.integers.getOrIncl(decodeInt t), currentInfo
+    dest.addToken IntLit, pool.integers.getOrIncl(decodeInt t), currentInfo
   of UIntLit:
-    withSuffix:
-      dest.addToken UIntLit, pool.uintegers.getOrIncl(decodeUInt t), currentInfo
+    dest.addToken UIntLit, pool.uintegers.getOrIncl(decodeUInt t), currentInfo
   of FloatLit:
-    withSuffix:
-      dest.addToken FloatLit, pool.floats.getOrIncl(decodeFloat t), currentInfo
+    dest.addToken FloatLit, pool.floats.getOrIncl(decodeFloat t), currentInfo
 
 proc litId*(n: PackedToken): StrId {.inline.} =
   assert n.kind in {Ident, StringLit}
