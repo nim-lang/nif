@@ -109,6 +109,12 @@ proc add*(result: var TokenBuf; c: Cursor) =
       elif item.kind == ParLe: inc nested
       inc c
 
+proc addUnstructured*(result: var TokenBuf; c: Cursor) =
+  var c = c
+  while c.rem > 0:
+    result.add c.load
+    inc c
+
 proc add*(result: var TokenBuf; s: var Stream) =
   let c = next(s)
   assert c.kind != ParRi, "cursor at end?"
