@@ -5,8 +5,8 @@
  (if
   (elif
    (and
-    (gt 4 5)
-    (le 2 3))
+    (gt +4 +5)
+    (le +2 +3))
    (stmts
     (asgn tmp.0.01
      (call bar))))
@@ -29,7 +29,7 @@
    (call echo "hi\00")
    (if
     (elif
-     (lt 4 5)
+     (lt +4 +5)
      (call echo "body"))
     (else
      (break))))))

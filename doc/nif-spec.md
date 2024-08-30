@@ -56,7 +56,7 @@ In order to get a feeling for how a NIF file can look, here is a complete exampl
 ```nif
 (.nif24)
 (stmts
-(imp @2,5,sysio.nim(type :File (object ..)))
+(imp 2,5,sysio.nim(type :File (object ..)))
 (imp (proc :write.1.sys . (pragmas varargs) (params (param f File)).))
 (call write.1.sys "Hello World!\0A")
 )
@@ -70,7 +70,7 @@ A generator can produce shorter code by making use of `.k` and `.i` (substitutio
 (.k P pragmas)
 (.i write write.1.sys)
 (stmts
-(I @2,5,sysio.nim(type :File (object ..)))
+(I 2,5,sysio.nim(type :File (object ..)))
 (I (proc :write . (P varargs) (params (param f File)).))
 (call write "Hello World!\0A")
 )
@@ -98,14 +98,14 @@ Whitespace is the set `{' ', '\t', '\n', '\r'}`.
 Control characters
 ------------------
 
-NIF uses some characters like `(`, `)` and `@` to describe the AST. As such these characters
+NIF uses some characters like `(`, `)` and `~` to describe the AST. As such these characters
 **must not** occur in string literals, char literals and comments so that a NIF parser can
 skip to the enclosing `)` without complex logic.
 
 The control characters are:
 
 ```
-( )  [ ]  { }  @  #  '  "  \  :
+( )  [ ]  { }  ~  #  '  "  \  :
 ```
 
 Escape sequences
@@ -194,14 +194,18 @@ Grammar:
 
 ```
 Digit ::= [0-9]
-NumberSuffix ::= [a-z]+ [0-9a-z]*  # suffixes can only contain lowercase letters
 FloatingPointPart ::= ('.' Digit+ ('E' '-'? Digit+)? ) | 'E' '-'? Digit+
-Number ::= '-'? Digit+ FloatingPointPart? NumberSuffix?
+Number ::= ('+' | '-') Digit+ (FloatingPointPart | 'u')?
 ```
 
-Numbers must start with a digit (or a minus) and only their decimal notation is supported. Numbers can have
-a suffix that has to start with a lowercase letter. For example Nim's `0xff'i32` would become `256i32x`.
-(The `x` encodes the fact that the number was originally written in hex.)
+Numbers must start with a plus or a minus and only their decimal notation is supported.
+For example Nim's `0xff` would become `256`.
+
+Unsigned numbers always have a `u` suffix. Floating point numbers must contain a dot or `E`.
+Every other number is interpreted as a signed integer.
+
+Note that numbers that do not start with a plus nor a minus are interpreted as "line information". See
+the corresponding section for more details.
 
 
 ### Char literals
@@ -222,9 +226,8 @@ Char literals are enclosed in single quotes. The only supported escape sequence 
 Grammar:
 
 ```
-StringSuffix ::= Identifier
 EscapedData ::= (VisibleChar | Escape | Whitespace)*
-StringLiteral ::= '"' EscapedData '"' StringSuffix?
+StringLiteral ::= '"' EscapedData '"'
 ```
 
 String literals are enclosed in double quotes. The only supported escape sequence is `\xx`.
@@ -239,14 +242,6 @@ For example:
 ```
 
 Produces: `"This is a single \n  literal string"`.
-
-A string literal can have a suffix that is usually ignored but can be used to store the
-original format of the string. For example, Nim supports "raw string literals" and "triple
-string literals". These could be modelled as `R` and `T` suffixes:
-
-```nif
-  "This was a triple quoted Nim string"T
-```
 
 
 <div style="page-break-after: always;"></div>
@@ -348,24 +343,33 @@ Line information
 Grammar:
 
 ```
-LineDiff ::= Digit* | '-' Digit+
-LineInfo ::= '@' LineDiff (',' LineDiff (',' EscapedData)?)?
+LineDiff ::= Digit* | '~' Digit+
+LineInfo ::= LineDiff (',' LineDiff (',' EscapedData)?)?
 ```
 
-Every node can be prefixed with `@` to add source code information. ("This node originates from file.nim(line,col).")
+Every node can be prefixed with a digit or `~` or `,` to add source code information.
+("This node originates from file.nim(line,col).")
 There are 3 forms:
 
-1. `@<column-diff>`
-2. `@<column-diff, line-diff>`
-3. `@<column, line, filename>`
+1. `<column-diff>`
+2. `<column-diff, line-diff>`
+3. `<column, line, filename>`
 
-The `diff` means that the value is relative to the parent node. For example `@8` means that the node is at
-the same position as the parent node except that its column is `+8` characters. Negative numbers are valid
-too and usually required for "infix" nodes where the left hand operand preceeds the parent (`x + y` becomes
-`(infix add @-3 x @2 y)` because `x` is written before the `+` operator).
+The `diff` means that the value is relative to the parent node. For example `8` means that the node is at
+the same position as the parent node except that its column is `+8` characters. Negative numbers use the tilde
+and not the minus. Negative numbers are usually required for "infix" nodes where the left hand operand
+preceeds the parent (`x + y` becomes
+`(infix add ~3 x 2 y)` because `x` is written before the `+` operator).
 
-The AST root node can only be annotated with the form `@<column, line, filename>` as it has no parent node
+The AST root node can only be annotated with the form `<column, line, filename>` as it has no parent node
 that column and line could refer to.
+
+Note that numeric literals in NIF have to start with `+` or `-` and thus cannot cause ambiguity with line
+information.
+
+Since the information includes both lines and columns it can easily take up 10-20% of the file size.
+Therefore a mere digit starts a line information and not a numeric literal. Numeric literals are not
+nearly as frequent in practice.
 
 
 Comments
@@ -465,7 +469,7 @@ For example:
 (.i Hello "Hello world!\0A")
 
 (stmts
-(call ECHO 1 2 3)
+(call ECHO +1 +2 +3)
 (C ECHO Hello)
 )
 ```
@@ -499,9 +503,10 @@ forms a valid identifier (for C code generation or otherwise). The following enc
 accomplishes this task:
 
 1. Line information and comments are ignored.
-2. The substring of trailing `)` is removed as there is nothing interesting about `))))`.
-3. Whitespace is canonicalized to a single space.
-4. The space after `)` and before `(` is removed.
+2. The unary `+` for numbers are removed.
+3. The substring of trailing `)` is removed as there is nothing interesting about `))))`.
+4. Whitespace is canonicalized to a single space.
+5. The space after `)` and before `(` is removed.
 
 
 `(` is turned into `A`.
@@ -541,7 +546,7 @@ In summary:
 
 For example:
 
-`(array (range 0 9) (array (range 0 4) (i 8))))`
+`(array (range +0 +9) (array (range +0 +4) (i +8))))`
 
 Becomes:
 

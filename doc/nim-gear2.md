@@ -16,7 +16,7 @@ pragmas which are then attached to the sym's declaration side. For example, if `
 is set to some value `4` which is not trivially recomputable it would be stored as:
 
 ```
-(var :theSymbol.2 . (pragmas (position 4)) int .)
+(var :theSymbol.2 . (pragmas (position +4)) int .)
 ```
 
 
@@ -66,7 +66,7 @@ Types
 Lisp trees and the symbol mangling to the scheme `<name>.<number>.<module-suffix>` are
 sufficient to encode any Nim type into a short descriptive unique name. Many builtin types
 like `system.int` are directly mapped to node kinds. For example, like in NIFC `system.int`
-becomes `(i M)` and `system.char` becomes `(c 8)`.
+becomes `(i M)` and `system.char` becomes `(c +8)`.
 
 More examples:
 
@@ -75,7 +75,7 @@ More examples:
 | `string`  | `(str)`  |
 | `seq`  | `(seq)`  |
 | `typeof(nil)`  | `(nilt)` |
-| `array[2..6, ref MyObj]` | `(array (ref MyObj.1.msfx) (range (i M) 2 6))` |
+| `array[2..6, ref MyObj]` | `(array (ref MyObj.1.msfx) (range (i M) +2 +6))` |
 
 
 ### Type aliases
@@ -186,7 +186,7 @@ SymbolDef ::= <according to NIF's spec>
 Number ::= <according to NIF's spec>
 CharLiteral ::= <according to NIF's spec>
 StringLiteral ::= <according to NIF's spec>
-IntBits ::= [0-9]+ | 'M'
+IntBits ::= '+' [0-9]+ | 'M'
 
 ExportMarker ::= Empty | 'x'
 

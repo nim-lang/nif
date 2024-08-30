@@ -10,7 +10,7 @@ import std / [memfiles, tables, parseutils]
 import stringviews
 
 const
-  ControlChars = {'(', ')', '[', ']', '{', '}', '@', '#', '\'', '"', ':'}
+  ControlChars = {'(', ')', '[', ']', '{', '}', '~', '#', '\'', '"', ':'}
   ControlCharsOrWhite = ControlChars + {' ', '\n', '\t', '\r'}
   HexChars* = {'0'..'9', 'A'..'F'} # lowercase letters are not in the NIF spec!
   StringSuffixChars = {'A'..'Z', 'a'..'z', '_', '0'..'9'}
@@ -50,7 +50,7 @@ type
     eof: pchar
     f: MemFile
     buf: string
-    line*: int32 # file position within the NIF file, not affected by '@' annotations
+    line*: int32 # file position within the NIF file, not affected by line annotations
     err*: bool
     trackDefs*: bool
     isubs, ksubs: Table[StringView, (TokenKind, StringView)]
@@ -233,19 +233,12 @@ proc handleNumber(r: var Reader; result: var Token) =
         while p < eof and ^p in Digits:
           inc p
           inc result.s.len
-      if p < eof and ^p in NumberSuffixChars:
-        result.suffix.p = p
-        if ^p == 'u': result.tk = UIntLit
-        elif ^p == 'f': result.tk = FloatLit
-        while p < eof and ^p in NumberSuffixChars:
-          inc p
-          inc result.suffix.len
 
 proc handleLineInfo(r: var Reader; result: var Token) =
   useCpuRegisters:
     var col = 0
     var negative = false
-    if p < eof and ^p == '-':
+    if p < eof and ^p == '~':
       inc p
       negative = true
     while p < eof and ^p in Digits:
@@ -260,7 +253,7 @@ proc handleLineInfo(r: var Reader; result: var Token) =
 
     if p < eof and ^p == ',':
       inc p
-      if p < eof and ^p == '-':
+      if p < eof and ^p == '~':
         inc p
         negative = true
       while p < eof and ^p in Digits:
@@ -294,9 +287,8 @@ proc next*(r: var Reader): Token =
   if r.p >= r.eof:
     result.tk = EofToken
   else:
-    if ^r.p == '@':
+    if ^r.p in {'0'..'9', ',', '~'}:
       # we have node prefix
-      inc r.p
       handleLineInfo r, result
       skipWhitespace r
 
@@ -319,6 +311,7 @@ proc next*(r: var Reader): Token =
         let repl = r.ksubs.getOrDefault(result.s)
         if repl[0] != UnknownToken:
           result.s = repl[1]
+
     of ')':
       result.tk = ParRi
       result.s.p = r.p
@@ -346,13 +339,6 @@ proc next*(r: var Reader): Token =
             inc r.line
           inc result.s.len
           inc p
-
-        if p < eof and ^p in StringSuffixChars:
-          result.suffix.p = p
-          while true:
-            inc p
-            inc result.suffix.len
-            if p == eof or ^p notin StringSuffixChars: break
     of '\'':
       inc r.p
       result.s.p = r.p
@@ -396,14 +382,10 @@ proc next*(r: var Reader): Token =
               break
             dec start
 
-    of '-':
+    of '-', '+':
       result.s.p = r.p
       inc r.p
       inc result.s.len
-      handleNumber r, result
-
-    of '0'..'9':
-      result.s.p = r.p
       handleNumber r, result
 
     else:

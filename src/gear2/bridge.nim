@@ -149,7 +149,7 @@ proc toNif*(n, parent: PNode; c: var WContext) =
     c.b.addIntLit n.intVal, "i64"
   of nkUIntLit:
     relLineInfo(n, parent, c, true)
-    c.b.addUIntLit cast[BiggestUInt](n.intVal), "u"
+    c.b.addUIntLit cast[BiggestUInt](n.intVal)
   of nkUInt8Lit:
     relLineInfo(n, parent, c, true)
     c.b.addUIntLit cast[BiggestUInt](n.intVal), "u8"
