@@ -40,14 +40,6 @@ proc `==`*(a, b: TagId): bool {.borrow.}
 proc addAtom*[L](dest: var PackedTree[NifKind]; kind: NifKind; lit: L; info: PackedLineInfo) =
   packedtrees.addAtom dest, kind, uint32(lit), info
 
-template withSuffix(body) =
-  if t.suffix.len > 0:
-    copyInto(dest, Suffixed, currentInfo):
-      body
-      dest.addAtom StrLit, lits.strings.getOrInclFromView(t.suffix), currentInfo
-  else:
-    body
-
 const
   LastTag = 255'u32
 
@@ -95,17 +87,13 @@ proc parse*(r: var Reader; dest: var PackedTree[NifKind]; lits: var Literals;
   of CharLit:
     dest.addAtom CharLit, uint32 decodeChar(t), currentInfo
   of StringLit:
-    withSuffix:
-      dest.addAtom StrLit, lits.strings.getOrIncl(decodeStr t), currentInfo
+    dest.addAtom StrLit, lits.strings.getOrIncl(decodeStr t), currentInfo
   of IntLit:
-    withSuffix:
-      dest.addAtom IntLit, lits.integers.getOrIncl(decodeInt t), currentInfo
+    dest.addAtom IntLit, lits.integers.getOrIncl(decodeInt t), currentInfo
   of UIntLit:
-    withSuffix:
-      dest.addAtom UIntLit, lits.uintegers.getOrIncl(decodeUInt t), currentInfo
+    dest.addAtom UIntLit, lits.uintegers.getOrIncl(decodeUInt t), currentInfo
   of FloatLit:
-    withSuffix:
-      dest.addAtom FloatLit, lits.floats.getOrIncl(decodeFloat t), currentInfo
+    dest.addAtom FloatLit, lits.floats.getOrIncl(decodeFloat t), currentInfo
 
 type
   Tree* = PackedTree[NifKind]

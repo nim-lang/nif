@@ -10,9 +10,9 @@ import std / [os]
 import bitabs, lineinfos, nifreader, nifstreams, nifcursors
 
 const
-  PublicT = TagId(2)
-  PrivateT = TagId(3)
-  KvT = TagId(4)
+  PublicT = TagId(3)
+  PrivateT = TagId(4)
+  KvT = TagId(5)
 
 proc createIndex*(infile: string) =
   registerTag "public", PublicT

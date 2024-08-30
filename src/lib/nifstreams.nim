@@ -71,11 +71,15 @@ proc hash*(x: TagId): Hash {.borrow.}
 
 const
   Suffixed* = TagId(1)
+  ErrT* = TagId(2)
 
 proc createLiterals*(): Literals =
   result = default(Literals)
   let t = result.tags.getOrIncl("suf")
   assert t == Suffixed
+
+  let t2 = result.tags.getOrIncl("err")
+  assert t2 == ErrT
 
 var pool* = createLiterals()
 
@@ -94,14 +98,6 @@ template copyIntoUnchecked*(dest: var seq[PackedToken]; tag: string; info: Packe
   dest.addToken ParLe, pool.strings.getOrIncl(tag), info
   body
   dest.addToken ParRi, 0'u32, info
-
-template withSuffix(body) =
-  if t.suffix.len > 0:
-    copyInto(dest, Suffixed, currentInfo):
-      body
-      dest.addToken StringLit, pool.strings.getOrInclFromView(t.suffix), currentInfo
-  else:
-    body
 
 type
   Stream* = object
@@ -204,17 +200,13 @@ proc parse*(r: var Reader; dest: var seq[PackedToken];
   of CharLit:
     dest.addToken CharLit, uint32 decodeChar(t), currentInfo
   of StringLit:
-    withSuffix:
-      dest.addToken StringLit, pool.strings.getOrIncl(decodeStr t), currentInfo
+    dest.addToken StringLit, pool.strings.getOrIncl(decodeStr t), currentInfo
   of IntLit:
-    withSuffix:
-      dest.addToken IntLit, pool.integers.getOrIncl(decodeInt t), currentInfo
+    dest.addToken IntLit, pool.integers.getOrIncl(decodeInt t), currentInfo
   of UIntLit:
-    withSuffix:
-      dest.addToken UIntLit, pool.uintegers.getOrIncl(decodeUInt t), currentInfo
+    dest.addToken UIntLit, pool.uintegers.getOrIncl(decodeUInt t), currentInfo
   of FloatLit:
-    withSuffix:
-      dest.addToken FloatLit, pool.floats.getOrIncl(decodeFloat t), currentInfo
+    dest.addToken FloatLit, pool.floats.getOrIncl(decodeFloat t), currentInfo
 
 proc litId*(n: PackedToken): StrId {.inline.} =
   assert n.kind in {Ident, StringLit}

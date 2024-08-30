@@ -16,9 +16,14 @@ type
 proc fromBuffer*(x: openArray[PackedToken]): Cursor {.inline.} =
   Cursor(p: addr(x[0]), rem: x.len)
 
+proc setSpan*(c: var Cursor; beyondLast: Cursor) {.inline.} =
+  c.rem = cast[int](beyondLast.p) - cast[int](c.p)
+
 proc load*(c: Cursor): PackedToken {.inline.} = c.p[]
 
 proc kind*(c: Cursor): TokenKind {.inline.} = c.load.kind
+
+proc info*(c: Cursor): PackedLineInfo {.inline.} = c.load.info
 
 proc litId*(c: Cursor): StrId {.inline.} = nifstreams.litId(c.load)
 proc intId*(c: Cursor): IntId {.inline.} = nifstreams.intId(c.load)
@@ -82,6 +87,10 @@ proc add*(b: var TokenBuf; item: PackedToken) {.inline.} =
   inc b.len
 
 proc len*(b: TokenBuf): int {.inline.} = b.len
+
+proc `[]`*(b: TokenBuf; i: int): PackedToken {.inline.} =
+  assert i >= 0 and i < b.len
+  result = b.data[i]
 
 proc add*(result: var TokenBuf; c: Cursor) =
   assert c.kind != ParRi, "cursor at end?"
