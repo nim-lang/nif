@@ -105,7 +105,7 @@ proc matchCall(c: var Context; it: var Item): bool =
     var om3 = false
     while not matchParRi(c, it):
       om3 = true
-      if not matchExpr(c, it): om3 = false
+      if not matchExpr(c, it): om3 = false; break
     if not om3:
       error(c, it, "invalid Call")
       return false
@@ -264,7 +264,7 @@ proc matchExpr(c: var Context; it: var Item): bool =
           kw21 = matchParRi(c, it)
           when declared(handleKv):
             if kw21: handleKv(c, it, before20)
-        if not kw21: zm19 = false
+        if not kw21: zm19 = false; break
       if not zm19:
         error(c, it, "invalid Expr")
         break or2
@@ -283,7 +283,7 @@ proc matchExpr(c: var Context; it: var Item): bool =
         break or2
       var zm24 = true
       while not matchParRi(c, it):
-        if not matchExpr(c, it): zm24 = false
+        if not matchExpr(c, it): zm24 = false; break
       if not zm24:
         error(c, it, "invalid Expr")
         break or2
@@ -657,7 +657,7 @@ proc matchBranchRanges(c: var Context; it: var Item): bool =
       var om5 = false
       while not matchParRi(c, it):
         om5 = true
-        if not matchBranchRange(c, it): om5 = false
+        if not matchBranchRange(c, it): om5 = false; break
       if not om5:
         error(c, it, "invalid BranchRanges")
         break or2
@@ -763,7 +763,7 @@ proc matchEmitStmt(c: var Context; it: var Item): bool =
     var om3 = false
     while not matchParRi(c, it):
       om3 = true
-      if not matchExpr(c, it): om3 = false
+      if not matchExpr(c, it): om3 = false; break
     if not om3:
       error(c, it, "invalid EmitStmt")
       return false
@@ -824,7 +824,7 @@ proc matchStmt(c: var Context; it: var Item): bool =
           kw9 = matchParRi(c, it)
           when declared(handleElif):
             if kw9: handleElif(c, it, before8)
-        if not kw9: om7 = false
+        if not kw9: om7 = false; break
       if not om7:
         error(c, it, "invalid Stmt")
         break or2
@@ -891,7 +891,7 @@ proc matchStmt(c: var Context; it: var Item): bool =
           kw19 = matchParRi(c, it)
           when declared(handleOf):
             if kw19: handleOf(c, it, before18)
-        if not kw19: om17 = false
+        if not kw19: om17 = false; break
       if not om17:
         error(c, it, "invalid Stmt")
         break or2
@@ -966,7 +966,7 @@ proc matchStmtList(c: var Context; it: var Item): bool =
   if isTag(c, it, StmtsT):
     var zm3 = true
     while not matchParRi(c, it):
-      if not matchStmt(c, it): zm3 = false
+      if not matchStmt(c, it): zm3 = false; break
     if not zm3:
       error(c, it, "invalid StmtList")
       return false
@@ -1015,7 +1015,7 @@ proc matchParams(c: var Context; it: var Item): bool =
         kw5 = matchParRi(c, it)
         when declared(handleParams):
           if kw5: handleParams(c, it, before4)
-      if not kw5: zm3 = false
+      if not kw5: zm3 = false; break
     if zm3:
       or1 = true
       break or2
@@ -1088,7 +1088,7 @@ proc matchUnionDecl(c: var Context; it: var Item): bool =
       return false
     var zm3 = true
     while not matchParRi(c, it):
-      if not matchFieldDecl(c, it): zm3 = false
+      if not matchFieldDecl(c, it): zm3 = false; break
     if not zm3:
       error(c, it, "invalid UnionDecl")
       return false
@@ -1116,7 +1116,7 @@ proc matchObjDecl(c: var Context; it: var Item): bool =
       return false
     var zm5 = true
     while not matchParRi(c, it):
-      if not matchFieldDecl(c, it): zm5 = false
+      if not matchFieldDecl(c, it): zm5 = false; break
     if not zm5:
       error(c, it, "invalid ObjDecl")
       return false
@@ -1166,7 +1166,7 @@ proc matchEnumDecl(c: var Context; it: var Item): bool =
     var om3 = false
     while not matchParRi(c, it):
       om3 = true
-      if not matchEnumFieldDecl(c, it): om3 = false
+      if not matchEnumFieldDecl(c, it): om3 = false; break
     if not om3:
       error(c, it, "invalid EnumDecl")
       return false
@@ -1241,7 +1241,7 @@ proc matchType(c: var Context; it: var Item): bool =
         break or2
       var zm5 = true
       while not matchParRi(c, it):
-        if not matchIntQualifier(c, it): zm5 = false
+        if not matchIntQualifier(c, it): zm5 = false; break
       if not zm5:
         error(c, it, "invalid Type")
         break or2
@@ -1260,7 +1260,7 @@ proc matchType(c: var Context; it: var Item): bool =
         break or2
       var zm8 = true
       while not matchParRi(c, it):
-        if not matchIntQualifier(c, it): zm8 = false
+        if not matchIntQualifier(c, it): zm8 = false; break
       if not zm8:
         error(c, it, "invalid Type")
         break or2
@@ -1279,7 +1279,7 @@ proc matchType(c: var Context; it: var Item): bool =
         break or2
       var zm11 = true
       while not matchParRi(c, it):
-        if not matchIntQualifier(c, it): zm11 = false
+        if not matchIntQualifier(c, it): zm11 = false; break
       if not zm11:
         error(c, it, "invalid Type")
         break or2
@@ -1298,7 +1298,7 @@ proc matchType(c: var Context; it: var Item): bool =
         break or2
       var zm14 = true
       while not matchParRi(c, it):
-        if not matchIntQualifier(c, it): zm14 = false
+        if not matchIntQualifier(c, it): zm14 = false; break
       if not zm14:
         error(c, it, "invalid Type")
         break or2
@@ -1314,7 +1314,7 @@ proc matchType(c: var Context; it: var Item): bool =
     if isTag(c, it, BoolT):
       var zm17 = true
       while not matchParRi(c, it):
-        if not matchIntQualifier(c, it): zm17 = false
+        if not matchIntQualifier(c, it): zm17 = false; break
       if not zm17:
         error(c, it, "invalid Type")
         break or2
@@ -1336,7 +1336,7 @@ proc matchType(c: var Context; it: var Item): bool =
         break or2
       var zm20 = true
       while not matchParRi(c, it):
-        if not matchPtrQualifier(c, it): zm20 = false
+        if not matchPtrQualifier(c, it): zm20 = false; break
       if not zm20:
         error(c, it, "invalid Type")
         break or2
@@ -1368,7 +1368,7 @@ proc matchType(c: var Context; it: var Item): bool =
         break or2
       var zm25 = true
       while not matchParRi(c, it):
-        if not matchPtrQualifier(c, it): zm25 = false
+        if not matchPtrQualifier(c, it): zm25 = false; break
       if not zm25:
         error(c, it, "invalid Type")
         break or2
@@ -1560,7 +1560,7 @@ proc matchProcTypePragmas(c: var Context; it: var Item): bool =
       var om5 = false
       while not matchParRi(c, it):
         om5 = true
-        if not matchProcTypePragma(c, it): om5 = false
+        if not matchProcTypePragma(c, it): om5 = false; break
       if not om5:
         error(c, it, "invalid ProcTypePragmas")
         break or2
@@ -1586,7 +1586,7 @@ proc matchProcPragmas(c: var Context; it: var Item): bool =
       var om5 = false
       while not matchParRi(c, it):
         om5 = true
-        if not matchProcPragma(c, it): om5 = false
+        if not matchProcPragma(c, it): om5 = false; break
       if not om5:
         error(c, it, "invalid ProcPragmas")
         break or2
@@ -1651,7 +1651,7 @@ proc matchVarPragmas(c: var Context; it: var Item): bool =
       var om5 = false
       while not matchParRi(c, it):
         om5 = true
-        if not matchVarPragma(c, it): om5 = false
+        if not matchVarPragma(c, it): om5 = false; break
       if not om5:
         error(c, it, "invalid VarPragmas")
         break or2
@@ -1699,7 +1699,7 @@ proc matchParamPragmas(c: var Context; it: var Item): bool =
       var om5 = false
       while not matchParRi(c, it):
         om5 = true
-        if not matchParamPragma(c, it): om5 = false
+        if not matchParamPragma(c, it): om5 = false; break
       if not om5:
         error(c, it, "invalid ParamPragmas")
         break or2
@@ -1742,7 +1742,7 @@ proc matchFieldPragmas(c: var Context; it: var Item): bool =
     var om3 = false
     while not matchParRi(c, it):
       om3 = true
-      if not matchFieldPragma(c, it): om3 = false
+      if not matchFieldPragma(c, it): om3 = false; break
     if not om3:
       error(c, it, "invalid FieldPragmas")
       return false
@@ -1787,7 +1787,7 @@ proc matchTypePragmas(c: var Context; it: var Item): bool =
       var om5 = false
       while not matchParRi(c, it):
         om5 = true
-        if not matchTypePragma(c, it): om5 = false
+        if not matchTypePragma(c, it): om5 = false; break
       if not om5:
         error(c, it, "invalid TypePragmas")
         break or2
@@ -1901,7 +1901,7 @@ proc matchModule(c: var Context; it: var Item): bool =
   if isTag(c, it, StmtsT):
     var zm3 = true
     while not matchParRi(c, it):
-      if not matchTopLevelConstruct(c, it): zm3 = false
+      if not matchTopLevelConstruct(c, it): zm3 = false; break
     if not zm3:
       error(c, it, "invalid Module")
       return false

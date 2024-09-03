@@ -118,7 +118,7 @@ proc compileZeroOrMany(c: var Context; it: string): string =
     ind c
     c.outp.add "if not "
     c.outp.add cond
-    c.outp.add ": " & result & " = false"
+    c.outp.add ": " & result & " = false; break"
   dec c.nesting
 
 proc compileOneOrMany(c: var Context; it: string): string =
@@ -133,7 +133,7 @@ proc compileOneOrMany(c: var Context; it: string): string =
     ind c
     c.outp.add "if not "
     c.outp.add cond
-    c.outp.add ": " & result & " = false"
+    c.outp.add ": " & result & " = false; break"
   dec c.nesting
 
 proc compileZeroOrOne(c: var Context; it: string): string =
@@ -161,7 +161,7 @@ proc compileKeyw(c: var Context; it: string): string =
 
   let cond = "isTag(" & c.args & ", " & tagAsNimIdent(tag) & ")"
   c.t = next(c.r)
-  if c.t.tk == ParRi:
+  if c.t.tk == ParRi and c.inMatch == 0:
     return cond
 
   let action = "handle" & upcase(tag)
@@ -228,9 +228,12 @@ proc compileKeyw(c: var Context; it: string): string =
     c.outp.add result
     c.outp.add ": "
     c.outp.add action & "(" & c.args & ", " & before & ")"
+    dec c.nesting, 2
+  else:
     dec c.nesting
-
-  dec c.nesting
+    ind c
+    c.outp.add "else: "
+    c.outp.add c.leaveBlock
 
 proc compileRuleInvokation(c: var Context; it: string): string =
   let ruleName = decodeStr(c.t)
