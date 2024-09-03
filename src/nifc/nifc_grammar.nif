@@ -1,0 +1,134 @@
+(.nif24)
+
+(GRAMMAR Module
+(RULE :IntBits (OR INTLIT (IDENT "M")))
+(RULE :Lvalue (OR SYMBOL
+             (deref Expr)
+             (at Expr Expr)
+             (dot Expr SYMBOL INTLIT)
+             (pat Expr Expr)))
+
+(RULE :Call (call (ONE_OR_MANY Expr)))
+(RULE :Expr (OR INTLIT UINTLIT FLOATLIT CHARLITERAL STRINGLITERAL
+         Lvalue
+         (par Expr)
+         (addr Lvalue)
+         (nil) (false) (true)
+         (and Expr Expr)
+         (or Expr Expr)
+         (not Expr)
+         (neg Expr)
+         (sizeof Expr)
+         (oconstr Type (ZERO_OR_MANY (kv SYMBOL Expr)))
+         (aconstr Type (ZERO_OR_MANY Expr))
+         (add Type Expr Expr)
+         (sub Type Expr Expr)
+         (mul Type Expr Expr)
+         (div Type Expr Expr)
+         (mod Type Expr Expr)
+         (shr Type Expr Expr)
+         (shl Type Expr Expr)
+         (bitand Type Expr Expr)
+         (bitor Type Expr Expr)
+         (bitnot Type Expr Expr)
+         (bitxor Type Expr Expr)
+         (eq Expr Expr)
+         (neq Expr Expr)
+         (le Expr Expr)
+         (lt Expr Expr)
+         (cast Type Expr)
+         (conv Type Expr)
+         Call
+))
+
+(RULE :BranchValue (OR INTLIT UINTLIT CHARLITERAL SYMBOL))
+(RULE :BranchRange (OR BranchValue (range BranchValue BranchValue)))
+(RULE :BranchRanges (OR (ranges (ONE_OR_MANY BranchRange))))
+
+(RULE :VarDeclCommon SYMBOLDEF VarPragmas Type (OR . Expr))
+(RULE :VarDecl (OR (var VarDeclCommon)
+            (gvar VarDeclCommon)
+            (tvar VarDeclCommon)))
+
+(RULE :ConstDecl (const SYMBOLDEF VarPragmas Type Expr))
+(RULE :EmitStmt (emit (ONE_OR_MANY Expr)))
+
+(RULE :Stmt (OR Call
+         VarDecl
+         ConstDecl
+         EmitStmt
+         (asgn Lvalue Expr)
+         (if (ONE_OR_MANY (elif Expr StmtList)) (ZERO_OR_ONE (else StmtList)))
+         (while Expr StmtList)
+         (break)
+         (case Expr (ONE_OR_MANY (of BranchRanges StmtList)) (ZERO_OR_ONE (else StmtList)))
+         (lab SYMBOLDEF)
+         (jmp SYMBOL)
+         (ret Expr)))
+
+(RULE :StmtList (stmts (ZERO_OR_MANY Stmt)))
+
+(RULE :Param (param SYMBOLDEF ParamPragmas Type))
+(RULE :Params (OR . (ZERO_OR_MANY (params Param))))
+
+(RULE :ProcDecl (proc SYMBOLDEF Params Type ProcPragmas (OR . StmtList)))
+
+(RULE :FieldDecl (fld SYMBOLDEF FieldPragmas Type))
+
+(RULE :UnionDecl (union . (ZERO_OR_MANY FieldDecl)))
+(RULE :ObjDecl (object (OR . Type) (ZERO_OR_MANY FieldDecl)))
+(RULE :EnumFieldDecl (efld SYMBOLDEF (OR INTLIT UINTLIT CHARLITERAL)))
+(RULE :EnumDecl (enum Type (ONE_OR_MANY EnumFieldDecl)))
+
+(RULE :ProcType (proctype . Params Type ProcTypePragmas))
+
+(RULE :IntQualifier (OR (atomic) (ro)))
+(RULE :PtrQualifier (OR (atomic) (ro) (restrict)))
+
+(RULE :Type (OR SYMBOL
+         (i IntBits (ZERO_OR_MANY IntQualifier))
+         (u IntBits (ZERO_OR_MANY IntQualifier))
+         (f IntBits (ZERO_OR_MANY IntQualifier))
+         (c IntBits (ZERO_OR_MANY IntQualifier))
+         (bool (ZERO_OR_MANY IntQualifier))
+         (void)
+         (ptr Type (ZERO_OR_MANY PtrQualifier))
+         (flexarray Type)
+         (aptr Type (ZERO_OR_MANY PtrQualifier))
+         ProcType))
+(RULE :ArrayDecl (array Type Expr))
+(RULE :TypeDecl (type SYMBOLDEF TypePragmas (OR ProcType ObjDecl UnionDecl EnumDecl ArrayDecl)))
+
+(RULE :CallingConvention (OR (cdecl) (stdcall) (safecall) (syscall)
+                      (fastcall) (thiscall) (noconv) (member)))
+
+(RULE :Attribute (attr STRINGLITERAL))
+(RULE :Identifier (OR SYMBOL IDENT))
+(RULE :ProcPragma (OR (inline) (noinline) CallingConvention (varargs) (was Identifier)
+               (selectany) Attribute))
+(RULE :ProcTypePragma (OR CallingConvention (varargs) Attribute))
+
+(RULE :ProcTypePragmas (OR . (pragmas (ONE_OR_MANY ProcTypePragma))))
+(RULE :ProcPragmas (OR . (pragmas (ONE_OR_MANY ProcPragma))))
+
+(RULE :CommonPragma (OR (align INTLIT) (was Identifier) Attribute))
+(RULE :VarPragma CommonPragma)
+(RULE :VarPragmas (OR . (pragmas (ONE_OR_MANY VarPragma))))
+
+(RULE :ParamPragma (OR (was Identifier) Attribute))
+(RULE :ParamPragmas (OR . (pragmas (ONE_OR_MANY ParamPragma))))
+
+(RULE :FieldPragma (OR CommonPragma (bits INTLIT)))
+(RULE :FieldPragmas (pragmas (ONE_OR_MANY FieldPragma)))
+
+(RULE :TypePragma (OR CommonPragma (vector INTLIT)))
+(RULE :TypePragmas (OR . (pragmas (ONE_OR_MANY TypePragma))))
+
+(RULE :ExternDecl (imp (OR ProcDecl VarDecl ConstDecl)))
+(RULE :IgnoreDecl (nodecl (OR ProcDecl VarDecl ConstDecl)))
+(RULE :Include (incl STRINGLITERAL))
+
+(RULE :TopLevelConstruct (OR ExternDecl IgnoreDecl ProcDecl VarDecl ConstDecl
+                      TypeDecl Include EmitStmt))
+(RULE :Module (stmts (ZERO_OR_MANY TopLevelConstruct)))
+)
