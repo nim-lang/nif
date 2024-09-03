@@ -231,6 +231,11 @@ proc handleNumber(r: var Reader; result: var Token) =
           inc p
           inc result.s.len
 
+      if p < eof and ^p == 'u':
+        result.tk = UIntLit
+        inc p
+        # ignore the suffix 'u'
+
 proc handleLineInfo(r: var Reader; result: var Token) =
   useCpuRegisters:
     var col = 0
