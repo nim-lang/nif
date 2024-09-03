@@ -187,11 +187,6 @@ proc genx(c: var GeneratedCode; t: Tree; n: NodePos) =
   of ConvC: typedUnOp ""
   of SufC:
     let (value, suffix) = sons2(t, n)
-    case t[value].kind
-    of StrLit:
-      c.add makeCString(c.m.lits.strings[t[value].litId])
-    else:
-      assert c.m.lits.strings[t[suffix].litId].startsWith('u')
-      genUIntLit c, t[value].litId
+    genx(c, t, value)
   else:
     genLvalue c, t, n
