@@ -197,3 +197,23 @@ proc testIndexer(overwrite: bool) =
     removeFile rem
 
 testIndexer(overwrite)
+
+proc testNifGram(overwrite: bool) =
+  exec "nim c src/nifgram/nifgram"
+  var toRemove: seq[string] = @[]
+  let f = "src/nifc/nifc_grammar.nif"
+  exec ("src" / "nifgram" / "nifgram").addFileExt(ExeExt) & " " & f
+
+  let r = f.withExt(".nim")
+  let e = "tests/data/nifc_grammar.nim"
+  if not os.sameFileContent(r, e):
+    if overwrite:
+      moveFile(r, e)
+    else:
+      fatal "files have not the same content: " & e & " " & r
+  else:
+    toRemove.add r
+  for rem in toRemove:
+    removeFile rem
+
+testNifGram(overwrite)
