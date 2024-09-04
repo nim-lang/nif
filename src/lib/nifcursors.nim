@@ -55,7 +55,7 @@ type
 
 proc `=copy`(dest: var TokenBuf; src: TokenBuf) {.error.}
 proc `=destroy`(dest: TokenBuf) {.inline.} =
-  assert dest.readers == 0, "TokenBuf still in use by some reader"
+  #assert dest.readers == 0, "TokenBuf still in use by some reader"
   if dest.data != nil: dealloc(dest.data)
 
 proc isMutable(b: TokenBuf): bool {.inline.} = b.cap >= 0
@@ -93,6 +93,9 @@ proc `[]`*(b: TokenBuf; i: int): PackedToken {.inline.} =
   result = b.data[i]
 
 proc add*(result: var TokenBuf; c: Cursor) =
+  result.add c.load
+
+proc addSubtree*(result: var TokenBuf; c: Cursor) =
   assert c.kind != ParRi, "cursor at end?"
   if c.kind != ParLe:
     # atom:

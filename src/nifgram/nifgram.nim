@@ -106,7 +106,7 @@ proc emitForLoop(c: var Context; it: string): string =
   else:
     result = it
     ind c
-    c.outp.add "while not matchParRi(" & c.args & "):"
+    c.outp.add "while not peekParRi(" & c.args & "):"
 
 proc compileZeroOrMany(c: var Context; it: string): string =
   result = declTemp(c, "zm", "true")
@@ -118,7 +118,13 @@ proc compileZeroOrMany(c: var Context; it: string): string =
     ind c
     c.outp.add "if not "
     c.outp.add cond
-    c.outp.add ": " & result & " = false"
+    c.outp.add ":"
+    inc c.nesting
+    ind c
+    c.outp.add result & " = false"
+    ind c
+    c.outp.add "break"
+    dec c.nesting
   dec c.nesting
 
 proc compileOneOrMany(c: var Context; it: string): string =
@@ -133,7 +139,13 @@ proc compileOneOrMany(c: var Context; it: string): string =
     ind c
     c.outp.add "if not "
     c.outp.add cond
-    c.outp.add ": " & result & " = false"
+    c.outp.add ":"
+    inc c.nesting
+    ind c
+    c.outp.add result & " = false"
+    ind c
+    c.outp.add "break"
+    dec c.nesting
   dec c.nesting
 
 proc compileZeroOrOne(c: var Context; it: string): string =
@@ -161,7 +173,7 @@ proc compileKeyw(c: var Context; it: string): string =
 
   let cond = "isTag(" & c.args & ", " & tagAsNimIdent(tag) & ")"
   c.t = next(c.r)
-  if c.t.tk == ParRi:
+  if c.t.tk == ParRi and c.inMatch == 0:
     return cond
 
   let action = "handle" & upcase(tag)
@@ -228,9 +240,12 @@ proc compileKeyw(c: var Context; it: string): string =
     c.outp.add result
     c.outp.add ": "
     c.outp.add action & "(" & c.args & ", " & before & ")"
+    dec c.nesting, 2
+  else:
     dec c.nesting
-
-  dec c.nesting
+    ind c
+    c.outp.add "else: "
+    c.outp.add c.leaveBlock
 
 proc compileRuleInvokation(c: var Context; it: string): string =
   let ruleName = decodeStr(c.t)
@@ -423,7 +438,7 @@ proc compileMatch(c: var Context; it: string): string =
 
   ind c
   c.outp.add "block " & lab & ":"
-  c.leaveBlock = "rollback(" & c.args0 & ", " & before & "); break " & lab
+  c.leaveBlock = "(; rollback(" & c.args0 & ", " & before & "); break " & lab & ")"
 
   inc c.nesting
 
