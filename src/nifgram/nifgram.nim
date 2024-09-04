@@ -106,7 +106,7 @@ proc emitForLoop(c: var Context; it: string): string =
   else:
     result = it
     ind c
-    c.outp.add "while not matchParRi(" & c.args & "):"
+    c.outp.add "while not peekParRi(" & c.args & "):"
 
 proc compileZeroOrMany(c: var Context; it: string): string =
   result = declTemp(c, "zm", "true")
@@ -118,7 +118,13 @@ proc compileZeroOrMany(c: var Context; it: string): string =
     ind c
     c.outp.add "if not "
     c.outp.add cond
-    c.outp.add ": " & result & " = false; break"
+    c.outp.add ":"
+    inc c.nesting
+    ind c
+    c.outp.add result & " = false"
+    ind c
+    c.outp.add "break"
+    dec c.nesting
   dec c.nesting
 
 proc compileOneOrMany(c: var Context; it: string): string =
@@ -133,7 +139,13 @@ proc compileOneOrMany(c: var Context; it: string): string =
     ind c
     c.outp.add "if not "
     c.outp.add cond
-    c.outp.add ": " & result & " = false; break"
+    c.outp.add ":"
+    inc c.nesting
+    ind c
+    c.outp.add result & " = false"
+    ind c
+    c.outp.add "break"
+    dec c.nesting
   dec c.nesting
 
 proc compileZeroOrOne(c: var Context; it: string): string =
@@ -426,7 +438,7 @@ proc compileMatch(c: var Context; it: string): string =
 
   ind c
   c.outp.add "block " & lab & ":"
-  c.leaveBlock = "rollback(" & c.args0 & ", " & before & "); break " & lab
+  c.leaveBlock = "(; rollback(" & c.args0 & ", " & before & "); break " & lab & ")"
 
   inc c.nesting
 
