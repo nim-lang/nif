@@ -104,10 +104,10 @@ proc matchCall(c: var Context; it: var Item): bool =
   if isTag(c, it, CallT):
     var om3 = false
     while not peekParRi(c, it):
-      om3 = true
       if not matchExpr(c, it):
-        om3 = false
         break
+      else:
+        om3 = true
     if not om3:
       error(c, it, "invalid Call")
       return false
@@ -662,10 +662,10 @@ proc matchBranchRanges(c: var Context; it: var Item): bool =
     if isTag(c, it, RangesT):
       var om5 = false
       while not peekParRi(c, it):
-        om5 = true
         if not matchBranchRange(c, it):
-          om5 = false
           break
+        else:
+          om5 = true
       if not om5:
         error(c, it, "invalid BranchRanges")
         break or2
@@ -770,10 +770,10 @@ proc matchEmitStmt(c: var Context; it: var Item): bool =
   if isTag(c, it, EmitT):
     var om3 = false
     while not peekParRi(c, it):
-      om3 = true
       if not matchExpr(c, it):
-        om3 = false
         break
+      else:
+        om3 = true
     if not om3:
       error(c, it, "invalid EmitStmt")
       return false
@@ -820,7 +820,6 @@ proc matchStmt(c: var Context; it: var Item): bool =
     if isTag(c, it, IfT):
       var om7 = false
       while not peekParRi(c, it):
-        om7 = true
         when declared(handleElif):
           var before8 = save(c, it)
         var kw9 = false
@@ -835,26 +834,23 @@ proc matchStmt(c: var Context; it: var Item): bool =
           when declared(handleElif):
             if kw9: handleElif(c, it, before8)
         if not kw9:
-          om7 = false
           break
+        else:
+          om7 = true
       if not om7:
         error(c, it, "invalid Stmt")
         break or2
-      var zo10 = true
       when declared(handleElse):
-        var before11 = save(c, it)
-      var kw12 = false
+        var before10 = save(c, it)
+      var kw11 = false
       if isTag(c, it, ElseT):
         if not matchStmtList(c, it):
           error(c, it, "StmtList expected")
           break or2
-        kw12 = matchParRi(c, it)
+        kw11 = matchParRi(c, it)
         when declared(handleElse):
-          if kw12: handleElse(c, it, before11)
-      zo10 = kw12
-      if not zo10:
-        error(c, it, "invalid Stmt")
-        break or2
+          if kw11: handleElse(c, it, before10)
+      discard kw11
       kw6 = matchParRi(c, it)
       when declared(handleIf):
         if kw6: handleIf(c, it, before5)
@@ -862,8 +858,8 @@ proc matchStmt(c: var Context; it: var Item): bool =
       or1 = true
       break or2
     when declared(handleWhile):
-      var before13 = save(c, it)
-    var kw14 = false
+      var before12 = save(c, it)
+    var kw13 = false
     if isTag(c, it, WhileT):
       if not matchExpr(c, it):
         error(c, it, "Expr expected")
@@ -871,28 +867,27 @@ proc matchStmt(c: var Context; it: var Item): bool =
       if not matchStmtList(c, it):
         error(c, it, "StmtList expected")
         break or2
-      kw14 = matchParRi(c, it)
+      kw13 = matchParRi(c, it)
       when declared(handleWhile):
-        if kw14: handleWhile(c, it, before13)
-    if kw14:
+        if kw13: handleWhile(c, it, before12)
+    if kw13:
       or1 = true
       break or2
     if isTag(c, it, BreakT):
       or1 = true
       break or2
     when declared(handleCase):
-      var before15 = save(c, it)
-    var kw16 = false
+      var before14 = save(c, it)
+    var kw15 = false
     if isTag(c, it, CaseT):
       if not matchExpr(c, it):
         error(c, it, "Expr expected")
         break or2
-      var om17 = false
+      var om16 = false
       while not peekParRi(c, it):
-        om17 = true
         when declared(handleOf):
-          var before18 = save(c, it)
-        var kw19 = false
+          var before17 = save(c, it)
+        var kw18 = false
         if isTag(c, it, OfT):
           if not matchBranchRanges(c, it):
             error(c, it, "BranchRanges expected")
@@ -900,74 +895,71 @@ proc matchStmt(c: var Context; it: var Item): bool =
           if not matchStmtList(c, it):
             error(c, it, "StmtList expected")
             break or2
-          kw19 = matchParRi(c, it)
+          kw18 = matchParRi(c, it)
           when declared(handleOf):
-            if kw19: handleOf(c, it, before18)
-        if not kw19:
-          om17 = false
+            if kw18: handleOf(c, it, before17)
+        if not kw18:
           break
-      if not om17:
+        else:
+          om16 = true
+      if not om16:
         error(c, it, "invalid Stmt")
         break or2
-      var zo20 = true
       when declared(handleElse):
-        var before21 = save(c, it)
-      var kw22 = false
+        var before19 = save(c, it)
+      var kw20 = false
       if isTag(c, it, ElseT):
         if not matchStmtList(c, it):
           error(c, it, "StmtList expected")
           break or2
-        kw22 = matchParRi(c, it)
+        kw20 = matchParRi(c, it)
         when declared(handleElse):
-          if kw22: handleElse(c, it, before21)
-      zo20 = kw22
-      if not zo20:
-        error(c, it, "invalid Stmt")
-        break or2
-      kw16 = matchParRi(c, it)
+          if kw20: handleElse(c, it, before19)
+      discard kw20
+      kw15 = matchParRi(c, it)
       when declared(handleCase):
-        if kw16: handleCase(c, it, before15)
-    if kw16:
+        if kw15: handleCase(c, it, before14)
+    if kw15:
       or1 = true
       break or2
     when declared(handleLab):
-      var before23 = save(c, it)
-    var kw24 = false
+      var before21 = save(c, it)
+    var kw22 = false
     if isTag(c, it, LabT):
-      var sym25 = declareSym(c, it)
-      if not success(sym25):
+      var sym23 = declareSym(c, it)
+      if not success(sym23):
         error(c, it, "SYMBOLDEF expected")
         break or2
-      kw24 = matchParRi(c, it)
+      kw22 = matchParRi(c, it)
       when declared(handleLab):
-        if kw24: handleLab(c, it, before23)
-    if kw24:
+        if kw22: handleLab(c, it, before21)
+    if kw22:
       or1 = true
       break or2
     when declared(handleJmp):
-      var before26 = save(c, it)
-    var kw27 = false
+      var before24 = save(c, it)
+    var kw25 = false
     if isTag(c, it, JmpT):
       if not lookupSym(c, it):
         error(c, it, "SYMBOL expected")
         break or2
-      kw27 = matchParRi(c, it)
+      kw25 = matchParRi(c, it)
       when declared(handleJmp):
-        if kw27: handleJmp(c, it, before26)
-    if kw27:
+        if kw25: handleJmp(c, it, before24)
+    if kw25:
       or1 = true
       break or2
     when declared(handleRet):
-      var before28 = save(c, it)
-    var kw29 = false
+      var before26 = save(c, it)
+    var kw27 = false
     if isTag(c, it, RetT):
       if not matchExpr(c, it):
         error(c, it, "Expr expected")
         break or2
-      kw29 = matchParRi(c, it)
+      kw27 = matchParRi(c, it)
       when declared(handleRet):
-        if kw29: handleRet(c, it, before28)
-    if kw29:
+        if kw27: handleRet(c, it, before26)
+    if kw27:
       or1 = true
       break or2
   if not or1: return false
@@ -1187,10 +1179,10 @@ proc matchEnumDecl(c: var Context; it: var Item): bool =
       return false
     var om3 = false
     while not peekParRi(c, it):
-      om3 = true
       if not matchEnumFieldDecl(c, it):
-        om3 = false
         break
+      else:
+        om3 = true
     if not om3:
       error(c, it, "invalid EnumDecl")
       return false
@@ -1597,10 +1589,10 @@ proc matchProcTypePragmas(c: var Context; it: var Item): bool =
     if isTag(c, it, PragmasT):
       var om5 = false
       while not peekParRi(c, it):
-        om5 = true
         if not matchProcTypePragma(c, it):
-          om5 = false
           break
+        else:
+          om5 = true
       if not om5:
         error(c, it, "invalid ProcTypePragmas")
         break or2
@@ -1625,10 +1617,10 @@ proc matchProcPragmas(c: var Context; it: var Item): bool =
     if isTag(c, it, PragmasT):
       var om5 = false
       while not peekParRi(c, it):
-        om5 = true
         if not matchProcPragma(c, it):
-          om5 = false
           break
+        else:
+          om5 = true
       if not om5:
         error(c, it, "invalid ProcPragmas")
         break or2
@@ -1692,10 +1684,10 @@ proc matchVarPragmas(c: var Context; it: var Item): bool =
     if isTag(c, it, PragmasT):
       var om5 = false
       while not peekParRi(c, it):
-        om5 = true
         if not matchVarPragma(c, it):
-          om5 = false
           break
+        else:
+          om5 = true
       if not om5:
         error(c, it, "invalid VarPragmas")
         break or2
@@ -1742,10 +1734,10 @@ proc matchParamPragmas(c: var Context; it: var Item): bool =
     if isTag(c, it, PragmasT):
       var om5 = false
       while not peekParRi(c, it):
-        om5 = true
         if not matchParamPragma(c, it):
-          om5 = false
           break
+        else:
+          om5 = true
       if not om5:
         error(c, it, "invalid ParamPragmas")
         break or2
@@ -1787,10 +1779,10 @@ proc matchFieldPragmas(c: var Context; it: var Item): bool =
   if isTag(c, it, PragmasT):
     var om3 = false
     while not peekParRi(c, it):
-      om3 = true
       if not matchFieldPragma(c, it):
-        om3 = false
         break
+      else:
+        om3 = true
     if not om3:
       error(c, it, "invalid FieldPragmas")
       return false
@@ -1834,10 +1826,10 @@ proc matchTypePragmas(c: var Context; it: var Item): bool =
     if isTag(c, it, PragmasT):
       var om5 = false
       while not peekParRi(c, it):
-        om5 = true
         if not matchTypePragma(c, it):
-          om5 = false
           break
+        else:
+          om5 = true
       if not om5:
         error(c, it, "invalid TypePragmas")
         break or2

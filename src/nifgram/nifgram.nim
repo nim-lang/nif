@@ -132,8 +132,6 @@ proc compileOneOrMany(c: var Context; it: string): string =
   c.t = next(c.r)
   let tmp = emitForLoop(c, it)
   inc c.nesting
-  ind c
-  c.outp.add result & " = true"
   let cond = compileExpr(c, tmp)
   if cond != "true":
     ind c
@@ -142,21 +140,26 @@ proc compileOneOrMany(c: var Context; it: string): string =
     c.outp.add ":"
     inc c.nesting
     ind c
-    c.outp.add result & " = false"
-    ind c
     c.outp.add "break"
+    dec c.nesting
+    ind c
+    c.outp.add "else:"
+    inc c.nesting
+    ind c
+    c.outp.add result & " = true"
     dec c.nesting
   dec c.nesting
 
 proc compileZeroOrOne(c: var Context; it: string): string =
-  result = declTemp(c, "zo", "true")
+  # XXX This is not completely correct. It must add code to backtrack
+  # if `cond` failed.
   c.t = next(c.r)
 
   let cond = compileExpr(c, it)
   ind c
-  c.outp.add result
-  c.outp.add " = "
+  c.outp.add "discard "
   c.outp.add cond
+  result = "true"
 
 proc upcase(s: string): string =
   toUpperAscii(s[0]) & substr(s, 1)
