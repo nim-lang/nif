@@ -4,7 +4,8 @@
 # See the file "license.txt", included in this
 # distribution, for details about the copyright.
 
-## Validates a NIF file according to a grammar file that is also in NIF notation.
+## Generates code that can validate a NIF file according to a grammar file
+## that is also in NIF notation.
 ## See nifc/nifc_grammar.nif for a real world example.
 
 import std / [strutils, tables, sets]
@@ -179,18 +180,6 @@ proc compileKeyw(c: var Context; it: string): string =
   if c.t.tk == ParRi and c.inMatch == 0:
     return cond
 
-  let action = "handle" & upcase(tag)
-
-  var before = ""
-  if c.inMatch == 0:
-    ind c
-    c.outp.add "when declared("
-    c.outp.add action
-    c.outp.add "):"
-    inc c.nesting
-    before = declTemp(c, "before", "save(" & c.args & ")")
-    dec c.nesting
-
   result = if c.inMatch > 0: declTempOuter(c, "kw") else: declTemp(c, "kw")
 
   ind c
@@ -231,21 +220,10 @@ proc compileKeyw(c: var Context; it: string): string =
   c.outp.add result
   c.outp.add " = matchParRi(" & c.args & ")"
 
+  dec c.nesting
   if c.inMatch == 0:
-    ind c
-    c.outp.add "when declared("
-    c.outp.add action
-    c.outp.add "):"
-    inc c.nesting
-
-    ind c
-    c.outp.add "if "
-    c.outp.add result
-    c.outp.add ": "
-    c.outp.add action & "(" & c.args & ", " & before & ")"
-    dec c.nesting, 2
+    discard
   else:
-    dec c.nesting
     ind c
     c.outp.add "else: "
     c.outp.add c.leaveBlock
@@ -490,7 +468,7 @@ proc compileExpr(c: var Context; it: string): string =
     result = compileAtom(c, it)
     c.t = next(c.r)
 
-proc compileRule(c: var Context) =
+proc compileRule(c: var Context; it: string) =
   c.t = next(c.r)
   if c.t.tk == SymbolDef:
     c.tmpCounter = 0
@@ -507,6 +485,18 @@ proc compileRule(c: var Context) =
     c.ruleFlags = {}
     c.declaredVar = ""
     c.locals = ""
+
+    let action = "handle" & upcase(c.currentRule)
+
+    var before = ""
+    ind c
+    c.outp.add "when declared("
+    c.outp.add action
+    c.outp.add "):"
+    inc c.nesting
+    before = declTemp(c, "before", "save(" & c.args & ")")
+    dec c.nesting
+
     while c.t.tk == Ident:
       if c.t.s == "LATEDECL":
         c.ruleFlags.incl LateDecl
@@ -517,7 +507,7 @@ proc compileRule(c: var Context) =
       else:
         break
 
-    compileConcat c, "it"
+    compileConcat c, it
 
     if LateDecl in c.ruleFlags:
       if c.declaredVar.len == 0:
@@ -528,6 +518,15 @@ proc compileRule(c: var Context) =
           else: "addSym"
         ind c
         c.outp.add declProc & "(" & c.args0 & ", " & c.declaredVar & ")"
+
+    ind c
+    c.outp.add "when declared("
+    c.outp.add action
+    c.outp.add "):"
+    inc c.nesting
+    ind c
+    c.outp.add action & "(" & c.args & ", " & before & ")"
+    dec c.nesting
 
     ind c
     c.outp.add "return true"
@@ -562,7 +561,7 @@ proc compile(c: var Context) =
       error c, "GRAMMAR takes an IDENT that is the name of the starting rule"
     while true:
       if c.t.tk == ParLe and c.t.s == "RULE":
-        compileRule(c)
+        compileRule(c, "it")
       else:
         break
     if c.t.tk == ParRi:
