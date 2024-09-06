@@ -165,3 +165,22 @@ proc addParRi*(dest: var TokenBuf) =
 
 proc toString*(b: TokenBuf): string =
   result = nifstreams.toString(toOpenArray(b.data, 0, b.len-1))
+
+proc span*(c: Cursor): int =
+  result = 0
+  var c = c
+  if c.kind == ParLe:
+    var nested = 0
+    while true:
+      inc c
+      inc result
+      if c.kind == ParRi:
+        if nested == 0: break
+        dec nested
+      elif c.kind == ParLe: inc nested
+  inc c
+  inc result
+
+proc toString*(b: Cursor): string =
+  let counter = span(b)
+  result = nifstreams.toString(toOpenArray(cast[ptr UncheckedArray[PackedToken]](b.p), 0, counter-1))
