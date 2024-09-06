@@ -13,6 +13,13 @@ type
     p: ptr PackedToken
     rem: int
 
+const
+  ErrToken = [toToken(ParLe, ErrT, NoLineInfo),
+              toToken(ParRi, 0'u32, NoLineInfo)]
+
+proc errCursor*(): Cursor =
+  Cursor(p: addr ErrToken[0], rem: 2)
+
 proc fromBuffer*(x: openArray[PackedToken]): Cursor {.inline.} =
   Cursor(p: addr(x[0]), rem: x.len)
 
@@ -26,15 +33,27 @@ proc kind*(c: Cursor): TokenKind {.inline.} = c.load.kind
 proc info*(c: Cursor): PackedLineInfo {.inline.} = c.load.info
 
 proc litId*(c: Cursor): StrId {.inline.} = nifstreams.litId(c.load)
+proc symId*(c: Cursor): SymId {.inline.} = nifstreams.symId(c.load)
+
 proc intId*(c: Cursor): IntId {.inline.} = nifstreams.intId(c.load)
 proc uintId*(c: Cursor): UIntId {.inline.} = nifstreams.uintId(c.load)
 proc floatId*(c: Cursor): FloatId {.inline.} = nifstreams.floatId(c.load)
 proc tagId*(c: Cursor): TagId {.inline.} = nifstreams.tagId(c.load)
 
+proc tag*(c: Cursor): TagId {.inline.} =
+  if c.kind == ParLe: result = c.tagId
+  else: result = ErrT
+
+proc uoperand*(c: Cursor): uint32 {.inline.} = nifstreams.uoperand(c.load)
+
 proc inc*(c: var Cursor) {.inline.} =
   assert c.rem > 0
   c.p = cast[ptr PackedToken](cast[uint](c.p) + sizeof(PackedToken).uint)
   dec c.rem
+
+proc unsafeDec*(c: var Cursor) {.inline.} =
+  c.p = cast[ptr PackedToken](cast[uint](c.p) - sizeof(PackedToken).uint)
+  inc c.rem
 
 proc skip*(c: var Cursor) =
   if c.kind == ParLe:
