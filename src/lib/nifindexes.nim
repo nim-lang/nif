@@ -9,15 +9,12 @@
 import std / [os]
 import bitabs, lineinfos, nifreader, nifstreams, nifcursors
 
-const
-  PublicT = TagId(3)
-  PrivateT = TagId(4)
-  KvT = TagId(5)
+proc registerTag(tag: string): TagId = pool.tags.getOrIncl(tag)
 
 proc createIndex*(infile: string) =
-  registerTag "public", PublicT
-  registerTag "private", PrivateT
-  registerTag "kv", KvT
+  let PublicT = registerTag "public"
+  let PrivateT = registerTag "private"
+  let KvT = registerTag "kv"
 
   let indexName = changeFileExt(infile, ".idx.nif")
 
@@ -62,4 +59,5 @@ proc createIndex*(infile: string) =
   outp.writeLine ")"
   close outp
 
-createIndex paramStr(1)
+when isMainModule:
+  createIndex paramStr(1)
