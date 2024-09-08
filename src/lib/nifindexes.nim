@@ -6,7 +6,7 @@
 
 ## Create an index file for a NIF file.
 
-import std / [os]
+import std / [os, tables]
 import bitabs, lineinfos, nifreader, nifstreams, nifcursors
 
 proc registerTag(tag: string): TagId = pool.tags.getOrIncl(tag)
@@ -21,7 +21,8 @@ proc createIndex*(infile: string) =
   var s = nifstreams.open(infile)
   discard processDirectives(s.r)
   var target = -1
-  var previousTarget = 0
+  var previousPublicTarget = 0
+  var previousPrivateTarget = 0
 
   var public = default(TokenBuf)
   var private = default(TokenBuf)
@@ -38,15 +39,21 @@ proc createIndex*(infile: string) =
       let info = t.info
       let sym = t.symId
       let tb = next(s)
+      let isPublic = tb.kind == Ident and pool.strings[tb.litId] == "x"
       var dest =
-        if tb.kind == Ident and pool.strings[tb.litId] == "x":
+        if isPublic:
           addr(public)
         else:
           addr(private)
+      let diff = if isPublic: target - previousPublicTarget
+                 else: target - previousPrivateTarget
       dest[].buildTree KvT, info:
         dest[].add toToken(Symbol, sym, NoLineInfo)
-        dest[].add toToken(IntLit, pool.integers.getOrIncl(target - previousTarget), NoLineInfo)
-      previousTarget = target
+        dest[].add toToken(IntLit, pool.integers.getOrIncl(diff), NoLineInfo)
+      if isPublic:
+        previousPublicTarget = target
+      else:
+        previousPrivateTarget = target
 
   public.addParRi()
   private.addParRi()
@@ -58,6 +65,74 @@ proc createIndex*(infile: string) =
   outp.writeLine toString(private)
   outp.writeLine ")"
   close outp
+
+type
+  NifIndexEntry* = object
+    offset*: int
+    info*: PackedLineInfo
+  NifIndex* = object
+    public*, private*: Table[string, NifIndexEntry]
+
+proc readSection(s: var Stream; tab: var Table[string, NifIndexEntry]) =
+  let KvT = registerTag "kv"
+  var previousOffset = 0
+  var t = next(s)
+  var nested = 0
+  while t.kind != EofToken:
+    let info = t.info
+    if t.kind == ParLe:
+      inc nested
+      if t.tagId == KvT:
+        t = next(s)
+        var key: string
+        if t.kind == Symbol:
+          key = pool.syms[t.symId]
+        elif t.kind == Ident:
+          key = pool.strings[t.litId]
+        else:
+          assert false, "invalid (kv) construct: symbol expected"
+        t = next(s) # skip Symbol
+        if t.kind == IntLit:
+          let offset = pool.integers[t.intId] + previousOffset
+          tab[key] = NifIndexEntry(offset: offset, info: info)
+          previousOffset = offset
+        else:
+          assert false, "invalid (kv) construct: IntLit expected"
+        t = next(s) # skip offset
+        if t.kind == ParRi:
+          t = next(s)
+        else:
+          assert false, "invalid (kv) construct: IntLit expected"
+    elif t.kind == ParRi:
+      t = next(s)
+      dec nested
+      if nested == 0:
+        break
+    else:
+      t = next(s)
+  if t.kind == ParRi:
+    discard next(s)
+
+proc readIndex*(infile: string): NifIndex =
+  let indexName = changeFileExt(infile, ".idx.nif")
+  var s = nifstreams.open(indexName)
+  discard processDirectives(s.r)
+
+  let PublicT = registerTag "public"
+  let PrivateT = registerTag "private"
+  let IndexT = registerTag "index"
+
+  result = default(NifIndex)
+  while true:
+    let t = next(s)
+    if t.kind == EofToken: break
+    if t.kind == ParLe:
+      if t.tagId == PublicT:
+        readSection s, result.public
+      elif t.tagId == PrivateT:
+        readSection s, result.private
+      elif t.tagId == IndexT:
+        discard
 
 when isMainModule:
   createIndex paramStr(1)
