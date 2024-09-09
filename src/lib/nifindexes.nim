@@ -77,7 +77,7 @@ proc readSection(s: var Stream; tab: var Table[string, NifIndexEntry]) =
   let KvT = registerTag "kv"
   var previousOffset = 0
   var t = next(s)
-  var nested = 0
+  var nested = 1
   while t.kind != EofToken:
     let info = t.info
     if t.kind == ParLe:
@@ -103,20 +103,20 @@ proc readSection(s: var Stream; tab: var Table[string, NifIndexEntry]) =
           t = next(s)
         else:
           assert false, "invalid (kv) construct: IntLit expected"
+      else:
+        assert false, "expected (kv) construct"
     elif t.kind == ParRi:
-      t = next(s)
       dec nested
       if nested == 0:
         break
+      t = next(s)
     else:
       t = next(s)
-  if t.kind == ParRi:
-    discard next(s)
 
-proc readIndex*(infile: string): NifIndex =
-  let indexName = changeFileExt(infile, ".idx.nif")
+proc readIndex*(indexName: string): NifIndex =
   var s = nifstreams.open(indexName)
-  discard processDirectives(s.r)
+  let res = processDirectives(s.r)
+  assert res == Success
 
   let PublicT = registerTag "public"
   let PrivateT = registerTag "private"
