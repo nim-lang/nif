@@ -78,7 +78,7 @@ SymbolDef ::= <according to NIF's spec>
 Number ::= <according to NIF's spec>
 CharLiteral ::= <according to NIF's spec>
 StringLiteral ::= <according to NIF's spec>
-IntBits ::= [0-9]+ | 'M'
+IntBits ::= ('+' | '-') [0-9]+
 
 Lvalue ::= Symbol | (deref Expr) |
              (at Expr Expr) | # array indexing
@@ -212,7 +212,7 @@ Module ::= (stmts TopLevelConstruct*)
 
 Notes:
 
-- `IntBits` is either 8, 16, 32, 64, etc. or the identifier `M` which stands
+- `IntBits` is either 8, 16, 32, 64, etc. or the `-1` which stands
   for **m**achine word size.
 - There can be more calling conventions than only `cdecl` and `stdcall`.
 - `case` is mapped to a `switch` but the generation of `break` is handled
