@@ -232,6 +232,10 @@ proc tagId*(n: PackedToken): TagId {.inline.} =
   assert n.kind == ParLe, $n.kind
   TagId(n.uoperand)
 
+proc tag*(n: PackedToken): TagId {.inline.} =
+  if n.kind == ParLe: result = n.tagId
+  else: result = ErrT
+
 proc `is`*(n: PackedToken; val: string): bool {.inline.} =
   n.kind == ParLe and pool.tags[n.tagId] == val
 
