@@ -106,7 +106,12 @@ proc traverseTypes(m: Module; o: var TypeOrder) =
 template integralBits(types: TypeGraph; t: TypeId): string =
   let lit = types[t.firstSon].litId
   let r = c.m.lits.strings[lit]
-  (if r == "M": "" else: r)
+  let res = parseBiggestInt(r)
+  case res
+  of -1:
+    ""
+  else: # 8, 16, 32, 64 etc.
+    $res
 
 proc genProcTypePragma(c: var GeneratedCode; types: TypeGraph; n: NodePos; isVarargs: var bool) =
   # ProcTypePragma ::= CallingConvention | (varargs) | Attribute
@@ -162,7 +167,7 @@ proc genType(c: var GeneratedCode; types: TypeGraph; t: TypeId; name = "") =
   of IntC: atom "NI" & types.integralBits(t)
   of UIntC: atom "NU" & types.integralBits(t)
   of FloatC: atom "NF" & types.integralBits(t)
-  of BoolC: atom "NB" & types.integralBits(t)
+  of BoolC: atom "NB8"
   of CharC: atom "NC" & types.integralBits(t)
   of Sym:
     atom mangle(c.m.lits.strings[types[t].litId])
