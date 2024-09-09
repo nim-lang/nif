@@ -12,7 +12,7 @@ import "../lib" / [bitabs, lineinfos, stringviews, packedtrees, nifreader, keyma
 
 type
   NifcKind* = enum
-    Empty, Ident, Sym, Symdef, IntLit, UIntLit, FloatLit, CharLit, StrLit,
+    Empty, Ident, Sym, SymDef, IntLit, UIntLit, FloatLit, CharLit, StrLit,
     Err, # must not be an atom!
     AtC = "at"
     DerefC = "deref"
@@ -89,7 +89,7 @@ type
     PtrC = "ptr"
     ArrayC = "array"
     FlexarrayC = "flexarray"
-    AptrC = "aptr"
+    APtrC = "aptr"
     TypeC = "type"
     CdeclC = "cdecl"
     StdcallC = "stdcall"
@@ -182,7 +182,7 @@ proc parse*(r: var Reader; dest: var PackedTree[NifcKind]; m: var Module; parent
     # Remember where to find this symbol:
     let litId = m.lits.strings.getOrIncl(decodeStr t)
     m.defs[litId] = dest.currentPos
-    dest.addAtom Symdef, litId, currentInfo
+    dest.addAtom SymDef, litId, currentInfo
   of StringLit:
     dest.addAtom StrLit, m.lits.strings.getOrIncl(decodeStr t), currentInfo
   of CharLit:
@@ -222,7 +222,7 @@ proc memSizes*(m: Module) =
 template elementType*(types: TypeGraph; n: NodePos): NodePos = n.firstSon
 
 proc litId*(n: PackedNode[NifcKind]): StrId {.inline.} =
-  assert n.kind in {Ident, Sym, Symdef, IntLit, UIntLit, FloatLit, CharLit, StrLit}
+  assert n.kind in {Ident, Sym, SymDef, IntLit, UIntLit, FloatLit, CharLit, StrLit}
   StrId(n.uoperand)
 
 type
@@ -287,7 +287,7 @@ proc toString(b: var Builder; tree: PackedTree[NifcKind]; n: NodePos; m: Module)
     b.addIdent(m.lits.strings[tree[n].litId])
   of Sym, IntLit, UIntLit, FloatLit:
     b.addSymbol(m.lits.strings[tree[n].litId])
-  of Symdef:
+  of SymDef:
     b.addSymbolDef(m.lits.strings[tree[n].litId])
   of CharLit:
     b.addCharLit char(tree[n].uoperand)
