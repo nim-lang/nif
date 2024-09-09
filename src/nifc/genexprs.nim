@@ -22,7 +22,7 @@ template typedBinOp(opr) =
   genx c, t, b
   c.add ParRi
 
-template cmpop(opr) =
+template cmpOp(opr) =
   let (a, b) = sons2(t, n)
   c.add ParLe
   genx c, t, a
@@ -30,7 +30,7 @@ template cmpop(opr) =
   genx c, t, b
   c.add ParRi
 
-template unop(opr) =
+template unOp(opr) =
   c.add ParLe
   c.add opr
   genx c, t, n.firstSon
@@ -63,7 +63,7 @@ proc genLvalue(c: var GeneratedCode; t: Tree; n: NodePos) =
     let name = mangle(c.m.lits.strings[lit])
     c.add name
     c.requestedSyms.incl name
-  of DerefC: unop "*"
+  of DerefC: unOp "*"
   of AtC:
     let (a, i) = sons2(t, n)
     genx c, t, a
@@ -157,7 +157,7 @@ proc genx(c: var GeneratedCode; t: Tree; n: NodePos) =
     c.add ParLe
     genx c, t, arg
     c.add ParRi
-  of AddrC: unop "&"
+  of AddrC: unOp "&"
   of SizeofC:
     let arg = n.firstSon
     c.add "sizeof"
@@ -176,13 +176,13 @@ proc genx(c: var GeneratedCode; t: Tree; n: NodePos) =
   of BitorC: typedBinOp " | "
   of BitxorC: typedBinOp " ^ "
   of BitnotC: typedUnOp " ~ "
-  of AndC: cmpop " && "
-  of OrC: cmpop " || "
-  of NotC: unOp " !"
-  of NegC: unOp " -"
-  of EqC: cmpop " == "
-  of LeC: cmpop " <= "
-  of LtC: cmpop " < "
+  of AndC: cmpOp " && "
+  of OrC: cmpOp " || "
+  of NotC: cmpOp " !"
+  of NegC: cmpOp " -"
+  of EqC: cmpOp " == "
+  of LeC: cmpOp " <= "
+  of LtC: cmpOp " < "
   of CastC: typedUnOp ""
   of ConvC: typedUnOp ""
   of SufC:
