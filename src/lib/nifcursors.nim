@@ -40,9 +40,7 @@ proc uintId*(c: Cursor): UIntId {.inline.} = nifstreams.uintId(c.load)
 proc floatId*(c: Cursor): FloatId {.inline.} = nifstreams.floatId(c.load)
 proc tagId*(c: Cursor): TagId {.inline.} = nifstreams.tagId(c.load)
 
-proc tag*(c: Cursor): TagId {.inline.} =
-  if c.kind == ParLe: result = c.tagId
-  else: result = ErrT
+proc tag*(c: Cursor): TagId {.inline.} = nifstreams.tag(c.load)
 
 proc uoperand*(c: Cursor): uint32 {.inline.} = nifstreams.uoperand(c.load)
 
