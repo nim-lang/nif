@@ -56,7 +56,7 @@ proc recordDependency(m: Module; o: var TypeOrder; parent, child: TypeId) =
     else:
       if not containsOrIncl(o.lookedAt, ch.int):
         traverseObjectBody(m, o, ch)
-      o.ordered.add ch, TypedefStruct
+      o.ordered.add tracebackTypeC(m, ch), TypedefStruct
   of Sym:
     # follow the symbol to its definition:
     let id = m.types[ch].litId
