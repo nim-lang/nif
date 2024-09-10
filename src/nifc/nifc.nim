@@ -35,6 +35,7 @@ proc handleCmdLine() =
   var action = ""
   var args: seq[string] = @[]
   var bits = sizeof(int)*8
+  var output = ""
   for kind, key, val in getopt():
     case kind
     of cmdArgument:
@@ -52,6 +53,7 @@ proc handleCmdLine() =
         else: quit "invalid value for --bits"
       of "help", "h": writeHelp()
       of "version", "v": writeVersion()
+      of "out", "o": output = val
       else: writeHelp()
     of cmdEnd: assert false, "cannot happen"
 
@@ -63,9 +65,15 @@ proc handleCmdLine() =
       quit "command takes a filename"
     else:
       let destExt = if action == "c": ".c" else: ".cpp"
-      let inp = args[0]
-      let outp = if args.len >= 2: args[1].addFileExt(destExt) else: changeFileExt(inp, destExt)
-      generateCode inp, outp, bits
+      if args.len == 1:
+        let inp = args[0]
+        let outp = if output.len > 0: output.addFileExt(destExt) else: changeFileExt(inp, destExt)
+        generateCode inp, outp, bits
+      else:
+        for i in 0..<args.len:
+          let inp = args[i]
+          let outp = changeFileExt(inp, destExt)
+          generateCode inp, outp, bits
   else:
     quit "Invalid action: " & action
 
