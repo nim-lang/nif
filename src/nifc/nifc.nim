@@ -20,7 +20,7 @@ const
 Usage:
   nifc [options] [command] [arguments]
 Command:
-  c|cpp file.nif [output.c]     convert the NIF file to C|C++
+  c|cpp file.nif [file2.nif]    convert NIF files to C|C++
 
 Options:
   --bits:N              (int M) has N bits; possible values: 64, 32, 16
@@ -63,9 +63,10 @@ proc handleCmdLine() =
       quit "command takes a filename"
     else:
       let destExt = if action == "c": ".c" else: ".cpp"
-      let inp = args[0]
-      let outp = if args.len >= 2: args[1].addFileExt(destExt) else: changeFileExt(inp, destExt)
-      generateCode inp, outp, bits
+      for i in 0..<args.len:
+        let inp = args[i]
+        let outp = changeFileExt(inp, destExt)
+        generateCode inp, outp, bits
   else:
     quit "Invalid action: " & action
 
