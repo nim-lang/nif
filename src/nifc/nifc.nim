@@ -20,7 +20,7 @@ const
 Usage:
   nifc [options] [command] [arguments]
 Command:
-  c|cpp file.nif                convert NIF files to C|C++
+  c|cpp file.nif [file2.nif]    convert NIF files to C|C++
 
 Options:
   --bits:N              (int M) has N bits; possible values: 64, 32, 16
