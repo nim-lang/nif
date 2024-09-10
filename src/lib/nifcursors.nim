@@ -109,6 +109,12 @@ proc `[]`*(b: TokenBuf; i: int): PackedToken {.inline.} =
   assert i >= 0 and i < b.len
   result = b.data[i]
 
+proc cursorAt*(b: var TokenBuf; i: int): Cursor {.inline.} =
+  assert i >= 0 and i < b.len
+  if b.readers == 0: freeze(b)
+  inc b.readers
+  result = Cursor(p: addr b.data[i], rem: b.len-i)
+
 proc add*(result: var TokenBuf; c: Cursor) =
   result.add c.load
 

@@ -13,7 +13,7 @@ import "../lib" / [stringviews, nifreader]
 
 type
   RuleFlag = enum
-    LateDecl, Overloadable
+    LateDecl, Overloadable, Collect
   Context = object
     r: Reader
     t: Token
@@ -24,7 +24,7 @@ type
     outp, forw, locals: string
     nesting, tmpCounter, inBinding, inMatch: int
     procPrefix, signature, args0, leaveBlock: string
-    declaredVar: string
+    declaredVar, collectInto, flipVar: string
     specTags, foundTags: OrderedTable[string, int] # maps to the arity for more checking
 
 proc error(c: var Context; msg: string) =
@@ -251,6 +251,12 @@ proc compileSymbolDef(c: var Context; it: string): string =
   result = "success(" & c.declaredVar & ")"
 
 proc compileAtom(c: var Context; it: string): string =
+  if c.collectInto.len > 0:
+    ind c
+    c.outp.add c.collectInto
+    c.outp.add ".add "
+    c.outp.add "save(" & c.args & ")"
+
   if c.t.tk == DotToken:
     result = "matchEmpty(" & c.args & ")"
   elif c.t.tk == Ident:
@@ -270,6 +276,8 @@ proc compileAtom(c: var Context; it: string): string =
       result = "matchUIntLit(" & c.args & ")"
     elif c.t.s == "FLOATLIT":
       result = "matchFloatLit(" & c.args & ")"
+    elif c.t.s == "ANY":
+      result = "matchAny(" & c.args & ")"
     else:
       result = compileRuleInvokation(c, it)
   else:
@@ -381,6 +389,49 @@ proc compileEnter(c: var Context; it: string): string =
   dec c.nesting
   result = "true"
 
+proc compileFlipFlop(c: var Context; it, mode: string): string =
+  c.t = next(c.r)
+
+  var op = ""
+  if c.t.tk == StringLit:
+    op = decodeStr(c.t)
+    c.t = next(c.r)
+  else:
+    error c, "string literal after FLIP|FLOP expected"
+
+  let isFlip = mode == "flip"
+  if isFlip:
+    ind c
+    result = declTemp(c, "valid")
+  else:
+    result = "true"
+
+  ind c
+  let flp = declTemp(c, "flp", "push" & op & "(" & c.args &
+                    (if isFlip: (", " & result) else: "") & ")")
+
+  if c.flipVar.len == 0:
+    c.flipVar = flp
+
+  if isFlip:
+    ind c
+    c.outp.add "if " & result & ":"
+    inc c.nesting
+
+  ind c
+  c.outp.add "try:"
+  inc c.nesting
+  compileConcat c, it
+  dec c.nesting
+  ind c
+  c.outp.add "finally:"
+  inc c.nesting
+  ind c
+  c.outp.add "pop" & op & "(" & c.args0 & ", " & flp & ")"
+  dec c.nesting
+  if isFlip:
+    dec c.nesting
+
 proc compileLet(c: var Context; it: string): string =
   c.t = next(c.r)
 
@@ -453,6 +504,10 @@ proc compileExpr(c: var Context; it: string): string =
       result = compileDo(c, it)
     elif c.t.s == "ENTER":
       result = compileEnter(c, it)
+    elif c.t.s == "FLIP":
+      result = compileFlipFlop(c, it, "flip")
+    elif c.t.s == "FLOP":
+      result = compileFlipFlop(c, it, "flop")
     elif c.t.s == "LET":
       result = compileLet(c, it)
     elif c.t.s == "MATCH":
@@ -485,17 +540,8 @@ proc compileRule(c: var Context; it: string) =
     c.ruleFlags = {}
     c.declaredVar = ""
     c.locals = ""
-
-    let action = "handle" & upcase(c.currentRule)
-
-    var before = ""
-    ind c
-    c.outp.add "when declared("
-    c.outp.add action
-    c.outp.add "):"
-    inc c.nesting
-    before = declTemp(c, "before", "save(" & c.args & ")")
-    dec c.nesting
+    c.collectInto = ""
+    c.flipVar = ""
 
     while c.t.tk == Ident:
       if c.t.s == "LATEDECL":
@@ -504,8 +550,25 @@ proc compileRule(c: var Context; it: string) =
       elif c.t.s == "OVERLOADABLE":
         c.ruleFlags.incl Overloadable
         c.t = next(c.r)
+      elif c.t.s == "COLLECT":
+        c.ruleFlags.incl Collect
+        c.t = next(c.r)
       else:
         break
+
+    let action = "handle" & upcase(c.currentRule)
+    var before = ""
+    if Collect in c.ruleFlags:
+      before = declTemp(c, "before", "@[save(" & c.args & ")]")
+      c.collectInto = before
+    else:
+      ind c
+      c.outp.add "when declared("
+      c.outp.add action
+      c.outp.add "):"
+      inc c.nesting
+      before = declTemp(c, "before", "save(" & c.args & ")")
+      dec c.nesting
 
     compileConcat c, it
 
@@ -519,14 +582,19 @@ proc compileRule(c: var Context; it: string) =
         ind c
         c.outp.add declProc & "(" & c.args0 & ", " & c.declaredVar & ")"
 
-    ind c
-    c.outp.add "when declared("
-    c.outp.add action
-    c.outp.add "):"
-    inc c.nesting
-    ind c
-    c.outp.add action & "(" & c.args & ", " & before & ")"
-    dec c.nesting
+    let moreArgs = before & (if c.flipVar.len > 0: (", " & c.flipVar) else: "")
+    if Collect in c.ruleFlags:
+      ind c
+      c.outp.add action & "(" & c.args & ", " & moreArgs & ")"
+    else:
+      ind c
+      c.outp.add "when declared("
+      c.outp.add action
+      c.outp.add "):"
+      inc c.nesting
+      ind c
+      c.outp.add action & "(" & c.args & ", " & moreArgs & ")"
+      dec c.nesting
 
     ind c
     c.outp.add "return true"
