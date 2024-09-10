@@ -145,6 +145,13 @@ type
 proc addAtom*[L](dest: var PackedTree[NifcKind]; kind: NifcKind; lit: L; info: PackedLineInfo) =
   packedtrees.addAtom dest, kind, uint32(lit), info
 
+proc tracebackTypeC*(m: Module, pos: NodePos): NodePos =
+  assert m.types[pos].kind in {ObjectC, UnionC, ArrayC}
+  var pos = int pos
+  while m.types[NodePos pos].kind != TypeC:
+    dec pos
+  result = NodePos pos
+
 proc parse*(r: var Reader; dest: var PackedTree[NifcKind]; m: var Module; parentInfo: PackedLineInfo): bool =
   let t = next(r)
   var currentInfo = parentInfo
@@ -181,7 +188,7 @@ proc parse*(r: var Reader; dest: var PackedTree[NifcKind]; m: var Module; parent
   of SymbolDef:
     # Remember where to find this symbol:
     let litId = m.lits.strings.getOrIncl(decodeStr t)
-    m.defs[litId] = dest.currentPos
+    m.defs[litId] = NodePos(int(dest.currentPos) - 1)
     dest.addAtom SymDef, litId, currentInfo
   of StringLit:
     dest.addAtom StrLit, m.lits.strings.getOrIncl(decodeStr t), currentInfo
