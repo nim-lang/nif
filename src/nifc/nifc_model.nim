@@ -145,7 +145,14 @@ type
 proc addAtom*[L](dest: var PackedTree[NifcKind]; kind: NifcKind; lit: L; info: PackedLineInfo) =
   packedtrees.addAtom dest, kind, uint32(lit), info
 
-proc parse*(r: var Reader; dest: var PackedTree[NifcKind]; m: var Module; parentInfo: PackedLineInfo): bool =
+proc tracebackTypeC*(m: Module, pos: NodePos): NodePos =
+  assert m.types[pos].kind in {ObjectC}
+  var pos = int pos
+  while m.types[NodePos pos].kind != TypeC:
+    dec pos
+  result = NodePos pos
+
+proc parse*(r: var Reader; dest: var PackedTree[NifcKind]; m: var Module; parentInfo: PackedLineInfo; pos = NodePos(0)): bool =
   let t = next(r)
   var currentInfo = parentInfo
   if t.filename.len == 0:
@@ -165,9 +172,10 @@ proc parse*(r: var Reader; dest: var PackedTree[NifcKind]; m: var Module; parent
   of ParLe:
     let kind = whichNifcKeyword(t.s, Err)
     var d = if kind == TypeC: addr(m.types) else: addr(dest)
+    let cPos = currentPos(d[])
     copyInto(d[], kind, currentInfo):
       while true:
-        let progress = parse(r, d[], m, currentInfo)
+        let progress = parse(r, d[], m, currentInfo, cPos)
         if not progress: break
   of UnknownToken:
     copyInto dest, Err, currentInfo:
@@ -181,7 +189,8 @@ proc parse*(r: var Reader; dest: var PackedTree[NifcKind]; m: var Module; parent
   of SymbolDef:
     # Remember where to find this symbol:
     let litId = m.lits.strings.getOrIncl(decodeStr t)
-    m.defs[litId] = dest.currentPos
+    assert pos != NodePos(0)
+    m.defs[litId] = pos
     dest.addAtom SymDef, litId, currentInfo
   of StringLit:
     dest.addAtom StrLit, m.lits.strings.getOrIncl(decodeStr t), currentInfo

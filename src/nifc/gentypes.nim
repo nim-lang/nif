@@ -49,7 +49,7 @@ proc recordDependency(m: Module; o: var TypeOrder; parent, child: TypeId) =
     else:
       if not containsOrIncl(o.lookedAt, obj.int):
         traverseObjectBody(m, o, obj)
-      o.ordered.add obj, decl
+      o.ordered.add tracebackTypeC(m, ch), decl
   of ArrayC:
     if viaPointer:
       o.forwardedDecls.add parent, TypedefStruct

@@ -8,8 +8,24 @@
     (efld :ValueB +1)
     (efld :ValueC +6)
   ))
+
+  (type :MyObject2.m .
+  (object . (fld :a1 . (i +32 atomic))
+    (fld :a2 . (i +64 atomic))
+    (fld :a3 . (bool .))
+    (fld :a4 . MyObject3.m)
+  )
+  )
+
+  (type :MyObject3.m .
+  (object . (fld :a1 . (i +32 atomic))
+    (fld :a2 . (i +64 atomic))
+    (fld :a3 . (bool .))
+  )
+  )
+
   (nodecl (proc :printf.c (params (param :f.1 . (ptr FILE.c))) (void) (pragmas (varargs)) .))
-  (proc :main.c . (i M +90) . (stmts
+  (proc :main.c . (i -1 +90) . (stmts
     (call printf.c "hello %s" "abc")
     (ret +0)
   ))
