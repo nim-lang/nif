@@ -146,7 +146,7 @@ proc addAtom*[L](dest: var PackedTree[NifcKind]; kind: NifcKind; lit: L; info: P
   packedtrees.addAtom dest, kind, uint32(lit), info
 
 proc tracebackTypeC*(m: Module, pos: NodePos): NodePos =
-  assert m.types[pos].kind in {ObjectC}
+  assert m.types[pos].kind in {ObjectC, UnionC}
   var pos = int pos
   while m.types[NodePos pos].kind != TypeC:
     dec pos
