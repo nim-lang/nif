@@ -20,7 +20,7 @@ const
 Usage:
   nifc [options] [command] [arguments]
 Command:
-  c|cpp file.nif [output.c]     convert the NIF file to C|C++
+  c|cpp file.nif                convert NIF files to C|C++
 
 Options:
   --bits:N              (int M) has N bits; possible values: 64, 32, 16
@@ -35,7 +35,6 @@ proc handleCmdLine() =
   var action = ""
   var args: seq[string] = @[]
   var bits = sizeof(int)*8
-  var output = ""
   for kind, key, val in getopt():
     case kind
     of cmdArgument:
@@ -53,7 +52,6 @@ proc handleCmdLine() =
         else: quit "invalid value for --bits"
       of "help", "h": writeHelp()
       of "version", "v": writeVersion()
-      of "out", "o": output = val
       else: writeHelp()
     of cmdEnd: assert false, "cannot happen"
 
@@ -65,15 +63,10 @@ proc handleCmdLine() =
       quit "command takes a filename"
     else:
       let destExt = if action == "c": ".c" else: ".cpp"
-      if args.len == 1:
-        let inp = args[0]
-        let outp = if output.len > 0: output.addFileExt(destExt) else: changeFileExt(inp, destExt)
+      for i in 0..<args.len:
+        let inp = args[i]
+        let outp = changeFileExt(inp, destExt)
         generateCode inp, outp, bits
-      else:
-        for i in 0..<args.len:
-          let inp = args[i]
-          let outp = changeFileExt(inp, destExt)
-          generateCode inp, outp, bits
   else:
     quit "Invalid action: " & action
 
