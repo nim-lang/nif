@@ -152,7 +152,7 @@ proc tracebackTypeC*(m: Module, pos: NodePos): NodePos =
     dec pos
   result = NodePos pos
 
-proc parse*(r: var Reader; dest: var PackedTree[NifcKind]; m: var Module; parentInfo: PackedLineInfo; pos = NodePos(0)): bool =
+proc parse*(r: var Reader; dest: var PackedTree[NifcKind]; m: var Module; parentInfo: PackedLineInfo): bool =
   let t = next(r)
   var currentInfo = parentInfo
   if t.filename.len == 0:
@@ -172,10 +172,9 @@ proc parse*(r: var Reader; dest: var PackedTree[NifcKind]; m: var Module; parent
   of ParLe:
     let kind = whichNifcKeyword(t.s, Err)
     var d = if kind == TypeC: addr(m.types) else: addr(dest)
-    let cPos = currentPos(d[])
     copyInto(d[], kind, currentInfo):
       while true:
-        let progress = parse(r, d[], m, currentInfo, cPos)
+        let progress = parse(r, d[], m, currentInfo)
         if not progress: break
   of UnknownToken:
     copyInto dest, Err, currentInfo:
@@ -189,8 +188,7 @@ proc parse*(r: var Reader; dest: var PackedTree[NifcKind]; m: var Module; parent
   of SymbolDef:
     # Remember where to find this symbol:
     let litId = m.lits.strings.getOrIncl(decodeStr t)
-    assert pos != NodePos(0)
-    m.defs[litId] = pos
+    m.defs[litId] = NodePos(int(dest.currentPos) - 1)
     dest.addAtom SymDef, litId, currentInfo
   of StringLit:
     dest.addAtom StrLit, m.lits.strings.getOrIncl(decodeStr t), currentInfo
