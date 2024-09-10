@@ -48,7 +48,6 @@ type
     f: MemFile
     buf: string
     line*: int32 # file position within the NIF file, not affected by line annotations
-    err*: bool
     trackDefs*: bool
     isubs, ksubs: Table[StringView, (TokenKind, StringView)]
     defs: Table[string, pchar]
@@ -79,26 +78,23 @@ template `-!`(a, b: pchar): int = cast[int](a) - cast[int](b)
 template `^`(p: pchar): char = p[0]
 
 proc open*(filename: string): Reader =
-  var err = false
   let f = try:
-            memfiles.open(filename)
-          except:
-            err = true
-            default(MemFile)
-  result = Reader(f: f, err: err, p: nil)
-  if not err:
-    result.p = cast[pchar](result.f.mem)
-    result.eof = result.p +! result.f.size
+      memfiles.open(filename)
+    except:
+      quit "cannot open: " & filename
+  result = Reader(f: f, p: nil)
+  result.p = cast[pchar](result.f.mem)
+  result.eof = result.p +! result.f.size
 
 proc openFromBuffer*(buf: sink string): Reader =
-  result = Reader(f: default(MemFile), err: true, buf: ensureMove buf)
+  result = Reader(f: default(MemFile), buf: ensureMove buf)
   result.p = cast[pchar](addr result.buf[0])
   result.eof = result.p +! result.buf.len
   result.f.mem = result.p
   result.f.size = result.buf.len
 
 proc close*(r: var Reader) =
-  if not r.err: close r.f
+  close r.f
 
 template useCpuRegisters(body) {.dirty.} =
   var p = r.p # encourage the code generator to use a register for this.

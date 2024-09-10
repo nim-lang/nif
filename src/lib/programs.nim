@@ -38,8 +38,6 @@ proc loadModule(p: var Program; suffix: string) =
   if not p.modules.hasKey(suffix):
     let nifFile = p.nifdir / (suffix & ".nif")
     var r = nifreader.open(nifFile)
-    if r.err:
-      fatal "cannot open: " & nifFile
     r.trackDefs = true
     let res = processDirectives(r)
     if res != Success:
