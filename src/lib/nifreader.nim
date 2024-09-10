@@ -78,7 +78,10 @@ template `-!`(a, b: pchar): int = cast[int](a) - cast[int](b)
 template `^`(p: pchar): char = p[0]
 
 proc open*(filename: string): Reader =
-  let f = memfiles.open(filename)
+  let f = try:
+      memfiles.open(filename)
+    except:
+      quit "cannot open: " & filename
   result = Reader(f: f, p: nil)
   result.p = cast[pchar](result.f.mem)
   result.eof = result.p +! result.f.size
