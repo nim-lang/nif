@@ -1,0 +1,19 @@
+(.nif24)
+(stmts
+  (incl "<stdio.h>")
+  (proc :genericProc.c . (void) (pragmas (selectany)) (stmts
+    (call printf.c "hello %s" "file t3")
+  )
+  )
+
+  (proc :genericProc2.c . (void) (pragmas (selectany)) (stmts
+    (call printf.c "hello %s" "file t3")
+  )
+  )
+
+  (proc :main.c . (i -1 +90) . (stmts
+    (call printf.c "hello %s" "abc")
+    (call printf.c "hello %d" (suf +12 "i64"))
+    (ret +0)
+  ))
+)

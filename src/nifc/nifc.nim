@@ -63,10 +63,17 @@ proc handleCmdLine() =
       quit "command takes a filename"
     else:
       let destExt = if action == "c": ".c" else: ".cpp"
+      var s = State()
+      createDir("nifcache")
       for i in 0..<args.len:
         let inp = args[i]
-        let outp = changeFileExt(inp, destExt)
-        generateCode inp, outp, bits
+        let outp = "nifcache" / splitFile(inp).name & destExt
+        generateCode s, inp, outp, bits
+      if s.selects.len > 0:
+        var h = open("nifcache/select_any.h", fmWrite)
+        for x in s.selects:
+          write h, "#include \"" & extractFileName(x) & "\"\n"
+        h.close()
   else:
     quit "Invalid action: " & action
 

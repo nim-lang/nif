@@ -141,6 +141,7 @@ type
     types*: TypeGraph
     defs*: Table[StrId, NodePos]
     lits*: Literals
+    filename*: string
 
 proc addAtom*[L](dest: var PackedTree[NifcKind]; kind: NifcKind; lit: L; info: PackedLineInfo) =
   packedtrees.addAtom dest, kind, uint32(lit), info
@@ -216,6 +217,7 @@ proc load*(filename: string): Module =
   var r = nifreader.open(filename)
   discard nifreader.processDirectives(r)
   result = parse(r)
+  result.filename = filename
   r.close
 
 proc memSizes*(m: Module) =

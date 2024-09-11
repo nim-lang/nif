@@ -11,7 +11,7 @@
 
 import std / [assertions, syncio, tables, sets, intsets, formatfloat, strutils]
 from std / strutils import parseBiggestInt, parseBiggestUInt, parseInt
-from std / os import changeFileExt
+from std / os import changeFileExt, splitFile, extractFileName
 
 import .. / lib / [bitabs, packedtrees]
 import mangler, nifc_model, cprelude
@@ -80,6 +80,9 @@ type
     headerFile: seq[Token]
     generatedTypes: IntSet
     requestedSyms: HashSet[string]
+
+  State* = object
+    selects*: seq[string]
 
 proc initGeneratedCode*(m: sink Module): GeneratedCode =
   result = GeneratedCode(m: m, code: @[], tokens: initBiTable[Token, string]())
@@ -173,6 +176,8 @@ template emitData(t: PredefinedToken) = c.data.add Token(t)
 proc genStrLit(c: var GeneratedCode; litId: StrId): Token =
   let cstr = makeCString(c.m.lits.strings[litId])
   result = c.tokens.getOrIncl cstr
+
+include selectany
 
 type
   ProcFlag = enum
@@ -335,9 +340,13 @@ proc genProcDecl(c: var GeneratedCode; t: Tree; n: NodePos; isExtern: bool) =
   if isExtern:
     c.code.setLen signatureBegin
   else:
+    if isSelectAny in flags:
+      genRoutineGuardBegin(c, name)
     c.add CurlyLe
     genStmt c, t, prc.body
     c.add CurlyRi
+    if isSelectAny in flags:
+      genRoutineGuardEnd(c)
 
 proc genInclude(c: var GeneratedCode; t: Tree; n: NodePos) =
   let lit = t[n.firstSon].litId
@@ -410,7 +419,7 @@ proc traverseCode(c: var GeneratedCode; t: Tree; n: NodePos) =
           c.init.add c.code[i]
         setLen c.code, oldLen
 
-proc generateCode*(inp, outp: string; intmSize: int) =
+proc generateCode*(s: var State, inp, outp: string; intmSize: int) =
   var c = initGeneratedCode(load(inp))
 
   var co = TypeOrder()
@@ -435,7 +444,9 @@ proc generateCode*(inp, outp: string; intmSize: int) =
   f.f.close
 
   if c.headerFile.len > 0:
-    var h = open(outp.changeFileExt(".h"), fmWrite)
+    let selectHeader = outp.changeFileExt(".h")
+    s.selects.add selectHeader
+    var h = open(selectHeader, fmWrite)
     for x in items(c.headerFile):
       write h, c.tokens[x]
     h.close()
