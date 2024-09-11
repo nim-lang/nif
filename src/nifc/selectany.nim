@@ -4,7 +4,7 @@
 # See the file "license.txt", included in this
 # distribution, for details about the copyright.
 
-# imported from codegen.nim
+# included from codegen.nim
 
 ##[
 
@@ -58,36 +58,51 @@ void genericProc() // always declare header
 
 ]##
 
-proc genRoutineGuardBegin(c: var GeneratedCode; f: var CppFunc) =
-  let guardName = c.tokens[f.e.name] & "__" & $c.m.canonName
+proc addHeadFile(c: var GeneratedCode; s: string) {.inline.} =
+  c.headerFile.add c.tokens.getOrIncl(s)
 
-  c.headerFile.add c.tokens.getOrIncl"""#ifndef """
-  c.headerFile.add f.e.name
-  c.headerFile.add "__impl"
-  c.headerFile.add NewLine
+proc addHeadFile(c: var GeneratedCode; t: PredefinedToken) {.inline.} =
+  c.headerFile.add Token(t)
 
-  c.headerFile.add "  #define "
-  c.headerFile.add f.e.name
-  c.headerFile.add "__impl"
-  c.headerFile.add NewLine
+proc inclHeader(c: var GeneratedCode) =
+  let header = c.tokens.getOrIncl("\"select_any.h\"")
+  if not c.includedHeaders.containsOrIncl(int header):
+    c.includes.add Token(IncludeKeyword)
+    c.includes.add header
+    c.includes.add Token NewLine
 
-  c.headerFile.add "  #define "
-  c.headerFile.add guardName
-  c.headerFile.add NewLine
+proc genRoutineGuardBegin(c: var GeneratedCode; name: string) =
+  let guardName = name & "__" & mangle(c.m.filename.extractFilename)
 
-  c.headerFile.add "#endif"
-  c.headerFile.add NewLine
+  inclHeader(c)
 
-  emit NewLine
-  emit "#ifdef "
-  emit guardName
-  emit NewLine
+  c.addHeadFile """#ifndef """
+  c.addHeadFile name
+  c.addHeadFile "__impl"
+  c.addHeadFile NewLine
+
+  c.addHeadFile "  #define "
+  c.addHeadFile name
+  c.addHeadFile "__impl"
+  c.addHeadFile NewLine
+
+  c.addHeadFile "  #define "
+  c.addHeadFile guardName
+  c.addHeadFile NewLine
+
+  c.addHeadFile "#endif"
+  c.addHeadFile NewLine
+
+  c.add NewLine
+  c.add "#ifdef "
+  c.add guardName
+  c.add NewLine
 
 
 proc genRoutineGuardEnd(c: var GeneratedCode) =
-  emit "#else"
-  emit NewLine
-  emit Semicolon
-  emit "#endif"
-  emit NewLine
-  emit NewLine
+  c.add "#else"
+  c.add NewLine
+  c.add Semicolon
+  c.add "#endif"
+  c.add NewLine
+  c.add NewLine
