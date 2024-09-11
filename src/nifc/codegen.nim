@@ -11,7 +11,7 @@
 
 import std / [assertions, syncio, tables, sets, intsets, formatfloat, strutils]
 from std / strutils import parseBiggestInt, parseBiggestUInt, parseInt
-from std / os import changeFileExt, splitFile
+from std / os import changeFileExt, splitFile, extractFileName
 
 import .. / lib / [bitabs, packedtrees]
 import mangler, nifc_model, cprelude

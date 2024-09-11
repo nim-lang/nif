@@ -217,3 +217,12 @@ proc testNifGram(overwrite: bool) =
     removeFile rem
 
 testNifGram(overwrite)
+
+proc testNifc(overwrite: bool) =
+  exec "nim c src/nifc/nifc"
+  let t1 = "tests/nifc/selectany/t1.nif"
+  let t2 = "tests/nifc/selectany/t2.nif"
+  let t3 = "tests/nifc/selectany/t3.nif"
+  exec ("src" / "nifc" / "nifc").addFileExt(ExeExt) & " c" & " " & t1 & " " & t2 & " " & t3
+
+testNifc(overwrite)
