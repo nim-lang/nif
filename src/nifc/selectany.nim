@@ -72,7 +72,7 @@ proc inclHeader(c: var GeneratedCode) =
     c.includes.add Token NewLine
 
 proc genRoutineGuardBegin(c: var GeneratedCode; name: string) =
-  let guardName = name & "__" & mangle(c.m.filename.extractFilename)
+  let guardName = name & "__" & mangle(c.m.filename.splitFile.name)
 
   inclHeader(c)
 
