@@ -1,7 +1,7 @@
 (.nif24)
 
 (GRAMMAR Module
-(RULE :IntBits (OR INTLIT (IDENT "M")))
+(RULE :IntBits INTLIT)
 (RULE :Lvalue (OR SYMBOL
              (deref Expr)
              (at Expr Expr)
