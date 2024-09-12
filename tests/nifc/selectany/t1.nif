@@ -12,10 +12,5 @@
   )
   )
 
-  (proc :main.c . (i -1 +90) . (stmts
-    (call printf.c "hello %s" "abc")
-    (call printf.c "hello %d" (suf +12 "i64"))
-    (ret +0)
-  ))
 
 )

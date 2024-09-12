@@ -82,7 +82,7 @@ type
     requestedSyms: HashSet[string]
 
   State* = object
-    selects*: seq[string]
+    selects*: seq[string] # names of modules with functions with selectany pragmas
 
 proc initGeneratedCode*(m: sink Module): GeneratedCode =
   result = GeneratedCode(m: m, code: @[], tokens: initBiTable[Token, string]())

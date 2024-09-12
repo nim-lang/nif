@@ -9,8 +9,8 @@
 
 ## NIFC driver program.
 
-import std / [parseopt, strutils, os]
-import codegen
+import std / [parseopt, strutils, os, osproc]
+import codegen, makefile
 
 const
   Version = "0.2"
@@ -35,6 +35,7 @@ proc handleCmdLine() =
   var action = ""
   var args: seq[string] = @[]
   var bits = sizeof(int)*8
+  var toRun = false
   for kind, key, val in getopt():
     case kind
     of cmdArgument:
@@ -52,6 +53,7 @@ proc handleCmdLine() =
         else: quit "invalid value for --bits"
       of "help", "h": writeHelp()
       of "version", "v": writeVersion()
+      of "run", "r": toRun = true
       else: writeHelp()
     of cmdEnd: assert false, "cannot happen"
 
@@ -64,16 +66,28 @@ proc handleCmdLine() =
     else:
       let destExt = if action == "c": ".c" else: ".cpp"
       var s = State()
-      createDir("nifcache")
+      var moduleNames = newSeq[string](args.len)
+      let nifcacheDir = "nifcache"
+      createDir(nifcacheDir)
       for i in 0..<args.len:
         let inp = args[i]
-        let outp = "nifcache" / splitFile(inp).name & destExt
+        moduleNames[i] = splitFile(inp).name
+        let outp = nifcacheDir / moduleNames[i] & destExt
         generateCode s, inp, outp, bits
       if s.selects.len > 0:
-        var h = open("nifcache/select_any.h", fmWrite)
+        var h = open(nifcacheDir / "select_any.h", fmWrite)
         for x in s.selects:
           write h, "#include \"" & extractFileName(x) & "\"\n"
         h.close()
+      let appName = moduleNames[^1]
+      let makefilePath = nifcacheDir / "Makefile." & appName
+      generateMakefile(makefilePath, moduleNames, appName, nifcacheDir, action)
+      if toRun:
+        let (output, exitCode) = execCmdEx("make -f " & makefilePath)
+        if exitCode != 0:
+          quit "execution of an external program failed: " & output
+        if execCmd("./" & appName) != 0:
+          quit "execution of an external program failed: " & appName
   else:
     quit "Invalid action: " & action
 

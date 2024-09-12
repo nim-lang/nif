@@ -223,8 +223,8 @@ proc testNifc(overwrite: bool) =
   let t1 = "tests/nifc/selectany/t1.nif"
   let t2 = "tests/nifc/selectany/t2.nif"
   let t3 = "tests/nifc/selectany/t3.nif"
-  exec ("src" / "nifc" / "nifc").addFileExt(ExeExt) & " c " & t1 & " " & t2 & " " & t3
+  exec ("src" / "nifc" / "nifc").addFileExt(ExeExt) & " c -r " & t1 & " " & t2 & " " & t3
   let hello = "tests/nifc/hello.nif"
-  exec ("src" / "nifc" / "nifc").addFileExt(ExeExt) & " c " & hello
+  exec ("src" / "nifc" / "nifc").addFileExt(ExeExt) & " c -r " & hello
 
 testNifc(overwrite)
