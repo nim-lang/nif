@@ -15,15 +15,7 @@ proc matchTypePragmas(c: var Context; it: var Item): bool
 proc matchIntBits(c: var Context; it: var Item): bool =
   when declared(handleIntBits):
     var before1 = save(c, it)
-  var or2 = false
-  block or3:
-    if matchIntLit(c, it):
-      or2 = true
-      break or3
-    if matchIdent(c, it, "M"):
-      or2 = true
-      break or3
-  if not or2: return false
+  if not matchIntLit(c, it): return false
   when declared(handleIntBits):
     handleIntBits(c, it, before1)
   return true
