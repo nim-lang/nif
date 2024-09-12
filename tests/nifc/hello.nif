@@ -47,6 +47,14 @@
     (call printf.c "foo %d" x.c)
   )))
 
+  (type :MyObject.ptr.flexarray .
+  (object . (fld :a1 . (i +32 atomic))
+    (fld :a2 . (i +64 atomic))
+    (fld :a3 . (bool .))
+    (fld :a4 . (ptr MyObject.flexarray))
+  )
+  )
+
   (type :MyObject.flexarray .
   (object . (fld :a1 . (i +32 atomic))
     (fld :a2 . (i +64 atomic))
@@ -79,11 +87,6 @@
   )
   )
 
-  (type :MyObject.sequence.base .
-    (object .
-      (fld :cap . (i -1 .))
-      (fld :data . (flexarray (i +64 .)))
-    ))
 
   (type :MyObject.my.sequence .
   (object .
@@ -91,6 +94,12 @@
     (fld :p . (ptr MyObject.sequence.base .))
   )
   )
+
+  (type :MyObject.sequence.base .
+    (object .
+      (fld :cap . (i -1 .))
+      (fld :data . (flexarray (i +64 .)))
+  ))
 
   (proc :main.c . (i -1 atomic) . (stmts
     (var :x.c . (i +32 .) +12)
