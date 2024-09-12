@@ -14,7 +14,7 @@ from std / strutils import parseBiggestInt, parseBiggestUInt, parseInt
 from std / os import changeFileExt, splitFile, extractFileName
 
 import .. / lib / [bitabs, packedtrees]
-import mangler, nifc_model, cprelude
+import mangler, nifc_model, cprelude, noptions
 
 type
   Token = distinct uint32
@@ -80,9 +80,6 @@ type
     headerFile: seq[Token]
     generatedTypes: IntSet
     requestedSyms: HashSet[string]
-
-  State* = object
-    selects*: seq[string] # names of modules with functions with selectany pragmas
 
 proc initGeneratedCode*(m: sink Module): GeneratedCode =
   result = GeneratedCode(m: m, code: @[], tokens: initBiTable[Token, string]())

@@ -10,7 +10,7 @@
 ## NIFC driver program.
 
 import std / [parseopt, strutils, os, osproc]
-import codegen, makefile
+import codegen, makefile, noptions
 
 const
   Version = "0.2"
@@ -67,13 +67,16 @@ proc handleCmdLine() =
     if args.len == 0:
       quit "command takes a filename"
     else:
+      var s = State(backend: if action == "c": backendC else: backendCpp)
       let destExt = if action == "c": ".c" else: ".cpp"
       when defined(windows):
-        if action == "c":
+        case s.backend
+        of backendC:
           ccOption = "gcc"
-        else:
+        of backendCpp:
           ccOption = "g++"
-      var s = State()
+        else:
+          quit "unreachable"
       var moduleNames = newSeq[string](args.len)
       let nifcacheDir = "nifcache"
       createDir(nifcacheDir)
@@ -89,9 +92,16 @@ proc handleCmdLine() =
         h.close()
       let appName = moduleNames[^1]
       let makefilePath = nifcacheDir / "Makefile." & appName
-      generateMakefile(makefilePath, moduleNames, appName, nifcacheDir, action)
+      generateMakefile(s, makefilePath, moduleNames, appName, nifcacheDir, action)
       if toRun:
-        let ccIdent = if action == "c": "CC" else: "CXX"
+        let ccIdent =  case s.backend
+          of backendC:
+            "CC"
+          of backendCpp:
+            "CXX"
+          else:
+            quit "unreachable"
+
         let makeCmd =
           if ccOption.len > 0: "make " & ccIdent & "=" & ccOption & " -f " & makefilePath
           else: "make -f " & makefilePath

@@ -1,11 +1,19 @@
 import std/[os, strformat]
+import noptions
 
-proc generateMakefile*(path: string; moduleNames: seq[string]; app: string; nifcache: string; compileOption: string) =
+proc generateMakefile*(s: State, path: string; moduleNames: seq[string]; app: string; nifcache: string; compileOption: string) =
   var h = open(path, fmWrite)
   var makefileContent = "program:"
   var programBody = ""
   var objectBody = ""
-  let cc = if compileOption == "c": "$(CC)" else: "$(CXX)"
+  let cc =
+    case s.backend
+    of backendC:
+      "$(CC)"
+    of backendCpp:
+      "$(CXX)"
+    else:
+      quit "unreachable"
   for i in 0..<moduleNames.len:
     makefileContent.add " " & moduleNames[i] & ".o"
     programBody.add " " & nifcache / moduleNames[i] & ".o"
@@ -16,4 +24,4 @@ proc generateMakefile*(path: string; moduleNames: seq[string]; app: string; nifc
   makefileContent.add &"\n	{cc} -o " & app & programBody & "\n\n" & objectBody
 
   h.write(makefileContent)
-  h.close() # TODO: exception?
+  h.close()
