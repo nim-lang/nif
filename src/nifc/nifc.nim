@@ -36,6 +36,8 @@ proc handleCmdLine() =
   var args: seq[string] = @[]
   var bits = sizeof(int)*8
   var toRun = false
+
+  var ccOption = ""
   for kind, key, val in getopt():
     case kind
     of cmdArgument:
@@ -54,6 +56,7 @@ proc handleCmdLine() =
       of "help", "h": writeHelp()
       of "version", "v": writeVersion()
       of "run", "r": toRun = true
+      of "cc": ccOption = val
       else: writeHelp()
     of cmdEnd: assert false, "cannot happen"
 
@@ -65,6 +68,11 @@ proc handleCmdLine() =
       quit "command takes a filename"
     else:
       let destExt = if action == "c": ".c" else: ".cpp"
+      when defined(windows):
+        if action == "c":
+          ccOption = "gcc"
+        else:
+          ccOption = "g++"
       var s = State()
       var moduleNames = newSeq[string](args.len)
       let nifcacheDir = "nifcache"
@@ -83,7 +91,11 @@ proc handleCmdLine() =
       let makefilePath = nifcacheDir / "Makefile." & appName
       generateMakefile(makefilePath, moduleNames, appName, nifcacheDir, action)
       if toRun:
-        let (output, exitCode) = execCmdEx("make -f " & makefilePath)
+        let ccIdent = if action == "c": "CC" else: "CXX"
+        let makeCmd =
+          if ccOption.len > 0: "make " & ccIdent & "=" & ccOption & " -f " & makefilePath
+          else: "make -f " & makefilePath
+        let (output, exitCode) = execCmdEx(makeCmd)
         if exitCode != 0:
           quit "execution of an external program failed: " & output
         if execCmd("./" & appName) != 0:

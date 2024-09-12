@@ -5,7 +5,7 @@ proc generateMakefile*(path: string; moduleNames: seq[string]; app: string; nifc
   var makefileContent = "program:"
   var programBody = ""
   var objectBody = ""
-  let cc = if compileOption == "c": "cc" else: "cxx"
+  let cc = if compileOption == "c": "$(CC)" else: "$(CXX)"
   for i in 0..<moduleNames.len:
     makefileContent.add " " & moduleNames[i] & ".o"
     programBody.add " " & nifcache / moduleNames[i] & ".o"
@@ -16,4 +16,4 @@ proc generateMakefile*(path: string; moduleNames: seq[string]; app: string; nifc
   makefileContent.add &"\n	{cc} -o " & app & programBody & "\n\n" & objectBody
 
   h.write(makefileContent)
-  h.close()
+  h.close() # TODO: exception?
