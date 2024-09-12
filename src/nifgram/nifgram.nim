@@ -562,6 +562,20 @@ proc compile(c: var Context) =
     while true:
       if c.t.tk == ParLe and c.t.s == "RULE":
         compileRule(c, "it")
+      elif c.t.tk == ParLe and c.t.s == "COM":
+        # skip comment:
+        var nested = 1
+        while true:
+          c.t = next(c.r)
+          if c.t.tk == EofToken:
+            error c, "')' expected, but got " & $c.t
+            break
+          if c.t.tk == ParLe: inc nested
+          elif c.t.tk == ParRi:
+            dec nested
+            if nested == 0:
+              c.t = next(c.r)
+              break
       else:
         break
     if c.t.tk == ParRi:
