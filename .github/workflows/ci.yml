@@ -103,6 +103,13 @@ jobs:
           echo '${{ github.workspace }}'"/external/mingw-${{ matrix.target.cpu }}/bin" >> $GITHUB_PATH
           echo '${{ github.workspace }}'"/external/dlls-${{ matrix.target.cpu }}" >> $GITHUB_PATH
 
+      - name: Install make dependencies (Windows)
+        if: runner.os == 'Windows'
+        uses: Cyberboss/install-winget@v1
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: winget install ezwinports.make --disable-interactivity --accept-source-agreements
+
       # - name: Restore Nim from cache
       #   if: >
       #     steps.nim-compiler-cache.outputs.cache-hit != 'true' &&
