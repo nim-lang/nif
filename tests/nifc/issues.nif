@@ -1,0 +1,31 @@
+(.nif24)
+(stmts
+  (type :MyProc.e . (proctype . (params (param :x . (ptr MyObject3.m)) (param :y . (ptr MyObject4.m))) MyObject2.m . ))
+
+  (type :MyObject2.m .
+  (object . (fld :a1 . (i +32 atomic))
+    (fld :a2 . (i +64 atomic))
+    (fld :a3 . (bool .))
+  )
+  )
+
+  (type :MyObject3.m .
+  (object . (fld :a1 . (i +32 atomic))
+    (fld :a2 . (i +64 atomic))
+    (fld :a3 . (bool .))
+  )
+  )
+
+  
+  (type :MyObject4.m .
+  (object . (fld :a1 . (i +32 atomic))
+    (fld :a2 . (i +64 atomic))
+    (fld :a3 . (bool .))
+  )
+  )
+
+  (proc :main.c . (i +32 atomic) . (stmts
+    (var :x.c . (i +32 .) +12)
+    (ret +0)
+  ))
+)

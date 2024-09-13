@@ -81,6 +81,13 @@ proc traverseObjectBody(m: Module; o: var TypeOrder; t: TypeId) =
       recordDependency m, o, t, x
     else: discard
 
+proc traverseProctypeBody(m: Module; o: var TypeOrder; t: TypeId) =
+  let procType = asProcType(m.types, t)
+  for param in sons(m.types, procType.params):
+    let paramDecl = asParamDecl(m.types, param)
+    recordDependency m, o, t, paramDecl.typ
+  recordDependency m, o, t, procType.returnType
+
 proc traverseTypes(m: Module; o: var TypeOrder) =
   for ch in sons(m.types, StartPos):
     let decl = asTypeDecl(m.types, ch)
@@ -96,8 +103,7 @@ proc traverseTypes(m: Module; o: var TypeOrder) =
       traverseObjectBody m, o, t
       o.ordered.add ch, TypedefStruct
     of ProctypeC:
-      # XXX
-      #traverseProctypeBody m, o, t
+      traverseProctypeBody m, o, t
       o.ordered.add ch, TypedefKeyword
     of EnumC:
       o.ordered.add ch, TypedefKeyword
@@ -194,8 +200,9 @@ proc genType(c: var GeneratedCode; types: TypeGraph; t: TypeId; name = "") =
     c.add ParLe
     var i = 0
     for ch in sons(types, decl.params):
+      let param = asParamDecl(types, ch)
       if i > 0: c.add Comma
-      genType c, types, ch
+      genType c, types, param.typ
       inc i
     if isVarargs:
       if i > 0: c.add Comma
