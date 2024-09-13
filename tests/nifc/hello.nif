@@ -101,7 +101,7 @@
       (fld :data . (flexarray (i +64 .)))
   ))
 
-  (proc :main.c . (i -1 atomic) . (stmts
+  (proc :main.c . (i +32 atomic) . (stmts
     (var :x.c . (i +32 .) +12)
     (call printf.c "hello %s\0A" "abc")
     (call printf.c "hello %d\0A" (suf +12 "i64"))

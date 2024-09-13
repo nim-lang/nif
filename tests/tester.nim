@@ -228,5 +228,8 @@ proc testNifc(overwrite: bool) =
   exec ("src" / "nifc" / "nifc").addFileExt(ExeExt) & " c -r " & hello
   exec ("src" / "nifc" / "nifc").addFileExt(ExeExt) & " c -r --opt:speed " & hello
   exec ("src" / "nifc" / "nifc").addFileExt(ExeExt) & " c -r --opt:size " & hello
+  # TEST CPP
+  exec ("src" / "nifc" / "nifc").addFileExt(ExeExt) & " cpp -r " & hello
+  exec ("src" / "nifc" / "nifc").addFileExt(ExeExt) & " cpp -r --opt:speed " & hello
 
 testNifc(overwrite)
