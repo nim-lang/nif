@@ -23,7 +23,8 @@ Command:
   c|cpp file.nif [file2.nif]    convert NIF files to C|C++
 
 Options:
-  -r --run                  run the makefile and the compiled program
+  -r, --run                 run the makefile and the compiled program
+  --cc:SYMBOL               specify the C compiler
   --opt:none|speed|size     optimize not at all or for speed|size
   --bits:N                  (int M) has N bits; possible values: 64, 32, 16
   --version                 show the version
