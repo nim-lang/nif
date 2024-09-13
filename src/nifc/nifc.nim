@@ -10,7 +10,7 @@
 ## NIFC driver program.
 
 import std / [parseopt, strutils, os, osproc]
-import codegen, makefile, noptions, extccomp
+import codegen, makefile, noptions
 
 const
   Version = "0.2"
@@ -64,7 +64,14 @@ proc handleCmdLine() =
       of "help", "h": writeHelp()
       of "version", "v": writeVersion()
       of "run", "r": toRun = true
-      of "cc": setCC(s.config, val)
+      of "cc":
+        case val.normalize
+        of "gcc":
+          s.config.cCompiler = ccGcc
+        of "clang":
+          s.config.cCompiler = ccCLang
+        else:
+          quit "unknown C compiler: '$1'. Available options are: gcc, clang" % [val]
       of "opt":
         case val.normalize
         of "speed":
@@ -109,17 +116,38 @@ proc handleCmdLine() =
       if toRun:
         var cflags = ""
         if optOptimizeSpeed in s.config.options:
-          cflags.add getOptSpeed(s.config, s.config.cCompiler)
+          cflags.add "-O3"
         elif optOptimizeSize in s.config.options:
-          cflags.add getOptSize(s.config, s.config.cCompiler)
+          cflags.add "-Os"
+
+        var cCompiler: string = ""
+        case s.config.cCompiler
+        of ccGcc:
+          case s.config.backend
+          of backendC:
+            cCompiler = "gcc"
+          of backendCpp:
+            cCompiler = "g++"
+          else:
+            quit "unreachable"
+        of ccCLang:
+          case s.config.backend
+          of backendC:
+            cCompiler = "clang"
+          of backendCpp:
+            cCompiler = "clang++"
+          else:
+            quit "unreachable"
+        else:
+          quit "unreachable"
 
         let makeCmd = case s.config.backend
           of backendC:
-            "make " & "CC=" & s.config.getCompilerExe(s.config.cCompiler) &
+            "make " & "CC=" & cCompiler &
                 " " & "CFLAGS=" & "\"" & cflags & "\"" &
                 " -f " & makefilePath
           of backendCpp:
-            "make " & "CXX=" & s.config.getCppCompiler(s.config.cCompiler) &
+            "make " & "CXX=" & cCompiler &
                 " " & "CXXFLAGS=" & "\"" & cflags & "\"" &
                 " -f " & makefilePath
           else:
