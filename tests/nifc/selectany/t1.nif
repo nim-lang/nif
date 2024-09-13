@@ -8,7 +8,7 @@
   )
 
   (proc :genericProc2.c . (void) (pragmas (selectany)) (stmts
-    (call printf.c "hello %s" "file t1")
+    (call printf.c "hello %s\0A" "file t1")
   )
   )
 

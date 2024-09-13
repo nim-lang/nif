@@ -38,13 +38,13 @@
   )
 
   (proc :foo.c . (void) . (stmts
-    (call printf.c "foo %s" "abc")
+    (call printf.c "foo %s\0A" "abc")
   ))
 
   (nodecl (proc :foo2.c . (void) . (stmts
     (var :x.c . (i +32 .) +12)
-    (call printf.c "foo %s" "abc")
-    (call printf.c "foo %d" x.c)
+    (call printf.c "foo %s\0A" "abc")
+    (call printf.c "foo %d\0A" x.c)
   )))
 
   (type :MyObject.ptr.flexarray .
@@ -103,9 +103,9 @@
 
   (proc :main.c . (i -1 atomic) . (stmts
     (var :x.c . (i +32 .) +12)
-    (call printf.c "hello %s" "abc")
-    (call printf.c "hello %d" (suf +12 "i64"))
-    (call printf.c "hello %d" x.c)
+    (call printf.c "hello %s\0A" "abc")
+    (call printf.c "hello %d\0A" (suf +12 "i64"))
+    (call printf.c "hello %d\0A" x.c)
     (call foo.c)
     (ret +0)
   ))
