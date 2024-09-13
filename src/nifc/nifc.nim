@@ -120,26 +120,23 @@ proc handleCmdLine() =
         elif optOptimizeSize in s.config.options:
           cflags.add "-Os"
 
-        var cCompiler: string = ""
-        case s.config.cCompiler
-        of ccGcc:
-          case s.config.backend
-          of backendC:
-            cCompiler = "gcc"
-          of backendCpp:
-            cCompiler = "g++"
+        let cCompiler: string =
+          case s.config.cCompiler
+          of ccGcc:
+            "gcc"
+          of ccCLang:
+            "clang++"
           else:
             quit "unreachable"
-        of ccCLang:
-          case s.config.backend
-          of backendC:
-            cCompiler = "clang"
-          of backendCpp:
-            cCompiler = "clang++"
+
+        let cppCompiler = 
+          case s.config.cCompiler
+          of ccGcc:
+            "g++"
+          of ccCLang:
+            "clang++"
           else:
             quit "unreachable"
-        else:
-          quit "unreachable"
 
         let makeCmd = case s.config.backend
           of backendC:
@@ -147,7 +144,7 @@ proc handleCmdLine() =
                 " " & "CFLAGS=" & "\"" & cflags & "\"" &
                 " -f " & makefilePath
           of backendCpp:
-            "make " & "CXX=" & cCompiler &
+            "make " & "CXX=" & cppCompiler &
                 " " & "CXXFLAGS=" & "\"" & cflags & "\"" &
                 " -f " & makefilePath
           else:
