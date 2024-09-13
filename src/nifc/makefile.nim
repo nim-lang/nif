@@ -7,17 +7,25 @@ proc generateMakefile*(s: State, path: string; moduleNames: seq[string]; app: st
   var programBody = ""
   var objectBody = ""
   let cc =
-    case s.backend
+    case s.config.backend
     of backendC:
       "$(CC)"
     of backendCpp:
       "$(CXX)"
     else:
       quit "unreachable"
+  let cflags =
+    case s.config.backend
+    of backendC:
+      "$(CFLAGS)"
+    of backendCpp:
+      "$(CXXFLAGS)"
+    else:
+      quit "unreachable"
   for i in 0..<moduleNames.len:
     makefileContent.add " " & moduleNames[i] & ".o"
     programBody.add " " & nifcache / moduleNames[i] & ".o"
-    objectBody.add &"{moduleNames[i]}.o:\n	{cc} -c " &
+    objectBody.add &"{moduleNames[i]}.o:\n	{cc} {cflags} -c " &
           nifcache / moduleNames[i] & ".c -o " &
           nifcache / moduleNames[i] & ".o\n"
 
