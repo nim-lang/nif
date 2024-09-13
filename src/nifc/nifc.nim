@@ -125,7 +125,7 @@ proc handleCmdLine() =
           of ccGcc:
             "gcc"
           of ccCLang:
-            "clang++"
+            "clang"
           else:
             quit "unreachable"
 
