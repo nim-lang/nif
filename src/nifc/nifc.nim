@@ -11,6 +11,7 @@
 
 import std / [parseopt, strutils, os]
 import codegen
+import preasm / genpreasm
 
 const
   Version = "0.2"
@@ -20,7 +21,7 @@ const
 Usage:
   nifc [options] [command] [arguments]
 Command:
-  c|cpp file.nif [file2.nif]    convert NIF files to C|C++
+  c|cpp|p file.nif [file2.nif]    convert NIF files to C|C++|PreASM
 
 Options:
   --bits:N              (int M) has N bits; possible values: 64, 32, 16
@@ -74,6 +75,15 @@ proc handleCmdLine() =
         for x in s.selects:
           write h, "#include \"" & extractFileName(x) & "\"\n"
         h.close()
+  of "p":
+    if args.len == 0:
+      quit "command takes a filename"
+    else:
+      createDir("nifcache")
+      for i in 0..<args.len:
+        let inp = args[i]
+        let outp = "nifcache" / splitFile(inp).name & ".preasm"
+        generatePreAsm inp, outp, bits
   else:
     quit "Invalid action: " & action
 
