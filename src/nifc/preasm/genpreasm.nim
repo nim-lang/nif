@@ -59,6 +59,10 @@ proc genIntLit(c: var GeneratedCode; litId: LitId; info: PackedLineInfo) =
   let id = pool.integers.getOrIncl(i)
   c.code.add toToken(IntLit, id, info)
 
+proc genIntLit(c: var GeneratedCode; i: BiggestInt; info: PackedLineInfo) =
+  let id = pool.integers.getOrIncl(i)
+  c.code.add toToken(IntLit, id, info)
+
 proc genUIntLit(c: var GeneratedCode; litId: LitId; info: PackedLineInfo) =
   let i = parseBiggestUInt(c.m.lits.strings[litId])
   let id = pool.uintegers.getOrIncl(i)

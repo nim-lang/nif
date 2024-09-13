@@ -152,7 +152,7 @@ proc setField(c: var GeneratedCode; name: LitId; obj: AsmSlot; t: var AsmSlot) =
   t.offset = obj.size + (obj.size mod t.align)
   c.fields[name] = t
 
-proc genType(c: var GeneratedCode; types: TypeGraph; t: TypeId; dest: var AsmSlot)
+proc fillTypeSlot(c: var GeneratedCode; types: TypeGraph; t: TypeId; dest: var AsmSlot)
 
 proc genObjectBody(c: var GeneratedCode; types: TypeGraph; n: NodePos;
                           obj: var AsmSlot; k: NifcKind) =
@@ -165,7 +165,7 @@ proc genObjectBody(c: var GeneratedCode; types: TypeGraph; n: NodePos;
       var bits = ""
       var f = AsmSlot()
       genFieldPragmas c, types, decl.pragmas, f, bits
-      genType c, types, decl.typ, f
+      fillTypeSlot c, types, decl.typ, f
       setField c, fn, obj, f
       if k == ObjectC:
         inc obj.size, f.size
@@ -174,12 +174,12 @@ proc genObjectBody(c: var GeneratedCode; types: TypeGraph; n: NodePos;
         obj.size = max(obj.size, f.size)
       obj.align = max(obj.align, f.align)
     of Sym:
-      genType c, types, x, obj
+      fillTypeSlot c, types, x, obj
     else: discard
   # padding at object end:
   obj.size = obj.size + (obj.size mod obj.align)
 
-proc genType(c: var GeneratedCode; types: TypeGraph; t: TypeId; dest: var AsmSlot) =
+proc fillTypeSlot(c: var GeneratedCode; types: TypeGraph; t: TypeId; dest: var AsmSlot) =
   let k = types[t].kind
   case k
   of VoidC:
@@ -205,21 +205,21 @@ proc genType(c: var GeneratedCode; types: TypeGraph; t: TypeId; dest: var AsmSlo
         dest = c.types[id]
       else:
         let decl = asTypeDecl(c.m.types, def)
-        genType c, c.m.types, decl.body, dest
+        fillTypeSlot c, c.m.types, decl.body, dest
         c.types[id] = dest
   of PtrC, APtrC, ProctypeC:
     dest = AsmSlot(kind: AUInt, size: c.intmSize, align: c.intmSize)
   of FlexarrayC:
     # Call `elementType` to get the alignment right:
-    genType c, types, elementType(types, t), dest
+    fillTypeSlot c, types, elementType(types, t), dest
     dest.kind = AMem
     dest.size = 0
   of EnumC:
     let baseType = t.firstSon
-    genType c, types, baseType, dest
+    fillTypeSlot c, types, baseType, dest
   of ArrayC:
     let (elem, size) = sons2(types, t)
-    genType c, types, elem, dest
+    fillTypeSlot c, types, elem, dest
     dest.kind = AMem
     dest.size *= parseInt(c.m.lits.strings[types[size].litId])
   of ObjectC, UnionC:
@@ -233,5 +233,23 @@ proc generateTypes(c: var GeneratedCode; types: TypeGraph; o: TypeOrder) =
     let litId = types[decl.name].litId
     if not c.generatedTypes.containsOrIncl(litId.int):
       var t = AsmSlot()
-      genType c, types, decl.body, t
+      fillTypeSlot c, types, decl.body, t
       c.types[litId] = t
+
+proc genType(c: var GeneratedCode; types: TypeGraph; t: TypeId) =
+  var dest = AsmSlot()
+  fillTypeSlot c, types, t, dest
+  let tag =
+    case dest.kind
+    of ABool: BT
+    of AInt: IT
+    of AUInt: UT
+    of AFloat: FT
+    of AMem: MT
+
+  let info = types[t].info
+  c.buildTree tag, info:
+    if tag != BT:
+      c.genIntLit dest.size, info
+      if dest.align != dest.size:
+        c.genIntLit dest.align, info

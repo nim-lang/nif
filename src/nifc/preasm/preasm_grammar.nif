@@ -5,10 +5,11 @@
 (RULE :IntType (i INTLIT (ZERO_OR_ONE INTLIT)))
 (RULE :UIntType (u INTLIT (ZERO_OR_ONE INTLIT)))
 (RULE :FloatType (f INTLIT (ZERO_OR_ONE INTLIT)))
-(RULE :MemType (m INTLIT INTLIT))
+(RULE :MemType (m INTLIT (ZERO_OR_ONE INTLIT)))
 (COM "           ^ size   ^ align")
+(RULE :BoolType (b))
 
-(RULE :Type (OR IntType UIntType FloatType MemType))
+(RULE :Type (OR IntType UIntType FloatType MemType BoolType))
 
 (RULE :Lvalue (OR SYMBOL
              (load Type Expr)))
