@@ -8,8 +8,7 @@ type
     optOptimizeSpeed, optOptimizeSize
 
   SystemCC* = enum
-    ccNone, ccGcc, ccNintendoSwitch, ccLLVM_Gcc, ccCLang, ccBcc, ccVcc,
-    ccTcc, ccEnv, ccIcl, ccIcc, ccClangCl, ccHipcc, ccNvcc
+    ccNone, ccGcc, ccCLang
 
   ConfigRef* {.acyclic.} = ref object ## every global configuration
     cCompiler*: SystemCC
