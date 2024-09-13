@@ -102,22 +102,29 @@ proc genProcPragmas(c: var GeneratedCode; t: Tree; n: NodePos;
   # ProcPragma ::= (inline) | (noinline) | CallingConvention | (varargs) | (was Identifier) |
   #               (selectany) | Attribute
   if t[n].kind == Empty:
-    discard
+    c.addEmpty t[n].info
   elif t[n].kind == PragmasC:
-    for ch in sons(t, n):
-      case t[ch].kind
-      of CallingConventions:
-        c.addIdent $t[ch].kind, t[n].info
-      of VarargsC:
-        flags.incl isVarargs
-      of SelectanyC:
-        flags.incl isSelectAny
-      of InlineC, AttrC, NoinlineC:
-        # Ignore for PreASM
-        discard " __attribute__((noinline))"
-      of WasC: genWas(c, t, ch)
-      else:
-        error c.m, "invalid proc pragma: ", t, ch
+    c.buildTree PragmasT, t[n].info:
+      for ch in sons(t, n):
+        case t[ch].kind
+        of CdeclC: c.addKeyw CdeclT, t[n].info
+        of StdcallC: c.addKeyw StdcallT, t[n].info
+        of SafecallC: c.addKeyw SafecallT, t[n].info
+        of SyscallC: c.addKeyw SyscallT, t[n].info
+        of FastcallC: c.addKeyw FastcallT, t[n].info
+        of ThiscallC: c.addKeyw ThiscallT, t[n].info
+        of NoconvC: c.addKeyw NoconvT, t[n].info
+        of MemberC: c.addKeyw MemberT, t[n].info
+        of VarargsC:
+          flags.incl isVarargs
+        of SelectanyC:
+          flags.incl isSelectAny
+        of InlineC, AttrC, NoinlineC:
+          # Ignore for PreASM
+          discard " __attribute__((noinline))"
+        of WasC: genWas(c, t, ch)
+        else:
+          error c.m, "invalid proc pragma: ", t, ch
   else:
     error c.m, "expected proc pragmas but got: ", t, n
 
@@ -135,41 +142,45 @@ proc genParamPragmas(c: var GeneratedCode; t: Tree; n: NodePos) =
   if t[n].kind == Empty:
     c.addEmpty t[n].info
   elif t[n].kind == PragmasC:
-    for ch in sons(t, n):
-      case t[ch].kind
-      of AttrC:
-        discard "Ignore for now"
-      of WasC:
-        genWas c, t, ch
-      else:
-        error c.m, "invalid pragma: ", t, ch
+    c.buildTree PragmasT, t[n].info:
+      for ch in sons(t, n):
+        case t[ch].kind
+        of AttrC:
+          discard "Ignore for now"
+        of WasC:
+          genWas c, t, ch
+        else:
+          error c.m, "invalid pragma: ", t, ch
   else:
     error c.m, "expected pragmas but got: ", t, n
 
 proc genParam(c: var GeneratedCode; t: Tree; n: NodePos) =
   let d = asParamDecl(t, n)
   if t[d.name].kind == SymDef:
-    let lit = t[d.name].litId
-    let name = mangle(c.m.lits.strings[lit])
-    genType c, t, d.typ, name
-    genParamPragmas c, t, d.pragmas
+    c.buildTree ParamT, t[n].info:
+      let lit = t[d.name].litId
+      c.addSymDef c.m.lits.strings[lit], t[d.name].info
+      genType c, t, d.typ
+      genParamPragmas c, t, d.pragmas
   else:
     error c.m, "expected SymbolDef but got: ", t, n
 
-proc genVarPragmas(c: var GeneratedCode; t: Tree; n: NodePos) =
+proc genVarPragmas(c: var GeneratedCode; t: Tree; n: NodePos; alignOverride: var int) =
   if t[n].kind == Empty:
-    discard
+    c.addEmpty t[n].info
   elif t[n].kind == PragmasC:
-    for ch in sons(t, n):
-      case t[ch].kind
-      of AlignC:
-        c.add " NIM_ALIGN(" & toString(t, ch.firstSon, c.m) & ")"
-      of AttrC:
-        c.add " __attribute__((" & toString(t, ch.firstSon, c.m) & "))"
-      of WasC:
-        genWas c, t, ch
-      else:
-        error c.m, "invalid pragma: ", t, ch
+    c.buildTree PragmasT, t[n].info:
+      for ch in sons(t, n):
+        case t[ch].kind
+        of AlignC:
+          let intId = t[ch.firstSon].litId
+          alignOverride = parseInt(c.m.lits.strings[intId])
+        of AttrC:
+          discard "ignore attribute"
+        of WasC:
+          genWas c, t, ch
+        else:
+          error c.m, "invalid pragma: ", t, ch
   else:
     error c.m, "expected pragmas but got: ", t, n
 
@@ -186,10 +197,12 @@ proc genVarDecl(c: var GeneratedCode; t: Tree; n: NodePos; vk: VarKind) =
     let name = mangle(c.m.lits.strings[lit])
     if vk == IsConst:
       c.add ConstKeyword
-    genType c, t, d.typ, name
+    var alignOverride = -1
+    genVarPragmas c, t, d.pragmas, alignOverride
+    genType c, t, d.typ, name, alignOverride
+
     if vk == IsThreadlocal:
       c.add " __thread"
-    genVarPragmas c, t, d.pragmas
     if t[d.value].kind != Empty:
       c.add AsgnOpr
       if vk != IsLocal: inc c.inSimpleInit
@@ -206,7 +219,7 @@ template moveToDataSection(body: untyped) =
     c.data.add c.code[i]
   setLen c.code, oldLen
 
-include genpreasm_t
+include genpreasm_s
 
 proc genProcDecl(c: var GeneratedCode; t: Tree; n: NodePos; isExtern: bool) =
   let signatureBegin = c.code.len
@@ -226,10 +239,13 @@ proc genProcDecl(c: var GeneratedCode; t: Tree; n: NodePos; isExtern: bool) =
 
   var params = 0
   if t[prc.params].kind != Empty:
+
     for ch in sons(t, prc.params):
       if params > 0: c.add Comma
       genParam c, t, ch
       inc params
+  else:
+    c.addEmpty t[prc.params].info
 
   if isVarargs in flags:
     if params > 0: c.add Comma

@@ -47,14 +47,9 @@ template typedUnOp(opr) =
   c.add ParRi
 
 proc genCall(c: var GeneratedCode; t: Tree; n: NodePos) =
-  genx c, t, n.firstSon
-  c.add ParLe
-  var i = 0
-  for ch in sonsFromX(t, n):
-    if i > 0: c.add Comma
-    genx c, t, ch
-    inc i
-  c.add ParRi
+  c.buildTree CallT, t[n].info:
+    for ch in sons(t, n):
+      genx c, t, ch
 
 proc genLvalue(c: var GeneratedCode; t: Tree; n: NodePos) =
   case t[n].kind

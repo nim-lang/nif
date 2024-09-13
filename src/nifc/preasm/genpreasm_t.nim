@@ -236,9 +236,11 @@ proc generateTypes(c: var GeneratedCode; types: TypeGraph; o: TypeOrder) =
       fillTypeSlot c, types, decl.body, t
       c.types[litId] = t
 
-proc genType(c: var GeneratedCode; types: TypeGraph; t: TypeId) =
+proc genType(c: var GeneratedCode; types: TypeGraph; t: TypeId; alignOverride = -1) =
   var dest = AsmSlot()
   fillTypeSlot c, types, t, dest
+  if alignOverride >= 0:
+    dest.align = alignOverride
   let tag =
     case dest.kind
     of ABool: BT
