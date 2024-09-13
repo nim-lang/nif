@@ -23,9 +23,11 @@ Command:
   c|cpp file.nif [file2.nif]    convert NIF files to C|C++
 
 Options:
-  --bits:N              (int M) has N bits; possible values: 64, 32, 16
-  --version             show the version
-  --help                show this help
+  --run                     run the compiled program
+  --opt:none|speed|size     optimize not at all or for speed|size
+  --bits:N                  (int M) has N bits; possible values: 64, 32, 16
+  --version                 show the version
+  --help                    show this help
 """
 
 proc writeHelp() = quit(Usage, QuitSuccess)
