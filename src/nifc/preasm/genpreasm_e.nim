@@ -31,10 +31,9 @@ template cmpOp(opr) =
   c.add ParRi
 
 template unOp(opr) =
-  c.add ParLe
-  c.add opr
-  genx c, t, n.firstSon
-  c.add ParRi
+  c.buildTree opr, t[n].info:
+    genTypeof c, t, n.firstSon
+    genx c, t, n.firstSon
 
 template typedUnOp(opr) =
   let (typ, a) = sons2(t, n)
@@ -55,10 +54,10 @@ proc genLvalue(c: var GeneratedCode; t: Tree; n: NodePos) =
   case t[n].kind
   of Sym:
     let lit = t[n].litId
-    let name = mangle(c.m.lits.strings[lit])
-    c.add name
+    let name = c.m.lits.strings[lit]
+    c.addSym name, t[n].info
     c.requestedSyms.incl name
-  of DerefC: unOp "*"
+  of DerefC: unOp LoadT
   of AtC:
     let (a, i) = sons2(t, n)
     genx c, t, a

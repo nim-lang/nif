@@ -14,7 +14,7 @@ from std / os import changeFileExt, splitFile, extractFileName
 
 import .. / .. / lib / [bitabs, packedtrees, lineinfos, nifstreams, nifcursors]
 import .. / nifc_model
-import preasm_model
+import preasm_model, typenav
 
 type
   AsmTypeKind = enum

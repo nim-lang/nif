@@ -187,6 +187,8 @@ proc genx(c: var GeneratedCode; t: Tree; n: NodePos) =
   of ConvC: typedUnOp ""
   of SufC:
     let (value, suffix) = sons2(t, n)
+    # suffix is "i64" or similar
+    # XXX to implement!
     genx(c, t, value)
   else:
     genLvalue c, t, n

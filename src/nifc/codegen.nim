@@ -10,7 +10,6 @@
 # We produce C code as a list of tokens.
 
 import std / [assertions, syncio, tables, sets, intsets, formatfloat, strutils]
-from std / strutils import parseBiggestInt, parseBiggestUInt, parseInt
 from std / os import changeFileExt, splitFile, extractFileName
 
 import .. / lib / [bitabs, packedtrees]
@@ -422,7 +421,7 @@ proc generateCode*(s: var State, inp, outp: string; intmSize: int) =
   var co = TypeOrder()
   traverseTypes(c.m, co)
 
-  generateTypes(c, c.m.types, co)
+  generateTypes(c, c.m.code, co)
   let typeDecls = move c.code
 
   traverseCode c, c.m.code, StartPos
