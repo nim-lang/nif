@@ -87,6 +87,8 @@ proc genLvalue(c: var GeneratedCode; t: Tree; n: NodePos) =
       while inh > 0:
         c.add ".Q"
         dec inh
+    else:
+      genx c, t, obj
     c.add Dot
     genx c, t, fld
   else:

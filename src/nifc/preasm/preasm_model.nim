@@ -11,57 +11,67 @@ const
   LoadT* = TagId(8)
   CallT* = TagId(9)
   VarargsT* = TagId(10)
-  GaddrT* = TagId(11)
-  TaddrT* = TagId(12)
-  NotT* = TagId(13)
-  NegT* = TagId(14)
-  AddT* = TagId(15)
-  SubT* = TagId(16)
-  MulT* = TagId(17)
-  DivT* = TagId(18)
-  ModT* = TagId(19)
-  ShrT* = TagId(20)
-  ShlT* = TagId(21)
-  BitandT* = TagId(22)
-  BitorT* = TagId(23)
-  BitnotT* = TagId(24)
-  BitxorT* = TagId(25)
-  EqT* = TagId(26)
-  NeqT* = TagId(27)
-  LeT* = TagId(28)
-  LtT* = TagId(29)
-  SextT* = TagId(30)
-  ZextT* = TagId(31)
-  FtoiT* = TagId(32)
-  ItofT* = TagId(33)
-  VarT* = TagId(34)
-  GvarT* = TagId(35)
-  TvarT* = TagId(36)
-  ConstT* = TagId(37)
-  EmitT* = TagId(38)
-  StoreT* = TagId(39)
-  LabT* = TagId(40)
-  JmpT* = TagId(41)
-  RetT* = TagId(42)
-  StmtsT* = TagId(43)
-  ParamT* = TagId(44)
-  ParamsT* = TagId(45)
-  ProcT* = TagId(46)
-  CdeclT* = TagId(47)
-  StdcallT* = TagId(48)
-  SafecallT* = TagId(49)
-  SyscallT* = TagId(50)
-  FastcallT* = TagId(51)
-  ThiscallT* = TagId(52)
-  NoconvT* = TagId(53)
-  MemberT* = TagId(54)
-  AttrT* = TagId(55)
-  WasT* = TagId(56)
-  SelectanyT* = TagId(57)
-  PragmasT* = TagId(58)
-  AlignT* = TagId(59)
-  ImpT* = TagId(60)
-  InclT* = TagId(61)
+  VaddrT* = TagId(11)
+  GaddrT* = TagId(12)
+  TaddrT* = TagId(13)
+  NotT* = TagId(14)
+  NegT* = TagId(15)
+  AddscaledT* = TagId(16)
+  AddT* = TagId(17)
+  SubT* = TagId(18)
+  MulT* = TagId(19)
+  DivT* = TagId(20)
+  ModT* = TagId(21)
+  ShrT* = TagId(22)
+  ShlT* = TagId(23)
+  BitandT* = TagId(24)
+  BitorT* = TagId(25)
+  BitnotT* = TagId(26)
+  BitxorT* = TagId(27)
+  EqT* = TagId(28)
+  NeqT* = TagId(29)
+  LeT* = TagId(30)
+  LtT* = TagId(31)
+  SextT* = TagId(32)
+  ZextT* = TagId(33)
+  FextT* = TagId(34)
+  FnarrowT* = TagId(35)
+  TruncT* = TagId(36)
+  FtoiT* = TagId(37)
+  FtouT* = TagId(38)
+  ItofT* = TagId(39)
+  UtofT* = TagId(40)
+  VarT* = TagId(41)
+  GvarT* = TagId(42)
+  TvarT* = TagId(43)
+  ConstT* = TagId(44)
+  AsciizT* = TagId(45)
+  EmitT* = TagId(46)
+  StoreT* = TagId(47)
+  LabT* = TagId(48)
+  LoopT* = TagId(49)
+  JmpT* = TagId(50)
+  JloopT* = TagId(51)
+  RetT* = TagId(52)
+  StmtsT* = TagId(53)
+  ParamT* = TagId(54)
+  ParamsT* = TagId(55)
+  ProcT* = TagId(56)
+  CdeclT* = TagId(57)
+  StdcallT* = TagId(58)
+  SafecallT* = TagId(59)
+  SyscallT* = TagId(60)
+  FastcallT* = TagId(61)
+  ThiscallT* = TagId(62)
+  NoconvT* = TagId(63)
+  MemberT* = TagId(64)
+  AttrT* = TagId(65)
+  WasT* = TagId(66)
+  SelectanyT* = TagId(67)
+  PragmasT* = TagId(68)
+  AlignT* = TagId(69)
+  ImpT* = TagId(70)
+  InclT* = TagId(71)
 
 proc registerTags*() =
   registerTag "i", IT
@@ -72,10 +82,12 @@ proc registerTags*() =
   registerTag "load", LoadT
   registerTag "call", CallT
   registerTag "varargs", VarargsT
+  registerTag "vaddr", VaddrT
   registerTag "gaddr", GaddrT
   registerTag "taddr", TaddrT
   registerTag "not", NotT
   registerTag "neg", NegT
+  registerTag "addscaled", AddscaledT
   registerTag "add", AddT
   registerTag "sub", SubT
   registerTag "mul", MulT
@@ -93,16 +105,24 @@ proc registerTags*() =
   registerTag "lt", LtT
   registerTag "sext", SextT
   registerTag "zext", ZextT
+  registerTag "fext", FextT
+  registerTag "fnarrow", FnarrowT
+  registerTag "trunc", TruncT
   registerTag "ftoi", FtoiT
+  registerTag "ftou", FtouT
   registerTag "itof", ItofT
+  registerTag "utof", UtofT
   registerTag "var", VarT
   registerTag "gvar", GvarT
   registerTag "tvar", TvarT
   registerTag "const", ConstT
+  registerTag "asciiz", AsciizT
   registerTag "emit", EmitT
   registerTag "store", StoreT
   registerTag "lab", LabT
+  registerTag "loop", LoopT
   registerTag "jmp", JmpT
+  registerTag "jloop", JloopT
   registerTag "ret", RetT
   registerTag "stmts", StmtsT
   registerTag "param", ParamT

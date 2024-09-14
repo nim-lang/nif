@@ -11,7 +11,7 @@
 
 import std / [parseopt, strutils, os, osproc]
 import codegen, makefile, noptions
-#import preasm / genpreasm
+import preasm / genpreasm
 
 const
   Version = "0.2"
@@ -164,8 +164,7 @@ proc handleCmdLine() =
       for i in 0..<args.len:
         let inp = args[i]
         let outp = "nifcache" / splitFile(inp).name & ".preasm"
-        #generatePreAsm inp, outp, bits
-        echo "NOT IMPLEMENTED!"
+        generatePreAsm inp, outp, bits
   else:
     quit "Invalid action: " & action
 

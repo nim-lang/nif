@@ -31,12 +31,12 @@ type
     data: TokenBuf
     code: TokenBuf
     init: TokenBuf
-    inSimpleInit: int
     intmSize: int
     generatedTypes: IntSet
     requestedSyms: HashSet[string]
     fields: Table[LitId, AsmSlot]
     types: Table[LitId, AsmSlot]
+    strings: Table[string, int]
 
   LitId = nifc_model.StrId
 
@@ -68,6 +68,14 @@ proc genUIntLit(c: var GeneratedCode; litId: LitId; info: PackedLineInfo) =
   let id = pool.uintegers.getOrIncl(i)
   c.code.add toToken(UIntLit, id, info)
 
+proc genFloatLit(c: var GeneratedCode; litId: LitId; info: PackedLineInfo) =
+  let i = parseFloat(c.m.lits.strings[litId])
+  let id = pool.floats.getOrIncl(i)
+  c.code.add toToken(FloatLit, id, info)
+
+proc genCharLit(c: var GeneratedCode; ch: char; info: PackedLineInfo) =
+  c.code.add toToken(CharLit, uint32(ch), info)
+
 proc addIdent(c: var GeneratedCode; s: string; info: PackedLineInfo) =
   c.code.add toToken(Ident, pool.strings.getOrIncl(s), info)
 
@@ -77,8 +85,11 @@ proc addEmpty(c: var GeneratedCode; info: PackedLineInfo) =
 proc addKeyw(c: var GeneratedCode; keyw: TagId; info: PackedLineInfo) =
   c.code.buildTree keyw, info: discard
 
-proc addSymDef(c: var GeneratedCode; s: string; info: PackedLineInfo) =
-  c.code.add toToken(SymbolDef, pool.syms.getOrIncl(s), info)
+proc addSymDef(c: var TokenBuf; s: string; info: PackedLineInfo) =
+  c.add toToken(SymbolDef, pool.syms.getOrIncl(s), info)
+
+proc addStrLit(c: var TokenBuf; s: string; info: PackedLineInfo) =
+  c.add toToken(StringLit, pool.strings.getOrIncl(s), info)
 
 proc addSym(c: var GeneratedCode; s: string; info: PackedLineInfo) =
   c.code.add toToken(Symbol, pool.syms.getOrIncl(s), info)
@@ -132,7 +143,7 @@ proc genSymDef(c: var GeneratedCode; t: Tree; n: NodePos): string =
   if t[n].kind == SymDef:
     let lit = t[n].litId
     result = c.m.lits.strings[lit]
-    c.addSymDef result, t[n].info
+    c.code.addSymDef result, t[n].info
   else:
     error c.m, "expected SymbolDef but got: ", t, n
     result = ""
@@ -159,8 +170,8 @@ proc genParam(c: var GeneratedCode; t: Tree; n: NodePos) =
   if t[d.name].kind == SymDef:
     c.buildTree ParamT, t[n].info:
       let lit = t[d.name].litId
-      c.addSymDef c.m.lits.strings[lit], t[d.name].info
-      genType c, t, d.typ
+      c.code.addSymDef c.m.lits.strings[lit], t[d.name].info
+      genType c, d.typ
       genParamPragmas c, t, d.pragmas
   else:
     error c.m, "expected SymbolDef but got: ", t, n

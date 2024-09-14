@@ -14,13 +14,17 @@
 (RULE :Lvalue (OR SYMBOL
              (load Type Expr)))
 
+(COM "addscaled Type Expr Expr  is (a+i*TypeSize)")
+
 (RULE :Call (call Type CallingConvention (OR . (varargs)) (ONE_OR_MANY Expr)))
 (RULE :Expr (OR INTLIT UINTLIT FLOATLIT CHARLITERAL
          Lvalue
+         (vaddr Type SYMBOL)
          (gaddr Type SYMBOL)
          (taddr Type SYMBOL)
          (not Type Expr)
          (neg Type Expr)
+         (addscaled Type Expr Expr)
          (add Type Expr Expr)
          (sub Type Expr Expr)
          (mul Type Expr Expr)
@@ -38,8 +42,13 @@
          (lt Type Expr Expr)
          (sext Type Type Expr)
          (zext Type Type Expr)
+         (fext Type Type Expr)
+         (fnarrow Type Type Expr)
+         (trunc Type Type Expr)
          (ftoi Type Type Expr)
+         (ftou Type Type Expr)
          (itof Type Type Expr)
+         (utof Type Type Expr)
          Call
 ))
 
@@ -49,15 +58,17 @@
             (tvar VarDeclCommon)))
 
 (RULE :ConstDecl (const SYMBOLDEF VarPragmas Type Expr))
+(RULE :AsciizDecl (asciiz SYMBOLDEF STRINGLITERAL))
 (RULE :EmitStmt (emit (ONE_OR_MANY Expr)))
 
 (RULE :Stmt (OR Call
          VarDecl
-         ConstDecl
          EmitStmt
          (store Type Lvalue Expr)
          (lab SYMBOLDEF)
+         (loop SYMBOLDEF)
          (jmp SYMBOL)
+         (jloop SYMBOL)
          (ret Expr)))
 
 (RULE :StmtList (stmts (ZERO_OR_MANY Stmt)))
@@ -87,7 +98,7 @@
 (RULE :ExternDecl (imp (OR ProcDecl VarDecl ConstDecl)))
 (RULE :Include (incl STRINGLITERAL))
 
-(RULE :TopLevelConstruct (OR ExternDecl ProcDecl VarDecl ConstDecl
+(RULE :TopLevelConstruct (OR ExternDecl ProcDecl VarDecl ConstDecl AsciizDecl
                           Include EmitStmt))
 (RULE :Module (stmts (ZERO_OR_MANY TopLevelConstruct)))
 )

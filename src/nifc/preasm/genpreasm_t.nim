@@ -106,10 +106,8 @@ proc traverseTypes(m: Module; o: var TypeOrder) =
       o.ordered.add ch
     else: discard
 
-template integralBits(c: GeneratedCode; types: TypeGraph; t: TypeId): int =
-  let lit = types[t.firstSon].litId
-  let r = c.m.lits.strings[lit]
-  let res = parseBiggestInt(r)
+template integralBits(c: GeneratedCode; t: TypeDesc): int =
+  let res = bits(c.m, t)
   if res == -1:
     c.intmSize
   else: # 8, 16, 32, 64 etc.
@@ -152,20 +150,20 @@ proc setField(c: var GeneratedCode; name: LitId; obj: AsmSlot; t: var AsmSlot) =
   t.offset = obj.size + (obj.size mod t.align)
   c.fields[name] = t
 
-proc fillTypeSlot(c: var GeneratedCode; types: TypeGraph; t: TypeId; dest: var AsmSlot)
+proc fillTypeSlot(c: var GeneratedCode; t: TypeDesc; dest: var AsmSlot)
 
-proc genObjectBody(c: var GeneratedCode; types: TypeGraph; n: NodePos;
-                          obj: var AsmSlot; k: NifcKind) =
+proc genObjectBody(c: var GeneratedCode; n: NodePos;
+                   obj: var AsmSlot; k: NifcKind) =
   obj.kind = AMem
-  for x in sons(types, n):
-    case types[x].kind
+  for x in sons(c.m.code, n):
+    case c.m.code[x].kind
     of FldC:
-      let decl = asFieldDecl(types, x)
-      let fn = fieldName(c, types, decl.name)
+      let decl = asFieldDecl(c.m.code, x)
+      let fn = fieldName(c, c.m.code, decl.name)
       var bits = ""
       var f = AsmSlot()
-      genFieldPragmas c, types, decl.pragmas, f, bits
-      fillTypeSlot c, types, decl.typ, f
+      genFieldPragmas c, c.m.code, decl.pragmas, f, bits
+      fillTypeSlot c, typeFromPos(decl.typ), f
       setField c, fn, obj, f
       if k == ObjectC:
         inc obj.size, f.size
@@ -174,73 +172,69 @@ proc genObjectBody(c: var GeneratedCode; types: TypeGraph; n: NodePos;
         obj.size = max(obj.size, f.size)
       obj.align = max(obj.align, f.align)
     of Sym:
-      fillTypeSlot c, types, x, obj
+      fillTypeSlot c, typeFromPos(x), obj
     else: discard
   # padding at object end:
   obj.size = obj.size + (obj.size mod obj.align)
 
-proc fillTypeSlot(c: var GeneratedCode; types: TypeGraph; t: TypeId; dest: var AsmSlot) =
-  let k = types[t].kind
+proc fillTypeSlot(c: var GeneratedCode; t: TypeDesc; dest: var AsmSlot) =
+  let k = kind(c.m.code, t)
   case k
   of VoidC:
-    error c.m, "internal error: Cannot handle 'void' type: ", types, t
+    error c.m, "internal error: Cannot handle 'void' type: ", c.m.code, rawPos(t)
   of IntC:
-    let bytes = integralBits(c, types, t) div 8
+    let bytes = integralBits(c, t) div 8
     dest = AsmSlot(kind: AInt, size: bytes, align: bytes)
   of UIntC, CharC:
-    let bytes = integralBits(c, types, t) div 8
+    let bytes = integralBits(c, t) div 8
     dest = AsmSlot(kind: AUInt, size: bytes, align: bytes)
   of FloatC:
-    let bytes = integralBits(c, types, t) div 8
+    let bytes = integralBits(c, t) div 8
     dest = AsmSlot(kind: AFloat, size: bytes, align: bytes)
   of BoolC:
     dest = AsmSlot(kind: ABool, size: 1, align: 1)
   of Sym:
-    let id = types[t].litId
+    let id = c.m.code[rawPos t].litId
     let def = c.m.defs.getOrDefault(id)
     if def == NodePos(0):
-      error c.m, "undeclared symbol: ", c.m.code, t
+      error c.m, "undeclared symbol: ", c.m.code, rawPos(t)
     else:
       if c.types.hasKey(id):
         dest = c.types[id]
       else:
         let decl = asTypeDecl(c.m.code, def)
-        fillTypeSlot c, c.m.code, decl.body, dest
+        fillTypeSlot c, typeFromPos(decl.body), dest
         c.types[id] = dest
   of PtrC, APtrC, ProctypeC:
     dest = AsmSlot(kind: AUInt, size: c.intmSize, align: c.intmSize)
   of FlexarrayC:
     # Call `elementType` to get the alignment right:
-    fillTypeSlot c, types, elementType(types, t), dest
+    fillTypeSlot c, typeFromPos(elementType(c.m.code, rawPos(t))), dest
     dest.kind = AMem
     dest.size = 0
   of EnumC:
-    let baseType = t.firstSon
-    fillTypeSlot c, types, baseType, dest
+    let baseType = rawPos(t).firstSon
+    fillTypeSlot c, typeFromPos(baseType), dest
   of ArrayC:
-    let (elem, size) = sons2(types, t)
-    fillTypeSlot c, types, elem, dest
+    let (elem, size) = sons2(c.m.code, rawPos(t))
+    fillTypeSlot c, typeFromPos(elem), dest
     dest.kind = AMem
-    dest.size *= parseInt(c.m.lits.strings[types[size].litId])
+    dest.size *= parseInt(c.m.lits.strings[c.m.code[size].litId])
   of ObjectC, UnionC:
-    genObjectBody c, types, t, dest, k
+    genObjectBody c, rawPos(t), dest, k
   else:
-    error c.m, "node is not a type: ", types, t
+    error c.m, "node is not a type: ", c.m.code, rawPos(t)
 
-proc generateTypes(c: var GeneratedCode; types: TypeGraph; o: TypeOrder) =
+proc generateTypes(c: var GeneratedCode; o: TypeOrder) =
   for d in o.ordered.s:
-    let decl = asTypeDecl(types, d)
-    let litId = types[decl.name].litId
+    let decl = asTypeDecl(c.m.code, d)
+    let litId = c.m.code[decl.name].litId
     if not c.generatedTypes.containsOrIncl(litId.int):
-      var t = AsmSlot()
-      fillTypeSlot c, types, decl.body, t
-      c.types[litId] = t
+      var dest = AsmSlot()
+      fillTypeSlot c, typeFromPos(decl.body), dest
+      c.types[litId] = dest
 
-proc genType(c: var GeneratedCode; types: TypeGraph; t: TypeId; alignOverride = -1) =
-  var dest = AsmSlot()
-  fillTypeSlot c, types, t, dest
-  if alignOverride >= 0:
-    dest.align = alignOverride
+proc genSlot(c: var GeneratedCode; dest: AsmSlot; info: PackedLineInfo) =
   let tag =
     case dest.kind
     of ABool: BT
@@ -249,9 +243,32 @@ proc genType(c: var GeneratedCode; types: TypeGraph; t: TypeId; alignOverride = 
     of AFloat: FT
     of AMem: MT
 
-  let info = types[t].info
   c.buildTree tag, info:
     if tag != BT:
       c.genIntLit dest.size, info
       if dest.align != dest.size:
         c.genIntLit dest.align, info
+
+proc genType(c: var GeneratedCode; n: NodePos; alignOverride = -1) =
+  var dest = AsmSlot()
+  fillTypeSlot c, typeFromPos(n), dest
+  if alignOverride >= 0:
+    dest.align = alignOverride
+  genSlot c, dest, c.m.code[n].info
+
+proc genTypeof(c: var GeneratedCode; n: NodePos) =
+  let t = getType(c.m, c.m.code, n)
+  if isError(t):
+    error c.m, "cannot compute type of expression: ", c.m.code, n
+  else:
+    var dest = AsmSlot()
+    fillTypeSlot c, t, dest
+    genSlot c, dest, c.m.code[n].info
+
+proc getAsmSlot(c: var GeneratedCode; n: NodePos): AsmSlot =
+  let t = getType(c.m, c.m.code, n)
+  if isError(t):
+    error c.m, "cannot compute type of expression: ", c.m.code, n
+  else:
+    result = AsmSlot()
+    fillTypeSlot c, t, result

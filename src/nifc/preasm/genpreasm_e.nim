@@ -9,111 +9,168 @@
 
 # included from genpreasm.nim
 
-proc genx(c: var GeneratedCode; t: Tree; n: NodePos)
+type
+  XMode = enum
+    WantValue, WantAddr
 
-template typedBinOp(opr) =
+proc genx(c: var GeneratedCode; t: Tree; n: NodePos; mode: XMode)
+
+template typedBinOp(opr) {.dirty.} =
   let (typ, a, b) = sons3(t, n)
-  c.add ParLe
-  c.add ParLe
-  genType c, t, typ
-  c.add ParRi
-  genx c, t, a
-  c.add opr
-  genx c, t, b
-  c.add ParRi
+  c.buildTree opr, info:
+    genType c, typ
+    genx c, t, a, WantValue
+    genx c, t, b, WantValue
 
-template cmpOp(opr) =
-  let (a, b) = sons2(t, n)
-  c.add ParLe
-  genx c, t, a
-  c.add opr
-  genx c, t, b
-  c.add ParRi
+template cmpOp(opr) {.dirty.} =
+  c.buildTree opr, info:
+    let (a, b) = sons2(t, n)
+    genTypeof c, a
+    genx c, t, a, WantValue
+    genx c, t, b, WantValue
 
-template unOp(opr) =
-  c.buildTree opr, t[n].info:
-    genTypeof c, t, n.firstSon
-    genx c, t, n.firstSon
+template unOp(opr) {.dirty.} =
+  c.buildTree opr, info:
+    genTypeof c, n.firstSon
+    genx c, t, n.firstSon, WantValue
 
-template typedUnOp(opr) =
+template typedUnOp(opr) {.dirty.} =
   let (typ, a) = sons2(t, n)
-  c.add ParLe
-  c.add ParLe
-  genType c, t, typ
-  c.add ParRi
-  c.add opr
-  genx c, t, a
-  c.add ParRi
+  c.buildTree opr, info:
+    genType c, typ
+    genx c, t, a, WantValue
 
 proc genCall(c: var GeneratedCode; t: Tree; n: NodePos) =
   c.buildTree CallT, t[n].info:
     for ch in sons(t, n):
-      genx c, t, ch
+      genx c, t, ch, WantValue
 
-proc genLvalue(c: var GeneratedCode; t: Tree; n: NodePos) =
+proc genLvalue(c: var GeneratedCode; t: Tree; n: NodePos; mode: XMode) =
+  let info = t[n].info
   case t[n].kind
   of Sym:
     let lit = t[n].litId
     let name = c.m.lits.strings[lit]
-    c.addSym name, t[n].info
+    if mode == WantAddr:
+      c.code.addParLe VaddrT, info
+    c.addSym name, info
+    if mode == WantAddr:
+      c.code.addParRi()
     c.requestedSyms.incl name
-  of DerefC: unOp LoadT
+  of DerefC:
+    if mode == WantAddr:
+      # addr(deref(x)) -> x
+      genx(c, t, n.firstSon, WantValue)
+    else:
+      unOp LoadT
   of AtC:
-    let (a, i) = sons2(t, n)
-    genx c, t, a
-    c.add Dot
-    c.add "a"
-    c.add BracketLe
-    genx c, t, i
-    c.add BracketRi
+    if mode == WantValue:
+      c.code.addParLe LoadT, info
+      genTypeof c, n
+    c.buildTree AddscaledT, info:
+      genTypeof c, n
+      let (a, i) = sons2(t, n)
+      genx c, t, a, WantAddr
+      genx c, t, i, WantValue
+    if mode == WantValue:
+      c.code.addParRi()
   of PatC:
-    let (a, i) = sons2(t, n)
-    genx c, t, a
-    c.add BracketLe
-    genx c, t, i
-    c.add BracketRi
+    if mode == WantValue:
+      c.code.addParLe LoadT, info
+      genTypeof c, n
+    c.buildTree AddscaledT, info:
+      genTypeof c, n
+      let (a, i) = sons2(t, n)
+      genx c, t, a, WantValue
+      genx c, t, i, WantValue
+    if mode == WantValue:
+      c.code.addParRi()
   of DotC:
-    let (obj, fld, inheritance) = sons3(t, n)
-    let inhs {.cursor.} = c.m.lits.strings[t[inheritance].litId]
-    if inhs != "0":
-      var inh = parseInt(inhs)
-      genx c, t, obj
-      while inh > 0:
-        c.add ".Q"
-        dec inh
-    c.add Dot
-    genx c, t, fld
+    let (obj, fld, _) = sons3(t, n)
+    if mode == WantValue:
+      c.code.addParLe LoadT, info
+      genTypeof c, n
+    c.buildTree AddT, info:
+      genTypeof c, n
+      genx c, t, obj, WantAddr
+      genx c, t, fld, WantValue
+    if mode == WantValue:
+      c.code.addParRi()
   else:
     error c.m, "expected expression but got: ", t, n
 
-proc objConstrType(c: var GeneratedCode; t: Tree; n: NodePos) =
-  # C99 is strange, it requires (T){} for struct construction but not for
-  # consts.
-  if c.inSimpleInit == 0:
-    c.add ParLe
-    genType(c, t, n)
-    c.add ParRi
+proc genStrLit(c: var GeneratedCode; s: string; info: PackedLineInfo) =
+  var id = c.strings.getOrDefault(s, -1)
+  if id < 0:
+    id = c.strings.len + 1
+    c.strings[s] = id
+    let symId = "str." & $id
+    c.data.buildTree AsciizT, info:
+      c.data.addSymDef symId, info
+      c.data.addStrLit s, info
+    addSym c, symId, info
+  else:
+    let symId = "str." & $id
+    addSym c, symId, info
 
-proc genx(c: var GeneratedCode; t: Tree; n: NodePos) =
+proc genConv(c: var GeneratedCode; t: Tree; n: NodePos) =
+  let (typ, arg) = sons2(t, n)
+  let src = getAsmSlot(c, arg)
+  var dest = AsmSlot()
+  fillTypeSlot c, typeFromPos(typ), dest
+  let info = t[n].info
+  var opc: TagId
+  if src.size == dest.size:
+    opc = ErrT
+  elif src.kind == AFloat and dest.kind != AFloat:
+    if dest.kind == AInt:
+      opc = FtoiT
+    else:
+      opc = FtouT
+  elif dest.kind == AFloat and src.kind != AFloat:
+    if src.kind == AInt:
+      opc = ItofT
+    else:
+      opc = UtofT
+  elif src.size > dest.size:
+    if dest.kind == AFloat:
+      opc = FnarrowT
+    else:
+      opc = TruncT
+  else:
+    case dest.kind
+    of AUInt, AMem, ABool:
+      opc = ZextT
+    of AInt:
+      opc = SextT
+    of AFloat:
+      opc = FextT
+
+  if opc != ErrT:
+    genSlot c, dest, info
+    genSlot c, src, info
+  genx c, t, arg, WantValue
+  if opc != ErrT:
+    c.code.addParRi()
+
+proc genx(c: var GeneratedCode; t: Tree; n: NodePos; mode: XMode) =
+  let info = t[n].info
   case t[n].kind
   of IntLit:
-    genIntLit c, t[n].litId
+    genIntLit c, t[n].litId, info
   of UIntLit:
-    genUIntLit c, t[n].litId
+    genUIntLit c, t[n].litId, info
   of FloatLit:
-    c.add c.m.lits.strings[t[n].litId]
+    genFloatLit c, t[n].litId, info
   of CharLit:
     let ch = t[n].uoperand
-    var s = "'"
-    toCChar char(ch), s
-    s.add "'"
-    c.add s
-  of FalseC: c.add "NIM_FALSE"
-  of TrueC: c.add "NIM_TRUE"
+    genCharLit c, char(ch), info
+  of FalseC: genCharLit c, char(0), info
+  of TrueC: genCharLit c, char(1), info
   of StrLit:
-    c.add makeCString(c.m.lits.strings[t[n].litId])
+    genStrLit(c, c.m.lits.strings[t[n].litId], info)
   of NilC:
-    c.add NullPtr
+    gentntLit c, 0, info
   of AconstrC:
     c.objConstrType(t, n.firstSon)
     c.add CurlyLe
@@ -148,39 +205,38 @@ proc genx(c: var GeneratedCode; t: Tree; n: NodePos) =
     c.add CurlyRi
   of ParC:
     let arg = n.firstSon
-    c.add ParLe
-    genx c, t, arg
-    c.add ParRi
-  of AddrC: unOp "&"
+    genx c, t, arg, mode
+  of AddrC:
+    assert mode == WantValue
+    genx c, t, n.firstSon, WantAddr
   of SizeofC:
-    let arg = n.firstSon
-    c.add "sizeof"
-    c.add ParLe
-    genx c, t, arg
-    c.add ParRi
+    # we evaluate it at compile-time:
+    let a = getAsmSlot(c, n.firstSon)
+    genIntLit c, a.size, info
   of CallC: genCall c, t, n
-  of AddC: typedBinOp " + "
-  of SubC: typedBinOp " - "
-  of MulC: typedBinOp " * "
-  of DivC: typedBinOp " / "
-  of ModC: typedBinOp " % "
-  of ShlC: typedBinOp " << "
-  of ShrC: typedBinOp " >> "
-  of BitandC: typedBinOp " & "
-  of BitorC: typedBinOp " | "
-  of BitxorC: typedBinOp " ^ "
-  of BitnotC: typedUnOp " ~ "
-  of AndC: cmpOp " && "
-  of OrC: cmpOp " || "
-  of NotC: cmpOp " !"
-  of NegC: cmpOp " -"
-  of EqC: cmpOp " == "
-  of LeC: cmpOp " <= "
-  of LtC: cmpOp " < "
-  of CastC: typedUnOp ""
-  of ConvC: typedUnOp ""
+  of AddC: typedBinOp AddT
+  of SubC: typedBinOp SubT
+  of MulC: typedBinOp MulT
+  of DivC: typedBinOp DivT
+  of ModC: typedBinOp ModT
+  of ShlC: typedBinOp ShlT
+  of ShrC: typedBinOp ShrT
+  of BitandC: typedBinOp BitandT
+  of BitorC: typedBinOp BitorT
+  of BitxorC: typedBinOp BitxorT
+  of BitnotC: typedUnOp BitnotT
+  of AndC: genAnd c, t, n
+  of OrC: genOr c, t, n
+  of NotC: unOp NotT
+  of NegC: unOp NegT
+  of EqC: cmpOp EqT
+  of LeC: cmpOp LeT
+  of LtC: cmpOp LtT
+  of CastC, ConvC:
+    assert mode == WantValue
+    genConv c, t, n
   of SufC:
     let (value, suffix) = sons2(t, n)
     genx(c, t, value)
   else:
-    genLvalue c, t, n
+    genLvalue c, t, n, mode

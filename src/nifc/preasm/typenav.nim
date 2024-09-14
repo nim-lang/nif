@@ -6,7 +6,7 @@
 
 ## A type navigator can recompute the type of an expression.
 
-import std / tables
+import std / [strutils, tables]
 import bitabs, packedtrees
 
 import .. / nifc_model
@@ -18,10 +18,15 @@ type
     down, next: ref TypeDesc
   TypeDescRef = ref TypeDesc
 
-proc typeFromPos(n: NodePos): TypeDesc {.inline.} =
+proc typeFromPos*(n: NodePos): TypeDesc {.inline.} =
   TypeDesc(p: n)
 
+proc rawPos*(t: TypeDesc): NodePos {.inline.} =
+  assert t.p != NodePos(0)
+  result = t.p
+
 proc errorType(): TypeDesc = TypeDesc(p: NodePos(0), a: createAtom(Empty))
+proc isError*(t: TypeDesc): bool = t.p == NodePos(0) and t.a.kind == Empty
 
 proc createAtom(k: NifcKind; value: StrId): PackedNode[NifcKind] {.inline.} =
   createAtom(k, uint32(value))
@@ -33,7 +38,7 @@ proc createIntegralType(lits: var Literals; integral: NifcKind; bits: string): T
 proc atomType(lits: var Literals; name: NifcKind): TypeDesc =
   result = TypeDesc(p: NodePos(0), a: createAtom(name))
 
-proc kind(tree: Tree; t: TypeDesc): NifcKind =
+proc kind*(tree: Tree; t: TypeDesc): NifcKind =
   if t.p != NodePos(0):
     tree[t.p].kind
   else:
@@ -52,11 +57,19 @@ proc copyType*(dest: var Tree; t: Tree; typ: TypeDesc) =
           copyType(dest, t, it[])
           it = it.next
 
-proc elemType(t: Tree; typ: TypeDesc): TypeDesc =
+proc elemType*(t: Tree; typ: TypeDesc): TypeDesc =
   if typ.p != NodePos(0):
     result = TypeDesc(p: ithSon(t, typ.p, 1))
   else:
     result = typ.down[]
+
+proc bits*(m: Module; typ: TypeDesc): int =
+  var lit: StrId
+  if typ.p != NodePos(0):
+    lit = m.code[typ.p.firstSon].litId
+  else:
+    lit = typ.down.a.litId
+  result = parseInt(m.lits.strings[lit])
 
 proc makePtrType(m: var Module; typ: TypeDesc): TypeDesc =
   result = atomType(m.lits, PtrC)
