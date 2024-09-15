@@ -245,9 +245,9 @@ proc genSlot(c: var GeneratedCode; dest: AsmSlot; info: PackedLineInfo) =
 
   c.buildTree tag, info:
     if tag != BT:
-      c.genIntLit dest.size, info
+      c.genIntLit dest.size*8, info
       if dest.align != dest.size:
-        c.genIntLit dest.align, info
+        c.genIntLit dest.align*8, info
 
 proc genType(c: var GeneratedCode; n: NodePos; alignOverride = -1) =
   var dest = AsmSlot()

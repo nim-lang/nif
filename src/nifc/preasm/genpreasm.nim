@@ -336,8 +336,10 @@ proc generatePreAsm*(inp, outp: string; intmSize: int) =
 
   traverseCode c, c.m.code, StartPos
   var f = open(outp, fmWrite)
+  f.write "(.nif24)\n(stmts"
   f.write toString(c.data)
   f.write toString(c.code)
+  f.write ")\n"
   if c.init.len > 0:
     quit "no init code implemented"
   f.close
