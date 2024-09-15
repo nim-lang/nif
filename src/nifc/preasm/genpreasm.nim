@@ -31,7 +31,7 @@ type
     data: TokenBuf
     code: TokenBuf
     init: TokenBuf
-    intmSize: int
+    intmSize, inConst, stmtBegin, labels, temps: int
     generatedTypes: IntSet
     requestedSyms: HashSet[string]
     fields: Table[LitId, AsmSlot]
@@ -93,6 +93,30 @@ proc addStrLit(c: var TokenBuf; s: string; info: PackedLineInfo) =
 
 proc addSym(c: var GeneratedCode; s: string; info: PackedLineInfo) =
   c.code.add toToken(Symbol, pool.syms.getOrIncl(s), info)
+
+type
+  Label = distinct int
+  TempVar = distinct int
+
+proc getLabel(c: var GeneratedCode): Label =
+  result = Label(c.labels)
+  inc c.labels
+
+proc getTempVar(c: var GeneratedCode): TempVar =
+  result = TempVar(c.temps)
+  inc c.temps
+
+proc defineLabel(c: var GeneratedCode; lab: Label; info: PackedLineInfo) =
+  c.code.addSymDef "L." & $int(lab), info
+
+proc useLabel(c: var GeneratedCode; lab: Label; info: PackedLineInfo) =
+  c.addSym "L." & $int(lab), info
+
+proc defineTemp(c: var GeneratedCode; tmp: TempVar; info: PackedLineInfo) =
+  c.code.addSymDef "v." & $int(tmp), info
+
+proc useTemp(c: var GeneratedCode; tmp: TempVar; info: PackedLineInfo) =
+  c.addSym "v." & $int(tmp), info
 
 template buildTree(c: var GeneratedCode; keyw: TagId; info: PackedLineInfo; body: untyped) =
   c.code.buildTree keyw, info:
@@ -199,27 +223,51 @@ include genpreasm_e
 
 type
   VarKind = enum
-    IsLocal, IsGlobal, IsThreadlocal, IsConst
+    IsLocal, IsGlobal, IsThreadlocal
 
 proc genVarDecl(c: var GeneratedCode; t: Tree; n: NodePos; vk: VarKind) =
   let d = asVarDecl(t, n)
   if t[d.name].kind == SymDef:
     let lit = t[d.name].litId
-    let name = mangle(c.m.lits.strings[lit])
-    if vk == IsConst:
-      c.add ConstKeyword
-    var alignOverride = -1
-    genVarPragmas c, t, d.pragmas, alignOverride
-    genType c, t, d.typ, name, alignOverride
+    let name = c.m.lits.strings[lit]
+    let opc =
+      case vk
+      of IsLocal: VarT
+      of IsGlobal: GvarT
+      of IsThreadlocal: TvarT
+    c.buildTree opc, t[n].info:
+      c.code.addSymDef name, t[d.name].info
+      var alignOverride = -1
+      genVarPragmas c, t, d.pragmas, alignOverride
+      genType c, d.typ, alignOverride
 
-    if vk == IsThreadlocal:
-      c.add " __thread"
     if t[d.value].kind != Empty:
-      c.add AsgnOpr
-      if vk != IsLocal: inc c.inSimpleInit
-      genx c, t, d.value
-      if vk != IsLocal: dec c.inSimpleInit
-    c.add Semicolon
+      c.buildTree AsgnT, t[d.value].info:
+        genType c, d.typ, alignOverride
+        c.addSym name, t[d.name].info
+        genx c, t, d.value, WantValue
+  else:
+    error c.m, "expected SymbolDef but got: ", t, n
+
+proc genConstDecl(c: var GeneratedCode; t: Tree; n: NodePos) =
+  let d = asVarDecl(t, n)
+  if t[d.name].kind == SymDef:
+    let lit = t[d.name].litId
+    let name = c.m.lits.strings[lit]
+
+    c.buildTree ConstT, t[n].info:
+      c.code.addSymDef name, t[d.name].info
+      var alignOverride = -1
+      genVarPragmas c, t, d.pragmas, alignOverride
+      genType c, d.typ, alignOverride
+
+      if t[d.value].kind != Empty:
+        c.buildTree ValuesT, t[d.value].info:
+          inc c.inConst
+          genx c, t, d.value, WantValue
+          dec c.inConst
+      else:
+        error c.m, "const needs a value: ", t, n
   else:
     error c.m, "expected SymbolDef but got: ", t, n
 
@@ -232,12 +280,11 @@ template moveToDataSection(body: untyped) =
 
 include genpreasm_s
 
-proc genProcDecl(c: var GeneratedCode; t: Tree; n: NodePos; isExtern: bool) =
+proc genProcDecl(c: var GeneratedCode; t: Tree; n: NodePos) =
+  c.labels = 0 # reset so that we produce nicer code
+  c.temps = 0
   let signatureBegin = c.code.len
   let prc = asProcDecl(t, n)
-
-  if isExtern:
-    c.add ExternKeyword
 
   genType c, t, prc.returnType
   c.add Space
@@ -267,23 +314,7 @@ proc genProcDecl(c: var GeneratedCode; t: Tree; n: NodePos; isExtern: bool) =
     c.add "void"
   c.add ParRi
 
-  if isExtern or c.requestedSyms.contains(name):
-    # symbol was used before its declaration has been processed so
-    # add a signature:
-    for i in signatureBegin ..< c.code.len:
-      c.protos.add c.code[i]
-    c.protos.add Token Semicolon
-
-  if isExtern:
-    c.code.setLen signatureBegin
-  else:
-    if isSelectAny in flags:
-      genRoutineGuardBegin(c, name)
-    c.add CurlyLe
-    genStmt c, t, prc.body
-    c.add CurlyRi
-    if isSelectAny in flags:
-      genRoutineGuardEnd(c)
+  genStmt c, t, prc.body
 
 proc genImp(c: var GeneratedCode; t: Tree; n: NodePos) =
   c.add ExternKeyword

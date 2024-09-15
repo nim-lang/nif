@@ -10,11 +10,7 @@
 # included from genpreasm.nim
 
 proc genEmitStmt(c: var GeneratedCode; t: Tree; n: NodePos) =
-  for ch in sons(t, n):
-    if t[ch].kind == StrLit:
-      c.add c.m.lits.strings[t[ch].litId]
-    else:
-      genx c, t, n
+  error c.m, "'emit' statement is not supported", t, n
 
 proc genStmt(c: var GeneratedCode; t: Tree; n: NodePos)
 
@@ -150,6 +146,7 @@ proc genSwitch(c: var GeneratedCode; t: Tree; caseStmt: NodePos) =
   c.add CurlyRi
 
 proc genStmt(c: var GeneratedCode; t: Tree; n: NodePos) =
+  c.stmtBegin = c.code.len
   case t[n].kind
   of Empty:
     discard

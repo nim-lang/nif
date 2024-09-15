@@ -52,21 +52,25 @@
          Call
 ))
 
-(RULE :VarDeclCommon SYMBOLDEF VarPragmas Type (OR . Expr))
+(RULE :VarDeclCommon SYMBOLDEF VarPragmas Type)
 (RULE :VarDecl (OR (var VarDeclCommon)
             (gvar VarDeclCommon)
             (tvar VarDeclCommon)))
 
-(RULE :ConstDecl (const SYMBOLDEF VarPragmas Type Expr))
+(RULE :ConstBody (values (ONE_OR_MANY (OR SYMBOL INTLIT UINTLIT FLOATLIT CHARLITERAL))))
+(RULE :ConstDecl (const SYMBOLDEF VarPragmas Type ConstBody))
 (RULE :AsciizDecl (asciiz SYMBOLDEF STRINGLITERAL))
 (RULE :EmitStmt (emit (ONE_OR_MANY Expr)))
 
 (RULE :Stmt (OR Call
          VarDecl
          EmitStmt
+         (asgn Type Lvalue Expr)
          (store Type Lvalue Expr)
          (lab SYMBOLDEF)
          (loop SYMBOLDEF)
+         (tjmp Expr SYMBOL)
+         (fjmp Expr SYMBOL)
          (jmp SYMBOL)
          (jloop SYMBOL)
          (ret Expr)))

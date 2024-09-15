@@ -633,15 +633,6 @@ proc matchVarDeclCommon(c: var Context; it: var Item): bool =
   if not success(sym2): return false
   if not matchVarPragmas(c, it): return false
   if not matchType(c, it): return false
-  var or3 = false
-  block or4:
-    if matchEmpty(c, it):
-      or3 = true
-      break or4
-    if matchExpr(c, it):
-      or3 = true
-      break or4
-  if not or3: return false
   when declared(handleVarDeclCommon):
     handleVarDeclCommon(c, it, before1)
   return true
@@ -683,6 +674,43 @@ proc matchVarDecl(c: var Context; it: var Item): bool =
     handleVarDecl(c, it, before1)
   return true
 
+proc matchConstBody(c: var Context; it: var Item): bool =
+  when declared(handleConstBody):
+    var before1 = save(c, it)
+  var kw2 = false
+  if isTag(c, it, ValuesT):
+    var om3 = false
+    while not peekParRi(c, it):
+      var or4 = false
+      block or5:
+        if lookupSym(c, it):
+          or4 = true
+          break or5
+        if matchIntLit(c, it):
+          or4 = true
+          break or5
+        if matchUIntLit(c, it):
+          or4 = true
+          break or5
+        if matchFloatLit(c, it):
+          or4 = true
+          break or5
+        if matchCharLit(c, it):
+          or4 = true
+          break or5
+      if not or4:
+        break
+      else:
+        om3 = true
+    if not om3:
+      error(c, it, "invalid ConstBody")
+      return false
+    kw2 = matchParRi(c, it)
+  if not kw2: return false
+  when declared(handleConstBody):
+    handleConstBody(c, it, before1)
+  return true
+
 proc matchConstDecl(c: var Context; it: var Item): bool =
   when declared(handleConstDecl):
     var before1 = save(c, it)
@@ -698,8 +726,8 @@ proc matchConstDecl(c: var Context; it: var Item): bool =
     if not matchType(c, it):
       error(c, it, "Type expected")
       return false
-    if not matchExpr(c, it):
-      error(c, it, "Expr expected")
+    if not matchConstBody(c, it):
+      error(c, it, "ConstBody expected")
       return false
     kw2 = matchParRi(c, it)
   if not kw2: return false
@@ -760,7 +788,7 @@ proc matchStmt(c: var Context; it: var Item): bool =
       or2 = true
       break or3
     var kw4 = false
-    if isTag(c, it, StoreT):
+    if isTag(c, it, AsgnT):
       if not matchType(c, it):
         error(c, it, "Type expected")
         break or3
@@ -775,36 +803,45 @@ proc matchStmt(c: var Context; it: var Item): bool =
       or2 = true
       break or3
     var kw5 = false
-    if isTag(c, it, LabT):
-      var sym6 = declareSym(c, it)
-      if not success(sym6):
-        error(c, it, "SYMBOLDEF expected")
+    if isTag(c, it, StoreT):
+      if not matchType(c, it):
+        error(c, it, "Type expected")
+        break or3
+      if not matchLvalue(c, it):
+        error(c, it, "Lvalue expected")
+        break or3
+      if not matchExpr(c, it):
+        error(c, it, "Expr expected")
         break or3
       kw5 = matchParRi(c, it)
     if kw5:
       or2 = true
       break or3
-    var kw7 = false
-    if isTag(c, it, LoopT):
-      var sym8 = declareSym(c, it)
-      if not success(sym8):
+    var kw6 = false
+    if isTag(c, it, LabT):
+      var sym7 = declareSym(c, it)
+      if not success(sym7):
         error(c, it, "SYMBOLDEF expected")
         break or3
-      kw7 = matchParRi(c, it)
-    if kw7:
+      kw6 = matchParRi(c, it)
+    if kw6:
       or2 = true
       break or3
-    var kw9 = false
-    if isTag(c, it, JmpT):
-      if not lookupSym(c, it):
-        error(c, it, "SYMBOL expected")
+    var kw8 = false
+    if isTag(c, it, LoopT):
+      var sym9 = declareSym(c, it)
+      if not success(sym9):
+        error(c, it, "SYMBOLDEF expected")
         break or3
-      kw9 = matchParRi(c, it)
-    if kw9:
+      kw8 = matchParRi(c, it)
+    if kw8:
       or2 = true
       break or3
     var kw10 = false
-    if isTag(c, it, JloopT):
+    if isTag(c, it, TjmpT):
+      if not matchExpr(c, it):
+        error(c, it, "Expr expected")
+        break or3
       if not lookupSym(c, it):
         error(c, it, "SYMBOL expected")
         break or3
@@ -813,12 +850,42 @@ proc matchStmt(c: var Context; it: var Item): bool =
       or2 = true
       break or3
     var kw11 = false
+    if isTag(c, it, FjmpT):
+      if not matchExpr(c, it):
+        error(c, it, "Expr expected")
+        break or3
+      if not lookupSym(c, it):
+        error(c, it, "SYMBOL expected")
+        break or3
+      kw11 = matchParRi(c, it)
+    if kw11:
+      or2 = true
+      break or3
+    var kw12 = false
+    if isTag(c, it, JmpT):
+      if not lookupSym(c, it):
+        error(c, it, "SYMBOL expected")
+        break or3
+      kw12 = matchParRi(c, it)
+    if kw12:
+      or2 = true
+      break or3
+    var kw13 = false
+    if isTag(c, it, JloopT):
+      if not lookupSym(c, it):
+        error(c, it, "SYMBOL expected")
+        break or3
+      kw13 = matchParRi(c, it)
+    if kw13:
+      or2 = true
+      break or3
+    var kw14 = false
     if isTag(c, it, RetT):
       if not matchExpr(c, it):
         error(c, it, "Expr expected")
         break or3
-      kw11 = matchParRi(c, it)
-    if kw11:
+      kw14 = matchParRi(c, it)
+    if kw14:
       or2 = true
       break or3
   if not or2: return false

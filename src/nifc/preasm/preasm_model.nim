@@ -44,34 +44,38 @@ const
   VarT* = TagId(41)
   GvarT* = TagId(42)
   TvarT* = TagId(43)
-  ConstT* = TagId(44)
-  AsciizT* = TagId(45)
-  EmitT* = TagId(46)
-  StoreT* = TagId(47)
-  LabT* = TagId(48)
-  LoopT* = TagId(49)
-  JmpT* = TagId(50)
-  JloopT* = TagId(51)
-  RetT* = TagId(52)
-  StmtsT* = TagId(53)
-  ParamT* = TagId(54)
-  ParamsT* = TagId(55)
-  ProcT* = TagId(56)
-  CdeclT* = TagId(57)
-  StdcallT* = TagId(58)
-  SafecallT* = TagId(59)
-  SyscallT* = TagId(60)
-  FastcallT* = TagId(61)
-  ThiscallT* = TagId(62)
-  NoconvT* = TagId(63)
-  MemberT* = TagId(64)
-  AttrT* = TagId(65)
-  WasT* = TagId(66)
-  SelectanyT* = TagId(67)
-  PragmasT* = TagId(68)
-  AlignT* = TagId(69)
-  ImpT* = TagId(70)
-  InclT* = TagId(71)
+  ValuesT* = TagId(44)
+  ConstT* = TagId(45)
+  AsciizT* = TagId(46)
+  EmitT* = TagId(47)
+  AsgnT* = TagId(48)
+  StoreT* = TagId(49)
+  LabT* = TagId(50)
+  LoopT* = TagId(51)
+  TjmpT* = TagId(52)
+  FjmpT* = TagId(53)
+  JmpT* = TagId(54)
+  JloopT* = TagId(55)
+  RetT* = TagId(56)
+  StmtsT* = TagId(57)
+  ParamT* = TagId(58)
+  ParamsT* = TagId(59)
+  ProcT* = TagId(60)
+  CdeclT* = TagId(61)
+  StdcallT* = TagId(62)
+  SafecallT* = TagId(63)
+  SyscallT* = TagId(64)
+  FastcallT* = TagId(65)
+  ThiscallT* = TagId(66)
+  NoconvT* = TagId(67)
+  MemberT* = TagId(68)
+  AttrT* = TagId(69)
+  WasT* = TagId(70)
+  SelectanyT* = TagId(71)
+  PragmasT* = TagId(72)
+  AlignT* = TagId(73)
+  ImpT* = TagId(74)
+  InclT* = TagId(75)
 
 proc registerTags*() =
   registerTag "i", IT
@@ -115,12 +119,16 @@ proc registerTags*() =
   registerTag "var", VarT
   registerTag "gvar", GvarT
   registerTag "tvar", TvarT
+  registerTag "values", ValuesT
   registerTag "const", ConstT
   registerTag "asciiz", AsciizT
   registerTag "emit", EmitT
+  registerTag "asgn", AsgnT
   registerTag "store", StoreT
   registerTag "lab", LabT
   registerTag "loop", LoopT
+  registerTag "tjmp", TjmpT
+  registerTag "fjmp", FjmpT
   registerTag "jmp", JmpT
   registerTag "jloop", JloopT
   registerTag "ret", RetT
