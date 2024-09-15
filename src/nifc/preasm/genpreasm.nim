@@ -280,48 +280,23 @@ include genpreasm_s
 proc genProcDecl(c: var GeneratedCode; t: Tree; n: NodePos) =
   c.labels = 0 # reset so that we produce nicer code
   c.temps = 0
-  let signatureBegin = c.code.len
   let prc = asProcDecl(t, n)
+  if t[prc.body].kind == Empty: return # ignore procs without body
+  # (proc SYMBOLDEF Params Type ProcPragmas (OR . StmtList)
+  c.buildTree ProcT, t[n].info:
+    discard genSymDef(c, t, prc.name)
 
-  genType c, t, prc.returnType
-  c.add Space
-  let name = genSymDef(c, t, prc.name)
+    if t[prc.params].kind != Empty:
+      c.buildTree ParamsT, t[prc.params].info:
+        for ch in sons(t, prc.params):
+          genParam c, t, ch
+    else:
+      c.addEmpty t[prc.params].info
+    genType c, prc.returnType
 
-  var flags: set[ProcFlag] = {}
-  genProcPragmas c, t, prc.pragmas, flags
-
-  c.add ParLe
-
-  var params = 0
-  if t[prc.params].kind != Empty:
-
-    for ch in sons(t, prc.params):
-      if params > 0: c.add Comma
-      genParam c, t, ch
-      inc params
-  else:
-    c.addEmpty t[prc.params].info
-
-  if isVarargs in flags:
-    if params > 0: c.add Comma
-    c.add "..."
-    inc params
-
-  if params == 0:
-    c.add "void"
-  c.add ParRi
-
-  genStmt c, t, prc.body
-
-proc genImp(c: var GeneratedCode; t: Tree; n: NodePos) =
-  c.add ExternKeyword
-  let arg = n.firstSon
-  case t[arg].kind
-  of ProcC: genProcDecl c, t, arg, true
-  of VarC: genStmt c, t, arg
-  of ConstC: genStmt c, t, arg
-  else:
-    error c.m, "expected declaration for `imp` but got: ", t, n
+    var flags: set[ProcFlag] = {}
+    genProcPragmas c, t, prc.pragmas, flags
+    genStmt c, t, prc.body
 
 proc genToplevel(c: var GeneratedCode; t: Tree; n: NodePos) =
   # ExternDecl ::= (imp ProcDecl | VarDecl | ConstDecl)
@@ -329,10 +304,10 @@ proc genToplevel(c: var GeneratedCode; t: Tree; n: NodePos) =
   # TopLevelConstruct ::= ExternDecl | ProcDecl | VarDecl | ConstDecl |
   #                       TypeDecl | Include | EmitStmt
   case t[n].kind
-  of ImpC: genImp c, t, n
-  of NodeclC: discard "Ignore nodecl"
-  of InclC: genInclude c, t, n
-  of ProcC: genProcDecl c, t, n, false
+  of ImpC: discard "ignore imp"
+  of NodeclC: discard "ignore nodecl"
+  of InclC: discard "genInclude c, t, n"
+  of ProcC: genProcDecl c, t, n
   of VarC: genStmt c, t, n
   of ConstC: genStmt c, t, n
   of TypeC: discard "handled in a different pass"
@@ -353,16 +328,12 @@ proc generatePreAsm*(inp, outp: string; intmSize: int) =
   var co = TypeOrder()
   traverseTypes(c.m, co)
 
-  generateTypes(c, c.m.types, co)
+  generateTypes(c, co)
 
   traverseCode c, c.m.code, StartPos
-  var f = CppFile(f: open(outp, fmWrite))
-  f.write "#define NIM_INTBITS " & $intmSize & "\n"
-  writeTokenSeq f, c.data, c
-  writeTokenSeq f, c.protos, c
-  writeTokenSeq f, c.code, c
+  var f = open(outp, fmWrite)
+  f.write toString(c.data)
+  f.write toString(c.code)
   if c.init.len > 0:
-    f.write "void __attribute__((constructor)) init(void) {"
-    writeTokenSeq f, c.init, c
-    f.write "}\n\n"
-  f.f.close
+    quit "no init code implemented"
+  f.close
