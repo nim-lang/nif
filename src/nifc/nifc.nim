@@ -113,7 +113,7 @@ proc handleCmdLine() =
         h.close()
       let appName = moduleNames[^1]
       let makefilePath = nifcacheDir / "Makefile." & appName
-      generateMakefile(s, makefilePath, moduleNames, appName, nifcacheDir, action)
+      generateMakefile(s, makefilePath, moduleNames, appName, nifcacheDir, action, destExt)
       if toRun:
         var cflags = ""
         if optOptimizeSpeed in s.config.options:
