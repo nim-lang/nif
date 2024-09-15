@@ -1,7 +1,7 @@
 import std/[os, strformat]
 import noptions
 
-proc generateMakefile*(s: State, path: string; moduleNames: seq[string]; app: string; nifcache: string; compileOption: string) =
+proc generateMakefile*(s: State, path: string; moduleNames: seq[string]; app: string; nifcache: string; compileOption: string; destExt: string) =
   var h = open(path, fmWrite)
   var makefileContent = "program:"
   var programBody = ""
@@ -26,7 +26,7 @@ proc generateMakefile*(s: State, path: string; moduleNames: seq[string]; app: st
     makefileContent.add " " & moduleNames[i] & ".o"
     programBody.add " " & nifcache / moduleNames[i] & ".o"
     objectBody.add &"{moduleNames[i]}.o:\n	{cc} {cflags} -c " &
-          nifcache / moduleNames[i] & ".c -o " &
+          nifcache / moduleNames[i] & fmt"{destExt} -o " &
           nifcache / moduleNames[i] & ".o\n"
 
   makefileContent.add &"\n	{cc} -o " & app & programBody & "\n\n" & objectBody
