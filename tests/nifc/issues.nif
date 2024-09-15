@@ -25,7 +25,16 @@
   )
 
   (proc :main.c . (i +32 atomic) . (stmts
-    (var :x.c . (i +32 .) +12)
+    (var :x . (i +8 .) (suf +12 "i8"))
+    (var :x.m . (i +16 .) (suf -12 "i16"))
+    (var :x1 . (i +32 .) (suf +12 "i32"))
+    (var :y1 . (u +32 .) (suf +12 "u32"))
+    (var :y2 . (u +64 .) (suf +12 "u64"))
+    (var :y3 . (u +16 .) (suf +12 "u16"))
+    (var :y4 . (u +8 .) (suf +12 "u8"))
+    (var :z . (f +32 .) (suf +12.5 "f32"))
+    (var :z1 . (f +64 .) (suf +12.5 "f64"))
+    (var :z2 . (ptr (c +8 .)) (suf "hello" "r"))
     (ret +0)
   ))
 )
