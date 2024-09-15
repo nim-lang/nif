@@ -25,6 +25,9 @@ type
     size, align, offset: int # offset is only used for fields and not
                              # really part of a "type" but it's easier this way
 
+  Label = distinct int
+  TempVar = distinct int
+
 type
   GeneratedCode* = object
     m: Module
@@ -32,6 +35,7 @@ type
     code: TokenBuf
     init: TokenBuf
     intmSize, inConst, stmtBegin, labels, temps: int
+    loopExits: seq[Label]
     generatedTypes: IntSet
     requestedSyms: HashSet[string]
     fields: Table[LitId, AsmSlot]
@@ -42,9 +46,6 @@ type
 
 proc initGeneratedCode*(m: sink Module; intmSize: int): GeneratedCode =
   result = GeneratedCode(m: m, intmSize: intmSize)
-
-proc add*[T](c: var GeneratedCode; x: T) {.inline.} =
-  c.code.add x
 
 proc error(m: Module; msg: string; tree: PackedTree[NifcKind]; n: NodePos) =
   write stdout, "[Error] "
@@ -93,10 +94,6 @@ proc addStrLit(c: var TokenBuf; s: string; info: PackedLineInfo) =
 
 proc addSym(c: var GeneratedCode; s: string; info: PackedLineInfo) =
   c.code.add toToken(Symbol, pool.syms.getOrIncl(s), info)
-
-type
-  Label = distinct int
-  TempVar = distinct int
 
 proc getLabel(c: var GeneratedCode): Label =
   result = Label(c.labels)
