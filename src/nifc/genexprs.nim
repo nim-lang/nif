@@ -100,6 +100,40 @@ proc objConstrType(c: var GeneratedCode; t: Tree; n: NodePos) =
     genType(c, t, n)
     c.add ParRi
 
+proc suffixToType(c: var GeneratedCode; t: Tree; suffix: NodePos) =
+  case c.m.lits.strings[t[suffix].litId]
+  of "i64":
+    c.add "NI64"
+  of "i32":
+    c.add "NI32"
+  of "i16":
+    c.add "NI16"
+  of "i8":
+    c.add "NI8"
+  of "u64":
+    c.add "NU64"
+  of "u32":
+    c.add "NU32"
+  of "u16":
+    c.add "NU16"
+  of "u8":
+    c.add "NU8"
+  of "f64":
+    c.add "NF64"
+  of "f32":
+    c.add "NF32"
+  else:
+    # TODO: f128?
+    quit "unsupported suffix"
+
+proc suffixConv(c: var GeneratedCode; t: Tree; value: NodePos, suffix: NodePos) =
+  c.add ParLe
+  c.add ParLe
+  suffixToType c, t, suffix
+  c.add ParRi
+  genx c, t, value
+  c.add ParRi
+
 proc genx(c: var GeneratedCode; t: Tree; n: NodePos) =
   case t[n].kind
   of IntLit:
@@ -187,6 +221,9 @@ proc genx(c: var GeneratedCode; t: Tree; n: NodePos) =
   of ConvC: typedUnOp ""
   of SufC:
     let (value, suffix) = sons2(t, n)
-    genx(c, t, value)
+    if t[value].kind == StrLit:
+      genx c, t, value
+    else:
+      suffixConv(c, t, value, suffix)
   else:
     genLvalue c, t, n

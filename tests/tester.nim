@@ -234,4 +234,5 @@ proc testNifc(overwrite: bool) =
 
   let issues = "tests/nifc/issues.nif"
   exec ("src" / "nifc" / "nifc").addFileExt(ExeExt) & " c -r " & issues
+  exec ("src" / "nifc" / "nifc").addFileExt(ExeExt) & " cpp -r " & issues
 testNifc(overwrite)
