@@ -11,6 +11,7 @@
 
 import std / [parseopt, strutils, os, osproc]
 import codegen, makefile, noptions
+import preasm / genpreasm
 
 const
   Version = "0.2"
@@ -20,7 +21,7 @@ const
 Usage:
   nifc [options] [command] [arguments]
 Command:
-  c|cpp file.nif [file2.nif]    convert NIF files to C|C++
+  c|cpp|p file.nif [file2.nif]    convert NIF files to C|C++|PreASM
 
 Options:
   -r, --run                 run the makefile and the compiled program
@@ -129,7 +130,7 @@ proc handleCmdLine() =
           else:
             quit "unreachable"
 
-        let cppCompiler = 
+        let cppCompiler =
           case s.config.cCompiler
           of ccGcc:
             "g++"
@@ -155,6 +156,15 @@ proc handleCmdLine() =
           quit "execution of an external program failed: " & output
         if execCmd("./" & appName) != 0:
           quit "execution of an external program failed: " & appName
+  of "p":
+    if args.len == 0:
+      quit "command takes a filename"
+    else:
+      createDir("nifcache")
+      for i in 0..<args.len:
+        let inp = args[i]
+        let outp = "nifcache" / splitFile(inp).name & ".preasm"
+        generatePreAsm inp, outp, bits
   else:
     quit "Invalid action: " & action
 

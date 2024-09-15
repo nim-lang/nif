@@ -31,18 +31,18 @@ proc recordDependency(m: Module; o: var TypeOrder; parent, child: TypeId) =
   var ch = child
   var viaPointer = false
   while true:
-    case m.types[ch].kind
+    case m.code[ch].kind
     of APtrC, PtrC:
       viaPointer = true
-      ch = elementType(m.types, ch)
+      ch = elementType(m.code, ch)
     of FlexarrayC:
-      ch = elementType(m.types, ch)
+      ch = elementType(m.code, ch)
     else:
       break
 
-  case m.types[ch].kind
+  case m.code[ch].kind
   of ObjectC, UnionC:
-    let decl = if m.types[ch].kind == ObjectC: TypedefStruct else: TypedefUnion
+    let decl = if m.code[ch].kind == ObjectC: TypedefStruct else: TypedefUnion
     let obj = ch
     if viaPointer:
       o.forwardedDecls.add parent, decl
@@ -59,22 +59,22 @@ proc recordDependency(m: Module; o: var TypeOrder; parent, child: TypeId) =
       o.ordered.add tracebackTypeC(m, ch), TypedefStruct
   of Sym:
     # follow the symbol to its definition:
-    let id = m.types[ch].litId
+    let id = m.code[ch].litId
     let def = m.defs.getOrDefault(id)
     if def == NodePos(0):
-      error m, "undeclared symbol: ", m.types, ch
+      error m, "undeclared symbol: ", m.code, ch
     else:
-      let decl = asTypeDecl(m.types, def)
+      let decl = asTypeDecl(m.code, def)
       if not containsOrIncl(o.lookedAtBodies, decl.body.int):
         recordDependency m, o, parent, decl.body
   else:
     discard "uninteresting type as we only focus on the required struct declarations"
 
 proc traverseObjectBody(m: Module; o: var TypeOrder; t: TypeId) =
-  for x in sons(m.types, t):
-    case m.types[x].kind
+  for x in sons(m.code, t):
+    case m.code[x].kind
     of FldC:
-      let decl = asFieldDecl(m.types, x)
+      let decl = asFieldDecl(m.code, x)
       recordDependency m, o, t, decl.typ
     of Sym:
       # inheritance
@@ -82,17 +82,17 @@ proc traverseObjectBody(m: Module; o: var TypeOrder; t: TypeId) =
     else: discard
 
 proc traverseProctypeBody(m: Module; o: var TypeOrder; t: TypeId) =
-  let procType = asProcType(m.types, t)
-  for param in sons(m.types, procType.params):
-    let paramDecl = asParamDecl(m.types, param)
+  let procType = asProcType(m.code, t)
+  for param in sons(m.code, procType.params):
+    let paramDecl = asParamDecl(m.code, param)
     recordDependency m, o, t, paramDecl.typ
   recordDependency m, o, t, procType.returnType
 
 proc traverseTypes(m: Module; o: var TypeOrder) =
-  for ch in sons(m.types, StartPos):
-    let decl = asTypeDecl(m.types, ch)
+  for ch in m.types:
+    let decl = asTypeDecl(m.code, ch)
     let t = decl.body
-    case m.types[t].kind
+    case m.code[t].kind
     of ObjectC:
       traverseObjectBody m, o, t
       o.ordered.add ch, TypedefStruct

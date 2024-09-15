@@ -6,7 +6,7 @@
 
 ## Parse NIF into a packed tree representation.
 
-import std / [hashes, tables, strutils]
+import std / [hashes, tables]
 import "../lib" / [bitabs, lineinfos, stringviews, packedtrees, nifreader, keymatcher,
   nifbuilder]
 
@@ -138,7 +138,7 @@ type
 
   Module* = object
     code*: Tree
-    types*: TypeGraph
+    types*: seq[NodePos]
     defs*: Table[StrId, NodePos]
     lits*: Literals
     filename*: string
@@ -147,13 +147,13 @@ proc addAtom*[L](dest: var PackedTree[NifcKind]; kind: NifcKind; lit: L; info: P
   packedtrees.addAtom dest, kind, uint32(lit), info
 
 proc tracebackTypeC*(m: Module, pos: NodePos): NodePos =
-  assert m.types[pos].kind in {ObjectC, UnionC, ArrayC}
+  assert m.code[pos].kind in {ObjectC, UnionC, ArrayC}
   var pos = int pos
-  while m.types[NodePos pos].kind != TypeC:
+  while m.code[NodePos pos].kind != TypeC:
     dec pos
   result = NodePos pos
 
-proc parse*(r: var Reader; dest: var PackedTree[NifcKind]; m: var Module; parentInfo: PackedLineInfo): bool =
+proc parse*(r: var Reader; m: var Module; parentInfo: PackedLineInfo): bool =
   let t = next(r)
   var currentInfo = parentInfo
   if t.filename.len == 0:
@@ -172,46 +172,45 @@ proc parse*(r: var Reader; dest: var PackedTree[NifcKind]; m: var Module; parent
     result = false
   of ParLe:
     let kind = whichNifcKeyword(t.s, Err)
-    var d = if kind == TypeC: addr(m.types) else: addr(dest)
-    copyInto(d[], kind, currentInfo):
+    if kind == TypeC:
+      m.types.add NodePos(m.code.len)
+    copyInto(m.code, kind, currentInfo):
       while true:
-        let progress = parse(r, d[], m, currentInfo)
+        let progress = parse(r, m, currentInfo)
         if not progress: break
   of UnknownToken:
-    copyInto dest, Err, currentInfo:
-      dest.addAtom StrLit, m.lits.strings.getOrIncl(decodeStr t), currentInfo
+    copyInto m.code, Err, currentInfo:
+      m.code.addAtom StrLit, m.lits.strings.getOrIncl(decodeStr t), currentInfo
   of DotToken:
-    dest.addAtom Empty, 0'u32, currentInfo
+    m.code.addAtom Empty, 0'u32, currentInfo
   of Ident:
-    dest.addAtom Ident, m.lits.strings.getOrIncl(decodeStr t), currentInfo
+    m.code.addAtom Ident, m.lits.strings.getOrIncl(decodeStr t), currentInfo
   of Symbol:
-    dest.addAtom Sym, m.lits.strings.getOrIncl(decodeStr t), currentInfo
+    m.code.addAtom Sym, m.lits.strings.getOrIncl(decodeStr t), currentInfo
   of SymbolDef:
     # Remember where to find this symbol:
     let litId = m.lits.strings.getOrIncl(decodeStr t)
-    m.defs[litId] = NodePos(int(dest.currentPos) - 1)
-    dest.addAtom SymDef, litId, currentInfo
+    m.defs[litId] = NodePos(int(m.code.currentPos) - 1)
+    m.code.addAtom SymDef, litId, currentInfo
   of StringLit:
-    dest.addAtom StrLit, m.lits.strings.getOrIncl(decodeStr t), currentInfo
+    m.code.addAtom StrLit, m.lits.strings.getOrIncl(decodeStr t), currentInfo
   of CharLit:
-    dest.addAtom CharLit, uint32 decodeChar(t), currentInfo
+    m.code.addAtom CharLit, uint32 decodeChar(t), currentInfo
   of IntLit:
     # we keep numbers as strings because we typically don't do anything with them
     # but to pass them as they are to the C code.
-    dest.addAtom IntLit, m.lits.strings.getOrIncl(decodeStr t), currentInfo
+    m.code.addAtom IntLit, m.lits.strings.getOrIncl(decodeStr t), currentInfo
   of UIntLit:
-    dest.addAtom UIntLit, m.lits.strings.getOrIncl(decodeStr t), currentInfo
+    m.code.addAtom UIntLit, m.lits.strings.getOrIncl(decodeStr t), currentInfo
   of FloatLit:
-    dest.addAtom FloatLit, m.lits.strings.getOrIncl(decodeStr t), currentInfo
+    m.code.addAtom FloatLit, m.lits.strings.getOrIncl(decodeStr t), currentInfo
 
 proc parse*(r: var Reader): Module =
   # empirically, (size div 7) is a good estimate for the number of nodes
   # in the file:
   let nodeCount = r.fileSize div 7
-  result = Module(code: createPackedTree[NifcKind](nodeCount),
-                  types: createPackedTree[NifcKind](60))
-  result.types.copyInto StmtsC, NoLineInfo:
-    discard parse(r, result.code, result, NoLineInfo)
+  result = Module(code: createPackedTree[NifcKind](nodeCount))
+  discard parse(r, result, NoLineInfo)
 
 proc load*(filename: string): Module =
   var r = nifreader.open(filename)
@@ -284,7 +283,7 @@ type
     name*, pragmas*, typ*, value*: NodePos
 
 proc asVarDecl*(t: Tree; n: NodePos): VarDecl =
-  assert t[n].kind == VarC
+  assert t[n].kind in {GvarC, TvarC, VarC}
   let (a, b, c, d) = sons4(t, n)
   VarDecl(name: a, pragmas: b, typ: c, value: d)
 
