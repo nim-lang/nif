@@ -160,10 +160,8 @@ proc handleCmdLine() =
     if args.len == 0:
       quit "command takes a filename"
     else:
-      createDir("nifcache")
-      for i in 0..<args.len:
-        let inp = args[i]
-        let outp = "nifcache" / splitFile(inp).name & ".preasm"
+      for inp in items args:
+        let outp = changeFileExt(inp, ".preasm")
         generatePreAsm inp, outp, bits
   else:
     quit "Invalid action: " & action

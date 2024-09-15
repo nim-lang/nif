@@ -292,7 +292,10 @@ proc genProcDecl(c: var GeneratedCode; t: Tree; n: NodePos) =
           genParam c, t, ch
     else:
       c.addEmpty t[prc.params].info
-    genType c, prc.returnType
+    if t[prc.returnType].kind == VoidC:
+      c.addEmpty t[prc.returnType].info
+    else:
+      genType c, prc.returnType
 
     var flags: set[ProcFlag] = {}
     genProcPragmas c, t, prc.pragmas, flags
@@ -323,6 +326,7 @@ proc traverseCode(c: var GeneratedCode; t: Tree; n: NodePos) =
     error c.m, "expected `stmts` but got: ", t, n
 
 proc generatePreAsm*(inp, outp: string; intmSize: int) =
+  registerTags()
   var c = initGeneratedCode(load(inp), intmSize)
 
   var co = TypeOrder()
@@ -332,8 +336,10 @@ proc generatePreAsm*(inp, outp: string; intmSize: int) =
 
   traverseCode c, c.m.code, StartPos
   var f = open(outp, fmWrite)
+  f.write "(.nif24)\n(stmts"
   f.write toString(c.data)
   f.write toString(c.code)
+  f.write ")\n"
   if c.init.len > 0:
     quit "no init code implemented"
   f.close

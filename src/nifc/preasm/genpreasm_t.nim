@@ -122,7 +122,7 @@ proc genFieldPragmas(c: var GeneratedCode; types: TypeGraph; n: NodePos;
   # CommonPragma ::= (align Number) | (was Identifier) | Attribute
   # FieldPragma ::= CommonPragma | (bits Number)
   if types[n].kind == Empty:
-    c.addEmpty types[n].info
+    discard
   elif types[n].kind == PragmasC:
     for ch in sons(types, n):
       case types[ch].kind
@@ -245,9 +245,9 @@ proc genSlot(c: var GeneratedCode; dest: AsmSlot; info: PackedLineInfo) =
 
   c.buildTree tag, info:
     if tag != BT:
-      c.genIntLit dest.size, info
+      c.genIntLit dest.size*8, info
       if dest.align != dest.size:
-        c.genIntLit dest.align, info
+        c.genIntLit dest.align*8, info
 
 proc genType(c: var GeneratedCode; n: NodePos; alignOverride = -1) =
   var dest = AsmSlot()
