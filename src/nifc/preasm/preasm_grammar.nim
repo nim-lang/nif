@@ -881,6 +881,9 @@ proc matchStmt(c: var Context; it: var Item): bool =
       break or3
     var kw14 = false
     if isTag(c, it, RetT):
+      if not matchType(c, it):
+        error(c, it, "Type expected")
+        break or3
       if not matchExpr(c, it):
         error(c, it, "Expr expected")
         break or3

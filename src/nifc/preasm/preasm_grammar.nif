@@ -73,7 +73,7 @@
          (fjmp Expr SYMBOL)
          (jmp SYMBOL)
          (jloop SYMBOL)
-         (ret Expr)))
+         (ret Type Expr)))
 
 (RULE :StmtList (stmts (ZERO_OR_MANY Stmt)))
 

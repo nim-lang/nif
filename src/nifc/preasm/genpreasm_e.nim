@@ -157,6 +157,7 @@ proc declareBoolAndAsgn(c: var GeneratedCode; info: PackedLineInfo): TempVar =
   result = getTempVar(c)
   c.code.buildTree VarT, info:
     c.defineTemp result, info
+    c.addEmpty info # no pragmas
     c.addKeyw BT, info
   c.code.addParLe AsgnT, info
   c.addKeyw BT, info

@@ -273,7 +273,7 @@ template moveToDataSection(body: untyped) =
   body
   for i in oldLen ..< c.code.len:
     c.data.add c.code[i]
-  setLen c.code, oldLen
+  shrink c.code, oldLen
 
 include genpreasm_s
 

@@ -106,68 +106,106 @@ proc genBranchValue(c: var GeneratedCode; t: Tree; n: NodePos) =
   else:
     error c.m, "expected valid `of` value but got: ", t, n
 
-proc genCaseCond(c: var GeneratedCode; t: Tree; n: NodePos) =
+proc genCaseCond(c: var GeneratedCode; t: Tree; n: NodePos;
+                 tmp: TempVar; tmptyp: AsmSlot; action: Label) =
   # BranchValue ::= Number | CharLiteral | Symbol
   # BranchRange ::= BranchValue | (range BranchValue BranchValue)
   # BranchRanges ::= (ranges BranchRange+)
   if t[n].kind == RangesC:
     for ch in sons(t, n):
-      c.add CaseKeyword
+      let info = t[ch].info
       if t[ch].kind == RangeC:
         let (a, b) = sons2(t, ch)
-        genBranchValue c, t, a
-        c.add " ... "
-        genBranchValue c, t, b
+        c.buildTree TjmpT, info:
+          c.buildTree BitandT, info:
+            c.addKeyw BT, info
+            c.buildTree LeT, info:
+              genSlot c, tmptyp, info # type
+              genBranchValue c, t, a
+              c.useTemp tmp, info
+
+            c.buildTree LeT, info:
+              genSlot c, tmptyp, info # type
+              c.useTemp tmp, info
+              genBranchValue c, t, b
+          c.useLabel action, info
       else:
-        genBranchValue c, t, ch
+        c.buildTree TjmpT, info:
+          c.buildTree EqT, info:
+            genSlot c, tmptyp, info # type
+            c.useTemp tmp, info
+            genBranchValue c, t, ch
+          c.useLabel action, info
   else:
     error c.m, "no `ranges` expected but got: ", t, n
 
 proc genSwitch(c: var GeneratedCode; t: Tree; caseStmt: NodePos) =
   # (case Expr (of BranchRanges StmtList)* (else StmtList)?) |
-  c.add SwitchKeyword
-  c.add ParLe
+  let sel = getTempVar(c)
   let selector = caseStmt.firstSon
-  c.genx t, selector
-  c.add ParRi
-  c.add CurlyLe
+  let seltyp = getAsmSlot(c, selector)
+  let info = t[selector].info
+  c.code.buildTree VarT, info:
+    c.defineTemp sel, info
+    c.addEmpty info # no pragmas
+    genSlot c, seltyp, info
+
+  c.buildTree AsgnT, info:
+    genSlot c, seltyp, info
+    c.useTemp sel, info
+    c.genx t, selector, WantValue
 
   var hasElse = false
   var hasElif = false
+  var afterwards = -1
+  let endif = getLabel(c)
   for n in sonsFromX(t, caseStmt):
+    let info = t[n].info
     case t[n].kind
     of OfC:
       if hasElse:
         error c.m, "no `of` allowed after `else` but got: ", t, n
       else:
-        let (cond, action) = sons2(t, n)
-        c.genCaseCond t, cond
-        c.add CurlyLe
-        genStmt c, t, action
-        c.add CurlyRi
-        c.add BreakKeyword
-        c.add Semicolon
+        if afterwards >= 0:
+          c.buildTree LabT, info:
+            c.defineLabel Label(afterwards), info
+        let action = getLabel(c)
+        let (cond, stmts) = sons2(t, n)
+        c.genCaseCond t, cond, sel, seltyp, action
+
+        afterwards = getLabel(c).int
+        c.buildTree JmpT, info:
+          c.useLabel Label(afterwards), info
+
+        c.buildTree LabT, info:
+          c.defineLabel action, info
+        genStmt c, t, stmts
+
+        c.buildTree JmpT, info:
+          c.useLabel endif, info
+        c.buildTree LabT, info:
+          c.defineLabel Label(afterwards), info
+
       hasElif = true
     of ElseC:
       hasElse = true
       if not hasElif:
         error c.m, "no `of` before `else` but got: ", t, n
       else:
-        c.add ElseKeyword
-        c.add CurlyLe
+        if afterwards >= 0:
+          c.buildTree LabT, info:
+            c.defineLabel Label(afterwards), info
         genStmt c, t, n.firstSon
-        c.add CurlyRi
-        c.add BreakKeyword
-        c.add Semicolon
     else:
       error c.m, "`case` expects `of` or `else` but got: ", t, n
   if not hasElif and not hasElse:
     error c.m, "`case` expects `of` or `else` but got: ", t, caseStmt
-  c.add CurlyRi
+  c.buildTree LabT, t[caseStmt].info:
+    c.defineLabel endif, t[caseStmt].info
 
 proc genAsgn(c: var GeneratedCode; t: Tree; n: NodePos) =
   let (dest, src) = sons2(t, n)
-  let isAsgn = t[dest].kind == Symbol
+  let isAsgn = t[dest].kind == Sym
   let opc = if isAsgn: AsgnT else: StoreT
   c.buildTree opc, t[n].info:
     genTypeof c, dest
@@ -177,6 +215,7 @@ proc genAsgn(c: var GeneratedCode; t: Tree; n: NodePos) =
 proc genReturn(c: var GeneratedCode; t: Tree; n: NodePos) =
   # XXX Needs to `kill` locals here?
   c.buildTree RetT, t[n].info:
+    genTypeof c, n.firstSon
     c.genx t, n.firstSon, WantValue
 
 proc genStmt(c: var GeneratedCode; t: Tree; n: NodePos) =
