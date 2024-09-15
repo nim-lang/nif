@@ -122,7 +122,7 @@ proc genFieldPragmas(c: var GeneratedCode; types: TypeGraph; n: NodePos;
   # CommonPragma ::= (align Number) | (was Identifier) | Attribute
   # FieldPragma ::= CommonPragma | (bits Number)
   if types[n].kind == Empty:
-    c.addEmpty types[n].info
+    discard
   elif types[n].kind == PragmasC:
     for ch in sons(types, n):
       case types[ch].kind

@@ -224,8 +224,9 @@ proc genStmt(c: var GeneratedCode; t: Tree; n: NodePos) =
   of Empty:
     discard
   of StmtsC:
-    for ch in sons(t, n):
-      genStmt(c, t, ch)
+    c.buildTree StmtsT, t[n].info:
+      for ch in sons(t, n):
+        genStmt(c, t, ch)
   of CallC:
     genCall c, t, n
   of VarC:
