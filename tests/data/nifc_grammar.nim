@@ -792,12 +792,21 @@ proc matchStmt(c: var Context; it: var Item): bool =
       or2 = true
       break or3
     var kw17 = false
+    if isTag(c, it, ScopeT):
+      if not matchStmtList(c, it):
+        error(c, it, "StmtList expected")
+        break or3
+      kw17 = matchParRi(c, it)
+    if kw17:
+      or2 = true
+      break or3
+    var kw18 = false
     if isTag(c, it, RetT):
       if not matchExpr(c, it):
         error(c, it, "Expr expected")
         break or3
-      kw17 = matchParRi(c, it)
-    if kw17:
+      kw18 = matchParRi(c, it)
+    if kw18:
       or2 = true
       break or3
   if not or2: return false
@@ -808,18 +817,23 @@ proc matchStmt(c: var Context; it: var Item): bool =
 proc matchStmtList(c: var Context; it: var Item): bool =
   when declared(handleStmtList):
     var before1 = save(c, it)
-  var kw2 = false
-  if isTag(c, it, StmtsT):
-    var zm3 = true
-    while not peekParRi(c, it):
-      if not matchStmt(c, it):
-        zm3 = false
-        break
-    if not zm3:
-      error(c, it, "invalid StmtList")
-      return false
-    kw2 = matchParRi(c, it)
-  if not kw2: return false
+  openScope(c)
+  try:
+    var kw2 = false
+    if isTag(c, it, StmtsT):
+      var zm3 = true
+      while not peekParRi(c, it):
+        if not matchStmt(c, it):
+          zm3 = false
+          break
+      if not zm3:
+        error(c, it, "invalid StmtList")
+        return false
+      kw2 = matchParRi(c, it)
+    if not kw2: return false
+  finally:
+    closeScope(c)
+  
   when declared(handleStmtList):
     handleStmtList(c, it, before1)
   return true
