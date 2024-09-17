@@ -52,11 +52,13 @@
 
 (RULE :ConstDecl (const SYMBOLDEF VarPragmas Type Expr))
 (RULE :EmitStmt (emit (ONE_OR_MANY Expr)))
+(RULE :LineDirective (linedir INTLIT STRINGLITERAL))
 
 (RULE :Stmt (OR Call
          VarDecl
          ConstDecl
          EmitStmt
+         LineDirective
          (asgn Lvalue Expr)
          (if (ONE_OR_MANY (elif Expr StmtList)) (ZERO_OR_ONE (else StmtList)))
          (while Expr StmtList)
