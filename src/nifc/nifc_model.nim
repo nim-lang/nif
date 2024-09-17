@@ -57,6 +57,7 @@ type
     ConstC = "const"
     EmitC = "emit"
     AsgnC = "asgn"
+    ScopeC = "scope"
     IfC = "if"
     ElifC = "elif"
     ElseC = "else"

@@ -140,9 +140,10 @@ Stmt ::= Call |
          (case Expr (of BranchRanges StmtList)* (else StmtList)?) |
          (lab SymbolDef) |
          (jmp Symbol) |
+         (scope StmtList)
          (ret Expr) # return statement
 
-StmtList ::= (stmts Stmt*)
+StmtList ::= (stmts SCOPE Stmt*)
 
 Param ::= (param SymbolDef ParamPragmas Type)
 Params ::= Empty | (params Param*)
@@ -249,6 +250,21 @@ Notes:
   and are not to be declared in the resulting C/C++ code.
 - `var` is always a local variable, `gvar` is a global variable and `tvar` a thread local
   variable.
+- `SCOPE` indicates the construct introduces a new local scope for variables.
+
+
+Scopes
+------
+
+NIFC effectively has the same scoping rules as C: C's `{ ... }` curly brackets introduce
+a new local scope and so does NIFC's `StmtList` non-terminal. The grammar indicates with
+a `SCOPE` keyword that otherwise has no meaning and should be ignored by a parser.
+
+Extra scopes can be introduced with the `(scope ...)` construct which produces `{}`. Note
+that a `scope` cannot be exited via `break`, `scope` is not like Nim's `block` statement
+in this regard!
+
+Scopes can be used by primitive code generators to produce significantly better code.
 
 
 Inheritance
