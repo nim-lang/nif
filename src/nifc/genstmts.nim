@@ -62,6 +62,12 @@ proc genWhile(c: var GeneratedCode; t: Tree; n: NodePos) =
   c.genStmt t, body
   c.add CurlyRi
 
+proc genScope(c: var GeneratedCode; t: Tree; n: NodePos) =
+  c.add CurlyLe
+  for ch in sons(t, n):
+    c.genStmt t, ch
+  c.add CurlyRi
+
 proc genBranchValue(c: var GeneratedCode; t: Tree; n: NodePos) =
   if t[n].kind in {IntLit, UIntLit, CharLit, Sym}:
     c.genx t, n

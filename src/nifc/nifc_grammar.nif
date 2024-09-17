@@ -64,6 +64,7 @@
          (case Expr (ONE_OR_MANY (of BranchRanges StmtList)) (ZERO_OR_ONE (else StmtList)))
          (lab SYMBOLDEF)
          (jmp SYMBOL)
+         (scope SCOPE StmtList)
          (ret Expr)))
 
 (RULE :StmtList (stmts (ZERO_OR_MANY Stmt)))
