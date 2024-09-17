@@ -29,6 +29,10 @@ type
   TempVar = distinct int
 
 type
+  Scope = object
+    # usedRegisters: RegisterSet # XXX later once we have a `frame` abstraction
+    # usedMem: (int, int)
+    syms: Table[string, AsmSlot]
   GeneratedCode* = object
     m: Module
     data: TokenBuf
@@ -41,8 +45,17 @@ type
     fields: Table[LitId, AsmSlot]
     types: Table[LitId, AsmSlot]
     strings: Table[string, int]
+    scopes: seq[Scope]
+    threadLocalsSize, globalsSize: int
+    globals: Table[string, AsmSlot]
 
   LitId = nifc_model.StrId
+
+proc openScope(c: var GeneratedCode) =
+  c.scopes.add Scope()
+
+proc closeScope(c: var GeneratedCode) =
+  discard c.scopes.pop()
 
 proc initGeneratedCode*(m: sink Module; intmSize: int): GeneratedCode =
   result = GeneratedCode(m: m, intmSize: intmSize)
@@ -222,6 +235,11 @@ type
   VarKind = enum
     IsLocal, IsGlobal, IsThreadlocal
 
+proc allocGlobal(size: var int; dest: var AsmSlot) =
+  size = align(size, dest.align)
+  dest.offset = size
+  inc size, dest.size
+
 proc genVarDecl(c: var GeneratedCode; t: Tree; n: NodePos; vk: VarKind) =
   let d = asVarDecl(t, n)
   if t[d.name].kind == SymDef:
@@ -236,7 +254,22 @@ proc genVarDecl(c: var GeneratedCode; t: Tree; n: NodePos; vk: VarKind) =
       c.code.addSymDef name, t[d.name].info
       var alignOverride = -1
       genVarPragmas c, t, d.pragmas, alignOverride
-      genType c, d.typ, alignOverride
+
+      # genType inlined:
+      var dest = AsmSlot()
+      fillTypeSlot c, typeFromPos(n), dest
+      if alignOverride >= 0:
+        dest.align = alignOverride
+      genSlot c, dest, c.m.code[n].info
+    case vk
+    of IsLocal:
+      c.scopes[c.scopes.high].syms[name] = dest
+    of IsGlobal:
+      allocGlobal c.globalsSize, dest
+      c.globals[name] = dest
+    of IsThreadlocal:
+      allocGlobal c.threadLocalsSize, dest
+      c.globals[name] = dest
 
     if t[d.value].kind != Empty:
       c.buildTree AsgnT, t[d.value].info:

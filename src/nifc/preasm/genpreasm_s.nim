@@ -90,7 +90,6 @@ proc genLabel(c: var GeneratedCode; t: Tree; n: NodePos) =
     error c.m, "expected SymbolDef but got: ", t, n
 
 proc genGoto(c: var GeneratedCode; t: Tree; n: NodePos) =
-  # XXX Needs to `kill` locals here?
   let dname = n.firstSon
   if t[dname].kind == Sym:
     let lit = t[dname].litId
@@ -213,7 +212,6 @@ proc genAsgn(c: var GeneratedCode; t: Tree; n: NodePos) =
     genx c, t, src, WantValue
 
 proc genReturn(c: var GeneratedCode; t: Tree; n: NodePos) =
-  # XXX Needs to `kill` locals here?
   c.buildTree RetT, t[n].info:
     genTypeof c, n.firstSon
     c.genx t, n.firstSon, WantValue
@@ -223,10 +221,12 @@ proc genStmt(c: var GeneratedCode; t: Tree; n: NodePos) =
   case t[n].kind
   of Empty:
     discard
-  of StmtsC:
+  of StmtsC, ScopeC:
+    c.openScope()
     c.buildTree StmtsT, t[n].info:
       for ch in sons(t, n):
         genStmt(c, t, ch)
+    c.closeScope()
   of CallC:
     genCall c, t, n
   of VarC:
