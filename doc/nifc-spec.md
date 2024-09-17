@@ -128,11 +128,13 @@ VarDecl ::= (var VarDeclCommon) | # local variable
 
 ConstDecl ::= (const SymbolDef VarPragmas Type Expr)
 EmitStmt ::= (emit Expr+)
+LineDirective :: (linedir Number StringLiteral)
 
 Stmt ::= Call |
          VarDecl |
          ConstDecl |
          EmitStmt |
+         LineDirective |
          (asgn Lvalue Expr) |
          (if (elif Expr StmtList)+ (else StmtList)? ) |
          (while Expr StmtList) |

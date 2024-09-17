@@ -154,5 +154,5 @@ proc getType*(m: var Module; t: Tree; n: NodePos): TypeDesc =
      VoidC, PtrC, ArrayC, FlexarrayC, APtrC, TypeC, CdeclC,
      StdcallC, SafecallC, SyscallC, FastcallC, ThiscallC, NoconvC, MemberC,
      AttrC, InlineC, NoinlineC, VarargsC, WasC, SelectanyC,
-     PragmasC, AlignC, BitsC, VectorC, ImpC, NodeclC, InclC, ScopeC:
+     PragmasC, AlignC, BitsC, VectorC, ImpC, NodeclC, InclC, ScopeC, LineDirC:
     result = errorType()

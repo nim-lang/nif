@@ -114,6 +114,7 @@ type
     NodeclC = "nodecl"
     InclC = "incl"
     SufC = "suf"
+    LineDirC = "linedir"
 
 const
   CallingConventions* = {CdeclC..MemberC}

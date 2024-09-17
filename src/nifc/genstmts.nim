@@ -196,5 +196,12 @@ proc genStmt(c: var GeneratedCode; t: Tree; n: NodePos) =
     c.add ReturnKeyword
     c.genx t, n.firstSon
     c.add Semicolon
+  of LineDirC:
+    let (num, filename) = sons2(t, n)
+    c.add LineDirKeyword
+    c.genx t, num
+    c.add Space
+    c.genx t, filename
+    c.add NewLine
   else:
     error c.m, "expected statement but got: ", t, n

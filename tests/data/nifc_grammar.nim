@@ -663,6 +663,23 @@ proc matchEmitStmt(c: var Context; it: var Item): bool =
     handleEmitStmt(c, it, before1)
   return true
 
+proc matchLineDirective(c: var Context; it: var Item): bool =
+  when declared(handleLineDirective):
+    var before1 = save(c, it)
+  var kw2 = false
+  if isTag(c, it, LinedirT):
+    if not matchIntLit(c, it):
+      error(c, it, "INTLIT expected")
+      return false
+    if not matchStringlit(c, it):
+      error(c, it, "STRINGLITERAL expected")
+      return false
+    kw2 = matchParRi(c, it)
+  if not kw2: return false
+  when declared(handleLineDirective):
+    handleLineDirective(c, it, before1)
+  return true
+
 proc matchStmt(c: var Context; it: var Item): bool =
   when declared(handleStmt):
     var before1 = save(c, it)
@@ -678,6 +695,9 @@ proc matchStmt(c: var Context; it: var Item): bool =
       or2 = true
       break or3
     if matchEmitStmt(c, it):
+      or2 = true
+      break or3
+    if matchLineDirective(c, it):
       or2 = true
       break or3
     var kw4 = false

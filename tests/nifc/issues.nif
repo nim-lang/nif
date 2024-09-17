@@ -16,11 +16,18 @@
   )
   )
 
-  
   (type :MyObject4.m .
   (object . (fld :a1 . (i +32 atomic))
     (fld :a2 . (i +64 atomic))
     (fld :a3 . (bool .))
+  )
+  )
+
+  (linedir +1 "test.nif")
+  (proc :foo.m . (void) . (stmts
+    (linedir +2 "test.nif")
+    (var :x . (i +8 .) (suf +12 "i8"))
+    (linedir +4 "test.nif")
   )
   )
 
@@ -35,6 +42,7 @@
     (var :z . (f +32 .) (suf +12.5 "f32"))
     (var :z1 . (f +64 .) (suf +12.5 "f64"))
     (var :z2 . (ptr (c +8 .)) (cast (ptr (c +8 .)) (suf "hello" "r")))
+    (linedir +8 "test.nif")
     (ret +0)
   ))
 )

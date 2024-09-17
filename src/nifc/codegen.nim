@@ -59,6 +59,7 @@ type
     TypedefUnion = "typedef union "
     TypedefKeyword = "typedef "
     IncludeKeyword = "#include "
+    LineDirKeyword = "#line "
 
 proc fillTokenTable(tab: var BiTable[Token, string]) =
   for e in EmptyToken..high(PredefinedToken):
@@ -391,6 +392,7 @@ proc genToplevel(c: var GeneratedCode; t: Tree; n: NodePos) =
   of ConstC: genStmt c, t, n
   of TypeC: discard "handled in a different pass"
   of EmitC: genEmitStmt c, t, n
+  of LineDirC: genStmt c, t, n
   else:
     error c.m, "expected top level construct but got: ", t, n
 
