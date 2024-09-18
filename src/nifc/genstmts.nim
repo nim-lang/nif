@@ -179,6 +179,7 @@ proc genStmt(c: var GeneratedCode; t: Tree; n: NodePos) =
   of EmitC:
     genEmitStmt c, t, n
   of AsgnC:
+    genCLineDir(c, t, info(t, n))
     let (dest, src) = sons2(t, n)
     genLvalue c, t, dest
     c.add AsgnOpr

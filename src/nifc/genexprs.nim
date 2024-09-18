@@ -47,6 +47,7 @@ template typedUnOp(opr) =
   c.add ParRi
 
 proc genCall(c: var GeneratedCode; t: Tree; n: NodePos) =
+  genCLineDir(c, t, info(t, n))
   genx c, t, n.firstSon
   c.add ParLe
   var i = 0

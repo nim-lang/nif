@@ -9,10 +9,10 @@
 
 # We produce C code as a list of tokens.
 
-import std / [assertions, syncio, tables, sets, intsets, formatfloat, strutils]
+import std / [assertions, syncio, tables, sets, intsets, formatfloat, strutils, packedsets]
 from std / os import changeFileExt, splitFile, extractFileName
 
-import .. / lib / [bitabs, packedtrees]
+import .. / lib / [bitabs, packedtrees, lineinfos]
 import mangler, nifc_model, cprelude, noptions
 
 type
@@ -59,6 +59,7 @@ type
     TypedefUnion = "typedef union "
     TypedefKeyword = "typedef "
     IncludeKeyword = "#include "
+    LineDirKeyword = "#line "
 
 proc fillTokenTable(tab: var BiTable[Token, string]) =
   for e in EmptyToken..high(PredefinedToken):
@@ -74,6 +75,7 @@ type
     protos: seq[Token]
     code: seq[Token]
     init: seq[Token]
+    fileIds: PackedSet[FileId]
     tokens: BiTable[Token, string]
     inSimpleInit: int
     headerFile: seq[Token]
@@ -81,7 +83,7 @@ type
     requestedSyms: HashSet[string]
 
 proc initGeneratedCode*(m: sink Module): GeneratedCode =
-  result = GeneratedCode(m: m, code: @[], tokens: initBiTable[Token, string]())
+  result = GeneratedCode(m: m, code: @[], tokens: initBiTable[Token, string](), fileIds: initPackedSet[FileId]())
   fillTokenTable(result.tokens)
 
 proc add*(c: var GeneratedCode; t: PredefinedToken) {.inline.} =
@@ -259,6 +261,19 @@ proc genVarPragmas(c: var GeneratedCode; t: Tree; n: NodePos) =
   else:
     error c.m, "expected pragmas but got: ", t, n
 
+proc genCLineDir(c: var GeneratedCode; t: Tree; info: PackedLineInfo) =
+  let (id, line, _) = unpack(c.m.lits.man, info)
+
+  if c.m.lits.files.hasId(id):
+    let name = "FX_" & $(int id)
+    c.add LineDirKeyword
+    c.add $line
+    c.add Space
+    c.add name
+    c.add NewLine
+
+    c.fileIds.incl id
+
 include genexprs
 
 type
@@ -267,6 +282,7 @@ type
 
 proc genVarDecl(c: var GeneratedCode; t: Tree; n: NodePos; vk: VarKind) =
   let d = asVarDecl(t, n)
+  genCLineDir(c, t, info(t, n))
   if t[d.name].kind == SymDef:
     let lit = t[d.name].litId
     let name = mangle(c.m.lits.strings[lit])
@@ -415,6 +431,13 @@ proc traverseCode(c: var GeneratedCode; t: Tree; n: NodePos) =
           c.init.add c.code[i]
         setLen c.code, oldLen
 
+proc writeLineDir(f: var CppFile, c: var GeneratedCode) =
+  for id in items(c.fileIds):
+    let name = "FX_" & $(int id)
+    let def = "#define " & name & " \"" & c.m.lits.files[id] & "\""
+    write f, def
+    write f, "\n"
+
 proc generateCode*(s: var State, inp, outp: string; intmSize: int) =
   var c = initGeneratedCode(load(inp))
 
@@ -429,6 +452,7 @@ proc generateCode*(s: var State, inp, outp: string; intmSize: int) =
   f.write "#define NIM_INTBITS " & $intmSize & "\n"
   f.write Prelude
   writeTokenSeq f, c.includes, c
+  writeLineDir f, c
   writeTokenSeq f, typeDecls, c
   writeTokenSeq f, c.data, c
   writeTokenSeq f, c.protos, c
