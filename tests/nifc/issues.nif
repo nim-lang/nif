@@ -24,7 +24,17 @@
   )
   )
 
+  (proc :foo.m2 . (void) . (stmts
+    1,1,test1.nim(var :x.m . (i +32 .) +12)
+    1,2,test1.nim(asgn x.m +15)
+  ))
+
   (proc :main.c . (i +32 atomic) . (stmts
+    1,1,hello.nim(var :x1.m . (i +32 .) +12)
+    1,2,hello.nim(var :z2.m . (ptr (c +8 .)) (cast (ptr (c +8 .)) (suf "hello" "r")))
+    1,3,hello.nim(var :z3.m . (ptr (c +8 .)) (cast (ptr (c +8 .)) (suf "hello" "r")))
+    1,4,hello.nim(call foo.m2)
+
     (var :x . (i +8 .) (suf +12 "i8"))
     (var :x.m . (i +16 .) (suf -12 "i16"))
     (var :x1 . (i +32 .) (suf +12 "i32"))
