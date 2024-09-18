@@ -61,10 +61,10 @@ proc recordDependency(m: Module; o: var TypeOrder; parent, child: TypeId) =
     # follow the symbol to its definition:
     let id = m.code[ch].litId
     let def = m.defs.getOrDefault(id)
-    if def == NodePos(0):
+    if def.pos == NodePos(0):
       error m, "undeclared symbol: ", m.code, ch
     else:
-      let decl = asTypeDecl(m.code, def)
+      let decl = asTypeDecl(m.code, def.pos)
       if not containsOrIncl(o.lookedAtBodies, decl.body.int):
         recordDependency m, o, parent, decl.body
   else:
