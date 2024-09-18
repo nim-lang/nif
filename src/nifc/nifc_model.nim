@@ -137,10 +137,14 @@ type
 
   Tree* = PackedTree[NifcKind]
 
+  Definition* = object
+    pos*: NodePos
+    kind*: NifcKind
+
   Module* = object
     code*: Tree
     types*: seq[NodePos]
-    defs*: Table[StrId, NodePos]
+    defs*: Table[StrId, Definition]
     lits*: Literals
     filename*: string
 
@@ -191,7 +195,8 @@ proc parse*(r: var Reader; m: var Module; parentInfo: PackedLineInfo): bool =
   of SymbolDef:
     # Remember where to find this symbol:
     let litId = m.lits.strings.getOrIncl(decodeStr t)
-    m.defs[litId] = NodePos(int(m.code.currentPos) - 1)
+    let pos = NodePos(int(m.code.currentPos) - 1)
+    m.defs[litId] = Definition(pos: pos, kind: m.code[pos].kind)
     m.code.addAtom SymDef, litId, currentInfo
   of StringLit:
     m.code.addAtom StrLit, m.lits.strings.getOrIncl(decodeStr t), currentInfo

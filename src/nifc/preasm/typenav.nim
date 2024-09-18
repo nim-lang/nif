@@ -81,8 +81,8 @@ proc getType*(m: var Module; t: Tree; n: NodePos): TypeDesc =
     result = errorType()
   of Sym:
     let d = m.defs.getOrDefault(t[n].litId)
-    if d != NodePos(0):
-      result = getType(m, t, d)
+    if d.pos != NodePos(0):
+      result = getType(m, t, d.pos)
     else:
       result = errorType()
   of GvarC, TvarC, ConstC, VarC:
