@@ -37,9 +37,7 @@ proc genWhile(c: var GeneratedCode; t: Tree; n: NodePos) =
   let (cond, body) = sons2(t, n)
   c.buildTree LoopT, t[n].info:
     c.defineLabel loopLabel, t[n].info
-  c.buildTree FjmpT, t[cond].info:
-    c.genx t, cond, WantValue
-    c.useLabel exit, t[cond].info
+    c.genFjmp t, cond, exit
   c.genStmt t, body
   c.buildTree JloopT, t[n].info:
     c.useLabel loopLabel, t[n].info
@@ -57,9 +55,7 @@ proc genIf(c: var GeneratedCode; t: Tree; ifStmt: NodePos) =
       else:
         let (cond, action) = sons2(t, n)
         let afterwards = getLabel(c)
-        c.buildTree FjmpT, t[n].info:
-          c.genx t, cond, WantValue
-          c.useLabel afterwards, t[n].info
+        c.genFjmp t, cond, afterwards
         genStmt c, t, action
         c.buildTree JmpT, t[n].info:
           c.useLabel endif, t[n].info

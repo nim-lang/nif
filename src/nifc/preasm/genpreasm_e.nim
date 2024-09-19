@@ -194,6 +194,12 @@ proc genCond(c: var GeneratedCode; t: Tree; n: NodePos; opc: TagId) =
     c.code.add fullExpr[i]
   c.useTemp temp, info
 
+
+proc genFjmp(c: var GeneratedCode; t: Tree; n: NodePos; jmpTarget: Label) =
+  c.buildTree FjmpT, t[n].info:
+    genx c, t, n, WantValue
+    c.useLabel jmpTarget, t[n].info
+
 proc genx(c: var GeneratedCode; t: Tree; n: NodePos; mode: XMode) =
   let info = t[n].info
   case t[n].kind

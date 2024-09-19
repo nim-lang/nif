@@ -235,4 +235,4 @@ proc getAsmSlot(c: var GeneratedCode; n: NodePos): AsmSlot =
 
 proc getTypeSlot(c: var GeneratedCode; t: NodePos): AsmSlot =
   result = AsmSlot()
-  fillTypeSlot c, t, result
+  fillTypeSlot c, typeFromPos(t), result

@@ -54,6 +54,8 @@ proc initGeneratedCode*(m: sink Module; intmSize: int): GeneratedCode =
   result = GeneratedCode(m: m, intmSize: intmSize)
 
 proc error(m: Module; msg: string; tree: PackedTree[NifcKind]; n: NodePos) =
+  when defined(debug):
+    writeStackTrace()
   write stdout, "[Error] "
   write stdout, msg
   writeLine stdout, toString(tree, n, m)
@@ -284,7 +286,7 @@ proc genVarDecl(c: var GeneratedCode; t: Tree; n: NodePos; vk: VarKind) =
 
       # genType inlined:
       var dest = AsmSlot()
-      fillTypeSlot c, typeFromPos(n), dest
+      fillTypeSlot c, typeFromPos(d.typ), dest
       if alignOverride >= 0:
         dest.align = alignOverride
       genSlot c, dest, c.m.code[n].info
