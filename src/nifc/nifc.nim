@@ -13,7 +13,7 @@ import std / [parseopt, strutils, os, osproc]
 import codegen, makefile, noptions
 import preasm / genpreasm
 
-when false:
+when defined(enableAsm):
   import amd64 / genasm
 
 const
@@ -170,9 +170,12 @@ proc handleCmdLine() =
     if args.len == 0:
       quit "command takes a filename"
     else:
-      for inp in items args:
-        let outp = changeFileExt(inp, ".asm")
-        when false: generateAsm inp, outp
+      when defined(enableAsm):
+        for inp in items args:
+          let outp = changeFileExt(inp, ".asm")
+          generateAsm inp, outp
+      else:
+        quit "wasn't built with native target support"
   else:
     quit "Invalid action: " & action
 

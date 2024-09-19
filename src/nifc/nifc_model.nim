@@ -289,7 +289,7 @@ type
     name*, pragmas*, typ*, value*: NodePos
 
 proc asVarDecl*(t: Tree; n: NodePos): VarDecl =
-  assert t[n].kind in {GvarC, TvarC, VarC}
+  assert t[n].kind in {GvarC, TvarC, VarC, ConstC}
   let (a, b, c, d) = sons4(t, n)
   VarDecl(name: a, pragmas: b, typ: c, value: d)
 

@@ -162,6 +162,8 @@ proc genStmt(c: var GeneratedCode; t: Tree; n: NodePos) =
   of StmtsC:
     for ch in sons(t, n):
       genStmt(c, t, ch)
+  of ScopeC:
+    genScope c, t, n
   of CallC:
     genCall c, t, n
     c.add Semicolon
