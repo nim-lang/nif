@@ -3,9 +3,9 @@
 
 (public)
 
-(private
+(private 1,1,hello.nim
  (kv MyObject.c +36)
- (kv MyProc.e +50)
+ (kv MyProc.e +49)
  (kv MyEnum.e +53)
  (kv ValueA +35)
  (kv ValueB +22)

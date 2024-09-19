@@ -9,6 +9,7 @@
 import std / [hashes, tables]
 import "../lib" / [bitabs, lineinfos, stringviews, packedtrees, nifreader, keymatcher,
   nifbuilder]
+import noptions
 
 type
   NifcKind* = enum
@@ -147,6 +148,7 @@ type
     defs*: Table[StrId, Definition]
     lits*: Literals
     filename*: string
+    config*: ConfigRef
 
 proc addAtom*[L](dest: var PackedTree[NifcKind]; kind: NifcKind; lit: L; info: PackedLineInfo) =
   packedtrees.addAtom dest, kind, uint32(lit), info

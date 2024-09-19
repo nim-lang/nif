@@ -233,6 +233,6 @@ proc testNifc(overwrite: bool) =
   exec ("src" / "nifc" / "nifc").addFileExt(ExeExt) & " cpp -r --opt:speed " & hello
 
   let issues = "tests/nifc/issues.nif"
-  exec ("src" / "nifc" / "nifc").addFileExt(ExeExt) & " c -r " & issues
-  exec ("src" / "nifc" / "nifc").addFileExt(ExeExt) & " cpp -r " & issues
+  exec ("src" / "nifc" / "nifc").addFileExt(ExeExt) & " c -r --linedir:on " & issues
+  exec ("src" / "nifc" / "nifc").addFileExt(ExeExt) & " cpp -r --linedir:off " & issues
 testNifc(overwrite)

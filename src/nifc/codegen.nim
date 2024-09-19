@@ -262,17 +262,17 @@ proc genVarPragmas(c: var GeneratedCode; t: Tree; n: NodePos) =
     error c.m, "expected pragmas but got: ", t, n
 
 proc genCLineDir(c: var GeneratedCode; t: Tree; info: PackedLineInfo) =
-  let (id, line, _) = unpack(c.m.lits.man, info)
+  if optLineDir in c.m.config.options:
+    let (id, line, _) = unpack(c.m.lits.man, info)
+    if c.m.lits.files.hasId(id):
+      let name = "FX_" & $(int id)
+      c.add LineDirKeyword
+      c.add $line
+      c.add Space
+      c.add name
+      c.add NewLine
 
-  if c.m.lits.files.hasId(id):
-    let name = "FX_" & $(int id)
-    c.add LineDirKeyword
-    c.add $line
-    c.add Space
-    c.add name
-    c.add NewLine
-
-    c.fileIds.incl id
+      c.fileIds.incl id
 
 include genexprs
 
@@ -439,7 +439,9 @@ proc writeLineDir(f: var CppFile, c: var GeneratedCode) =
     write f, "\n"
 
 proc generateCode*(s: var State, inp, outp: string; intmSize: int) =
-  var c = initGeneratedCode(load(inp))
+  var m = load(inp)
+  m.config = s.config
+  var c = initGeneratedCode(m)
 
   var co = TypeOrder()
   traverseTypes(c.m, co)
@@ -452,7 +454,8 @@ proc generateCode*(s: var State, inp, outp: string; intmSize: int) =
   f.write "#define NIM_INTBITS " & $intmSize & "\n"
   f.write Prelude
   writeTokenSeq f, c.includes, c
-  writeLineDir f, c
+  if optLineDir in c.m.config.options:
+    writeLineDir f, c
   writeTokenSeq f, typeDecls, c
   writeTokenSeq f, c.data, c
   writeTokenSeq f, c.protos, c

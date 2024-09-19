@@ -1,7 +1,7 @@
 (.nif24)
 (stmts
   (incl "<stdio.h>")
-  (type @1,1,hello.nim :MyObject.c . (object . ))
+  (type 1,1,hello.nim :MyObject.c . (object . ))
   (type :MyProc.e . (proctype . (params) (void) . ))
   (type :MyEnum.e . (enum (u +8 .)
     (efld :ValueA +0)
