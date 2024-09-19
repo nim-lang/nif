@@ -194,11 +194,35 @@ proc genCond(c: var GeneratedCode; t: Tree; n: NodePos; opc: TagId) =
     c.code.add fullExpr[i]
   c.useTemp temp, info
 
-
-proc genFjmp(c: var GeneratedCode; t: Tree; n: NodePos; jmpTarget: Label) =
-  c.buildTree FjmpT, t[n].info:
-    genx c, t, n, WantValue
-    c.useLabel jmpTarget, t[n].info
+proc genFjmp(c: var GeneratedCode; t: Tree; n: NodePos; jmpTarget: Label; opc = FjmpT) =
+  let info = t[n].info
+  let k = t[n].kind
+  case k
+  of ParC:
+    genFjmp c, t, n.firstSon, jmpTarget, opc
+  of NotC:
+    genFjmp c, t, n.firstSon, jmpTarget, (if opc == FjmpT: TjmpT else: FjmpT)
+  of AndC, OrC:
+    if (k == AndC and opc == FjmpT) or
+       (k == OrC and opc == TjmpT):
+      # easy case
+      let (a, b) = sons2(t, n)
+      genFjmp c, t, a, jmpTarget, opc
+      genFjmp c, t, b, jmpTarget, opc
+    else:
+      # "or" case:
+      let (a, b) = sons2(t, n)
+      # "if not a: b"
+      let neg = (if opc == FjmpT: TjmpT else: FjmpT)
+      let lab = getLabel(c)
+      genFjmp c, t, a, lab, neg
+      genFjmp c, t, b, jmpTarget, opc
+      c.buildTree LabT, info:
+        c.defineLabel lab, info
+  else:
+    c.buildTree opc, info:
+      genx c, t, n, WantValue
+      c.useLabel jmpTarget, info
 
 proc genx(c: var GeneratedCode; t: Tree; n: NodePos; mode: XMode) =
   let info = t[n].info
