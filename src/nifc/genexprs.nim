@@ -17,9 +17,11 @@ template typedBinOp(opr) =
   c.add ParLe
   genType c, t, typ
   c.add ParRi
+  c.add ParLe
   genx c, t, a
   c.add opr
   genx c, t, b
+  c.add ParRi
   c.add ParRi
 
 template cmpOp(opr) =

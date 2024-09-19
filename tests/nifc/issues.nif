@@ -45,6 +45,9 @@
     (var :z . (f +32 .) (suf +12.5 "f32"))
     (var :z1 . (f +64 .) (suf +12.5 "f64"))
     (var :z2 . (ptr (c +8 .)) (cast (ptr (c +8 .)) (suf "hello" "r")))
+
+    (var :add2.m . (i +32 .) (add (i +32 .) +214 +21))
     (ret +0)
   ))
 )
+
