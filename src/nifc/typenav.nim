@@ -9,7 +9,7 @@
 import std / [strutils, tables]
 import bitabs, packedtrees
 
-import .. / nifc_model
+import nifc_model
 
 type
   TypeDesc* {.acyclic.} = object

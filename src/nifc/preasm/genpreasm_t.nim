@@ -11,9 +11,6 @@
 
 ## Generates PreASM types from NIFC types.
 
-proc align(address, alignment: int): int =
-  result = (address + (alignment - 1)) and not (alignment - 1)
-
 proc mergeBranch(arg: var AsmSlot; value: AsmSlot) =
   arg.offset = max(arg.offset, value.offset)
   arg.align = max(arg.align, value.align)
@@ -113,10 +110,6 @@ template integralBits(c: GeneratedCode; t: TypeDesc): int =
   else: # 8, 16, 32, 64 etc.
     res
 
-proc genWas(c: var GeneratedCode; t: Tree; ch: NodePos) =
-  c.code.buildTree(WasT, t[ch].info):
-    c.code.add toToken(Ident, pool.strings.getOrIncl(toString(t, ch.firstSon, c.m)), t[ch].info)
-
 proc genFieldPragmas(c: var GeneratedCode; types: TypeGraph; n: NodePos;
                      field: var AsmSlot; bits: var string) =
   # CommonPragma ::= (align Number) | (was Identifier) | Attribute
@@ -128,9 +121,7 @@ proc genFieldPragmas(c: var GeneratedCode; types: TypeGraph; n: NodePos;
       case types[ch].kind
       of AlignC:
         field.align = parseInt(c.m.lits.strings[types[ch.firstSon].litId])
-      of WasC:
-        genWas c, types, ch
-      of AttrC:
+      of WasC, AttrC:
         discard "ignore attributes"
       of BitsC:
         error c.m, "bit sizes fields are not supported: ", types, ch
@@ -233,37 +224,6 @@ proc generateTypes(c: var GeneratedCode; o: TypeOrder) =
       var dest = AsmSlot()
       fillTypeSlot c, typeFromPos(decl.body), dest
       c.types[litId] = dest
-
-proc genSlot(c: var GeneratedCode; dest: AsmSlot; info: PackedLineInfo) =
-  let tag =
-    case dest.kind
-    of ABool: BT
-    of AInt: IT
-    of AUInt: UT
-    of AFloat: FT
-    of AMem: MT
-
-  c.buildTree tag, info:
-    if tag != BT:
-      c.genIntLit dest.size*8, info
-      if dest.align != dest.size:
-        c.genIntLit dest.align*8, info
-
-proc genType(c: var GeneratedCode; n: NodePos; alignOverride = -1) =
-  var dest = AsmSlot()
-  fillTypeSlot c, typeFromPos(n), dest
-  if alignOverride >= 0:
-    dest.align = alignOverride
-  genSlot c, dest, c.m.code[n].info
-
-proc genTypeof(c: var GeneratedCode; n: NodePos) =
-  let t = getType(c.m, c.m.code, n)
-  if isError(t):
-    error c.m, "cannot compute type of expression: ", c.m.code, n
-  else:
-    var dest = AsmSlot()
-    fillTypeSlot c, t, dest
-    genSlot c, dest, c.m.code[n].info
 
 proc getAsmSlot(c: var GeneratedCode; n: NodePos): AsmSlot =
   let t = getType(c.m, c.m.code, n)

@@ -13,6 +13,9 @@ import std / [parseopt, strutils, os, osproc]
 import codegen, makefile, noptions
 import preasm / genpreasm
 
+when false:
+  import amd64 / genasm
+
 const
   Version = "0.2"
   Usage = "NIFC Compiler. Version " & Version & """
@@ -163,6 +166,13 @@ proc handleCmdLine() =
       for inp in items args:
         let outp = changeFileExt(inp, ".preasm")
         generatePreAsm inp, outp, bits
+  of "asm":
+    if args.len == 0:
+      quit "command takes a filename"
+    else:
+      for inp in items args:
+        let outp = changeFileExt(inp, ".asm")
+        when false: generateAsm inp, outp
   else:
     quit "Invalid action: " & action
 
