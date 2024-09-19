@@ -5,7 +5,10 @@ type
     backendCpp = "cpp"
 
   Option* = enum
-    optOptimizeSpeed, optOptimizeSize
+    optLineDir
+
+  OptimizeLevel* = enum
+    None, Speed, Size
 
   SystemCC* = enum
     ccNone, ccGcc, ccCLang
@@ -14,6 +17,7 @@ type
     cCompiler*: SystemCC
     backend*: Backend
     options*: set[Option]
+    optimizeLevel*: OptimizeLevel
 
   State* = object
     selects*: seq[string] # names of modules with functions with selectany pragmas

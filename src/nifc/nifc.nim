@@ -27,6 +27,7 @@ Options:
   -r, --run                 run the makefile and the compiled program
   --cc:SYMBOL               specify the C compiler
   --opt:none|speed|size     optimize not at all or for speed|size
+  --lineDir:on|off          generation of #line directive on|off
   --bits:N                  (int M) has N bits; possible values: 64, 32, 16
   --version                 show the version
   --help                    show this help
@@ -76,16 +77,21 @@ proc handleCmdLine() =
       of "opt":
         case val.normalize
         of "speed":
-          incl(s.config.options, optOptimizeSpeed)
-          excl(s.config.options, optOptimizeSize)
+          s.config.optimizeLevel = Speed
         of "size":
-          excl(s.config.options, optOptimizeSpeed)
-          incl(s.config.options, optOptimizeSize)
+          s.config.optimizeLevel = Size
         of "none":
-          excl(s.config.options, optOptimizeSpeed)
-          excl(s.config.options, optOptimizeSize)
+          s.config.optimizeLevel = None
         else:
           quit "'none', 'speed' or 'size' expected, but '$1' found" % val
+      of "linedir":
+        case val.normalize
+        of "", "on":
+          s.config.options.incl optLineDir
+        of "off":
+          s.config.options.excl optLineDir
+        else:
+          quit "'on', 'off' expected, but '$1' found" % val
       else: writeHelp()
     of cmdEnd: assert false, "cannot happen"
 
@@ -116,10 +122,13 @@ proc handleCmdLine() =
       generateMakefile(s, makefilePath, moduleNames, appName, nifcacheDir, action, destExt)
       if toRun:
         var cflags = ""
-        if optOptimizeSpeed in s.config.options:
+        case s.config.optimizeLevel
+        of Speed:
           cflags.add "-O3"
-        elif optOptimizeSize in s.config.options:
+        of Size:
           cflags.add "-Os"
+        of None:
+          discard
 
         let cCompiler: string =
           case s.config.cCompiler
