@@ -13,18 +13,11 @@ import std / [assertions, syncio, tables, sets, intsets, strutils]
 from std / os import changeFileExt, splitFile, extractFileName
 
 import .. / .. / lib / [bitabs, packedtrees, lineinfos, nifstreams, nifcursors]
-import .. / nifc_model
-import preasm_model, typenav
+import ".." / [nifc_model, typenav]
+import ".." / native / slots
+import preasm_model
 
 type
-  AsmTypeKind = enum
-    ABool, # also useful for modelling CPU flag registers
-    AInt, AUInt, AFloat, AMem
-  AsmSlot = object
-    kind: AsmTypeKind
-    size, align, offset: int # offset is only used for fields and not
-                             # really part of a "type" but it's easier this way
-
   Label = distinct int
   TempVar = distinct int
 
@@ -61,6 +54,8 @@ proc initGeneratedCode*(m: sink Module; intmSize: int): GeneratedCode =
   result = GeneratedCode(m: m, intmSize: intmSize)
 
 proc error(m: Module; msg: string; tree: PackedTree[NifcKind]; n: NodePos) =
+  when defined(debug):
+    writeStackTrace()
   write stdout, "[Error] "
   write stdout, msg
   writeLine stdout, toString(tree, n, m)
@@ -137,6 +132,40 @@ template buildTree(c: var GeneratedCode; keyw: TagId; info: PackedLineInfo; body
 include genpreasm_t
 
 # Procs
+proc genSlot(c: var GeneratedCode; dest: AsmSlot; info: PackedLineInfo) =
+  let tag =
+    case dest.kind
+    of ABool: BT
+    of AInt: IT
+    of AUInt: UT
+    of AFloat: FT
+    of AMem: MT
+
+  c.buildTree tag, info:
+    if tag != BT:
+      c.genIntLit dest.size*8, info
+      if dest.align != dest.size:
+        c.genIntLit dest.align*8, info
+
+proc genType(c: var GeneratedCode; n: NodePos; alignOverride = -1) =
+  var dest = AsmSlot()
+  fillTypeSlot c, typeFromPos(n), dest
+  if alignOverride >= 0:
+    dest.align = alignOverride
+  genSlot c, dest, c.m.code[n].info
+
+proc genTypeof(c: var GeneratedCode; n: NodePos) =
+  let t = getType(c.m, c.m.code, n)
+  if isError(t):
+    error c.m, "cannot compute type of expression: ", c.m.code, n
+  else:
+    var dest = AsmSlot()
+    fillTypeSlot c, t, dest
+    genSlot c, dest, c.m.code[n].info
+
+proc genWas(c: var GeneratedCode; t: Tree; ch: NodePos) =
+  c.code.buildTree(WasT, t[ch].info):
+    c.code.add toToken(Ident, pool.strings.getOrIncl(toString(t, ch.firstSon, c.m)), t[ch].info)
 
 type
   ProcFlag = enum
@@ -257,7 +286,7 @@ proc genVarDecl(c: var GeneratedCode; t: Tree; n: NodePos; vk: VarKind) =
 
       # genType inlined:
       var dest = AsmSlot()
-      fillTypeSlot c, typeFromPos(n), dest
+      fillTypeSlot c, typeFromPos(d.typ), dest
       if alignOverride >= 0:
         dest.align = alignOverride
       genSlot c, dest, c.m.code[n].info
