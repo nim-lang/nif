@@ -4,6 +4,24 @@ const
 /* GENERATED CODE. DO NOT EDIT. */
 
 #ifdef __cplusplus
+#  if __cplusplus >= 201103L
+#    /* nullptr is more type safe (less implicit conversions than 0) */
+#    define NIM_NIL nullptr
+#  else
+#    // both `((void*)0)` and `NULL` would cause codegen to emit
+#    // error: assigning to 'Foo *' from incompatible type 'void *'
+#    // but codegen could be fixed if need. See also potential caveat regarding
+#    // NULL.
+#    // However, `0` causes other issues, see #13798
+#    define NIM_NIL 0
+#  endif
+#else
+#  include <stdbool.h>
+#  define NIM_NIL ((void*)0) /* C's NULL is fucked up in some C compilers, so
+                              the generated code does not rely on it anymore */
+#endif
+
+#ifdef __cplusplus
 #define NB8 bool
 #elif (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901)
 // see #13798: to avoid conflicts for code emitting `#include <stdbool.h>`
@@ -112,6 +130,9 @@ typedef NU8 NU;
 #    error "invalid bit width for int"
 #  endif
 #endif
+
+#define NIM_TRUE true
+#define NIM_FALSE false
 
 """
 

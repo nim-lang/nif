@@ -52,7 +52,7 @@ type
     CaseKeyword = "case "
     DefaultKeyword = "default:"
     BreakKeyword = "break"
-    NullPtr = "nullptr"
+    NullPtr = "NIM_NIL"
     IfNot = "if (!("
     ReturnKeyword = "return "
     TypedefStruct = "typedef struct "
