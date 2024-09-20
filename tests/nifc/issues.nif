@@ -56,6 +56,21 @@
     )
   ))
 
+  (proc :foo.while . (void) . (stmts
+    (var :x.c . (i +32 .) (suf +12 "i32"))
+    (while (not (lt x.c +8))
+       (stmts 
+          (asgn x.c
+            (sub (i +32 .) x.c +1)
+          )
+       )
+    )
+  ))
+
+  (proc :foo.neg . (void) . (stmts
+    (var :x.c . (i +32 .) (neg +12 ))
+  )
+  )
 
   (proc :main.c . (i +32 atomic) . (stmts
     1,1,hello.nim(var :x1.m . (i +32 .) +12)
@@ -65,6 +80,8 @@
     (call foo.m3)
     (call foo.if)
     (call foo.switch)
+    (call foo.while)
+    (call foo.neg)
 
     (var :x.c . (i +8 .) (suf +12 "i8"))
     (var :x.m . (i +16 .) (suf -12 "i16"))
