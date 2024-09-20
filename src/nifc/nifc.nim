@@ -39,6 +39,36 @@ Options:
 proc writeHelp() = quit(Usage, QuitSuccess)
 proc writeVersion() = quit(Version & "\n", QuitSuccess)
 
+proc genMakeCmd(config: ConfigRef, makefilePath: string): string =
+  let optimizeLevelFlag = case config.optimizeLevel
+    of Speed:
+      "-O3"
+    of Size:
+      "-Os"
+    of None:
+      ""
+
+  let (cCompiler, cppCompiler) =
+    case config.cCompiler
+    of ccGcc:
+      ("gcc", "g++")
+    of ccCLang:
+      ("clang", "clang++")
+    else:
+      quit "unreachable"
+
+  result = case config.backend
+    of backendC:
+      "make " & "CC=" & cCompiler &
+          " " & "CFLAGS=" & "\"" & optimizeLevelFlag & "\"" &
+          " -f " & makefilePath
+    of backendCpp:
+      "make " & "CXX=" & cppCompiler &
+          " " & "CXXFLAGS=" & "\"" & optimizeLevelFlag & "\"" &
+          " -f " & makefilePath
+    else:
+      quit "unreachable"
+
 proc handleCmdLine() =
   var action = ""
   var args: seq[string] = @[]
@@ -124,45 +154,7 @@ proc handleCmdLine() =
       let makefilePath = nifcacheDir / "Makefile." & appName
       generateMakefile(s, makefilePath, moduleNames, appName, nifcacheDir, action, destExt)
       if toRun:
-        var cflags = ""
-        case s.config.optimizeLevel
-        of Speed:
-          cflags.add "-O3"
-        of Size:
-          cflags.add "-Os"
-        of None:
-          discard
-
-        let cCompiler: string =
-          case s.config.cCompiler
-          of ccGcc:
-            "gcc"
-          of ccCLang:
-            "clang"
-          else:
-            quit "unreachable"
-
-        let cppCompiler =
-          case s.config.cCompiler
-          of ccGcc:
-            "g++"
-          of ccCLang:
-            "clang++"
-          else:
-            quit "unreachable"
-
-        let makeCmd = case s.config.backend
-          of backendC:
-            "make " & "CC=" & cCompiler &
-                " " & "CFLAGS=" & "\"" & cflags & "\"" &
-                " -f " & makefilePath
-          of backendCpp:
-            "make " & "CXX=" & cppCompiler &
-                " " & "CXXFLAGS=" & "\"" & cflags & "\"" &
-                " -f " & makefilePath
-          else:
-            quit "unreachable"
-
+        let makeCmd = genMakeCmd(s.config, makefilePath)
         let (output, exitCode) = execCmdEx(makeCmd)
         if exitCode != 0:
           quit "execution of an external program failed: " & output
