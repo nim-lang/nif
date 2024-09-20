@@ -27,11 +27,10 @@ proc genIf(c: var GeneratedCode; t: Tree; ifStmt: NodePos) =
       if hasElse:
         error c.m, "no `elif` allowed after `else` but got: ", t, n
       else:
-        if not hasElif:
+        if hasElif:
           c.add ElseKeyword
         c.add IfKeyword
         let (cond, action) = sons2(t, n)
-        c.add ParLe
         c.genx t, cond
         c.add ParRi
         c.add CurlyLe
