@@ -19,7 +19,7 @@ proc emitLoc*(c: var GeneratedCode; loc: Location) =
     c.code.add toToken(UIntLit, pool.uintegers.getOrIncl(loc.uval), NoLineInfo)
   of ImmediateFloat:
     c.code.add toToken(FloatLit, pool.floats.getOrIncl(loc.fval), NoLineInfo)
-  of InReg:
+  of InReg, InPushedReg:
     c.addKeywUnchecked regName(loc.reg)
   of InRegFp:
     c.addKeywUnchecked regName(loc.regf)
@@ -32,11 +32,11 @@ proc emitLoc*(c: var GeneratedCode; loc: Location) =
   of JumpMode:
     c.code.add toToken(Ident, pool.strings.getOrIncl("L." & $loc.label), NoLineInfo)
   of InData:
-    c.code.add toToken(Symbol, pool.syms.getOrIncl(c.m.lits.strings[loc.data]), NoLineInfo)
-
-type
-  XMode = enum
-    WantValue, WantAddr
+    c.buildTree RelT:
+      c.code.add toToken(Symbol, pool.syms.getOrIncl(c.m.lits.strings[loc.data]), NoLineInfo)
+  of InTls:
+    c.buildTree FsT:
+      c.code.add toToken(Symbol, pool.syms.getOrIncl(c.m.lits.strings[loc.data]), NoLineInfo)
 
 proc genx(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location)
 
@@ -44,39 +44,44 @@ proc gen(c: var GeneratedCode; t: Tree; n: NodePos): Location =
   result = Location(kind: Undef)
   genx c, t, n, result
 
+proc makeReg(c: var GeneratedCode; x: Location): Location =
+  if x.kind != InReg:
+    result = scratchReg(c.rega)
+    if result.kind == Undef:
+      c.buildTree PushT:
+        c.addKeyw RcxT   # Rcx is as good as any other
+      result = Location(kind: InPushedReg, reg: Rcx)
+    c.buildTree MovT:
+      c.addKeyw RcxT
+      emitLoc c, x
+  else:
+    result = x
+
+proc genForceReg(c: var GeneratedCode; t: Tree; n: NodePos): Location =
+  result = Location(kind: Undef)
+  genx c, t, n, result
+  result = makeReg(c, result)
+
+proc freeTemp(c: var GeneratedCode; loc: Location) =
+  if loc.kind == InPushedReg:
+    assert(not loc.temp, "pushed reg must not be marked as temporary")
+    c.buildTree PopT:
+      emitLoc c, loc
+    # KEEP THE REGISTER MARKED AS "USED"! Do not call `freeTempRaw` here!
+  else:
+    freeTempRaw c.rega, loc
+
 proc combine(c: var GeneratedCode; a, b: Location; opc: TagId) =
   # x86 has no Mem-Mem operations for ALU operations, so instead of
   # Mem[a] + Mem[b] we need to produce `mov reg, Mem[b]; Mem[a] + reg`
   # We need a scratch register to accomplish that. If we have no available
   # we push&pop a used register.
   if invalidCombination(a, b):
-    let tmp = scratchReg(c.rega)
-    if tmp.kind == Undef:
-      # no scratch register available! Make Rcx free by a push/pop sequence:
-      c.buildTree PushT:
-        c.addKeyw RcxT   # Rcx is as good as any other
-
-      # mov rcx, b
-      c.buildTree MovT:
-        c.addKeyw RcxT
-        emitLoc c, b
-      # op a, rcx
-      c.buildTree opc:
-        emitLoc c, a
-        c.addKeyw RcxT
-
-      c.buildTree PopT:
-        c.addKeyw RcxT
-    else:
-      # mov rcx, b
-      c.buildTree MovT:
-        emitLoc c, tmp
-        emitLoc c, b
-      # op a, rcx
-      c.buildTree opc:
-        emitLoc c, a
-        emitLoc c, tmp
-      c.rega.freeTemp tmp
+    let tmp = makeReg(c, b)
+    c.buildTree opc:
+      emitLoc c, a
+      emitLoc c, tmp
+    c.freeTemp tmp
   else:
     c.buildTree opc:
       emitLoc c, a
@@ -120,6 +125,12 @@ proc genAsgn(c: var GeneratedCode; dest, src: Location) =
     c.buildTree MovT:
       c.emitLoc dest
       c.emitLoc src
+
+proc into(c: var GeneratedCode; dest: var Location; src: Location) =
+  if dest.kind == Undef:
+    dest = src
+  else:
+    genAsgn c, dest, src
 
 proc genCall(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
   var args: seq[NodePos] = @[] # so that we can also do it backwards
@@ -168,20 +179,39 @@ proc genLvalue(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
   case t[n].kind
   of Sym:
     let lit = t[n].litId
-    let name = c.m.lits.strings[lit]
-    if mode == WantAddr:
-      c.code.addParLe VaddrT, info
-    c.addSym name, info
-    if mode == WantAddr:
-      c.code.addParRi()
-    c.requestedSyms.incl name
-  of DerefC:
-    if mode == WantAddr:
-      # addr(deref(x)) -> x
-      genx(c, t, n.firstSon, WantValue)
+    let def = c.m.defs.getOrDefault(lit)
+    case def.kind
+    of ConstC:
+      let cnst = asVarDecl(t, def.pos)
+      genLvalue(c, t, cnst.value, dest)
+    of ProcC:
+      let d = Location(size: 8, kind: InData, data: lit)
+      into c, dest, d
+    of VarC, ParamC:
+      into c, dest, c.locals[lit]
+    of GvarC:
+      let d = Location(indirect: true, size: 8, kind: InData, data: lit)
+      into c, dest, d
+    of TvarC:
+      let d = Location(indirect: true, size: 8, kind: InTls, data: lit)
+      into c, dest, d
+    of EfldC:
+      assert false, "enum fields not implemented"
     else:
-      unOp LoadT
+      error c.m, "undeclared identifier: ", t, n
+    #let lit = t[n].litId
+    #let name = c.m.lits.strings[lit]
+    #c.addSym name, info
+  of DerefC:
+    let tmp = genForceReg(c, t, n.firstSon)
+    c.buildTreeI Mem1T, t[n].info:
+      c.emitLoc tmp
+    c.freeTemp tmp
   of AtC:
+    let elemType = getType(m, t, n)
+    let (a, i) = sons2(t, n)
+    let tmp = gen(c, t, a)
+
     if mode == WantValue:
       c.code.addParLe LoadT, info
       genTypeof c, n
@@ -219,17 +249,19 @@ proc genLvalue(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
 
 proc genStrLit(c: var GeneratedCode; s: string; info: PackedLineInfo; dest: var Location) =
   var id = c.strings.getOrDefault(s, -1)
+  var symId: string
   if id < 0:
     id = c.strings.len + 1
     c.strings[s] = id
-    let symId = "str." & $id
-    c.data.buildTree AsciizT, info:
-      c.data.addSymDef symId, info
-      c.data.addStrLit s, info
-    addSym c, symId, info
+    symId = "str." & $id
+    c.rodata.buildTree DbT, info:
+      c.rodata.addSymDef symId, info
+      c.rodata.addStrLit s, info
+      c.rodata.addIntLit 0, info
   else:
-    let symId = "str." & $id
-    addSym c, symId, info
+    symId = "str." & $id
+  let d = Location(size: -1'i32, kind: InData, data: pool.syms.getOrIncl(symId))
+  into c, dest, d
 
 proc genConv(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
   let (typ, arg) = sons2(t, n)

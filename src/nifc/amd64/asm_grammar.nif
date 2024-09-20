@@ -41,16 +41,20 @@
   Reg FpReg
   SYMBOL
   (rel SYMBOL)
+  (fs SYMBOL)
   INTLIT UINTLIT
 ))
 
 (RULE :Expr (OR
   Primary
+  (mem1 Primary)
   (mem2 Primary Primary)
   (mem3 Primary Primary INTLIT)
   (byteat Primary)
   (wordat Primary)
 ))
+
+(COM "tread local storage looks like fs:[x@TPOFF]")
 
 (RULE :Label SYMBOL)
 

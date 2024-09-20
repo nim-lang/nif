@@ -29,7 +29,7 @@ proc `<`(a, b: FloatReg): bool {.borrow.}
 const
   Rax = IntReg(0)
   Rbx = IntReg(1)
-  Rcx = IntReg(2)
+  Rcx* = IntReg(2)
   Rdx = IntReg(3)
   Rsi = IntReg(4)
   Rdi = IntReg(5)
@@ -148,11 +148,14 @@ type
     ImmediateInt,
     ImmediateUInt,
     ImmediateFloat,
-    InReg, InRegFp,
+    InReg,
+    InPushedReg, # it is a register that needs a `pop` operation
+    InRegFp,
     InStack,
     InFlag, # in a CPU flag
     JumpMode # not a value, but control flow
     InData # in some global data section
+    InTls  # in thread local storage
   Location* = object
     size*: int32
     indirect*: bool # we only have the address of the thing, not the thing itself
@@ -163,12 +166,12 @@ type
     of ImmediateInt: ival*: int64
     of ImmediateUInt: uval*: uint64
     of ImmediateFloat: fval*: float
-    of InReg: reg*: IntReg
+    of InReg, InPushedReg: reg*: IntReg
     of InRegFp: regf*: FloatReg
     of InStack: slot*: int
     of InFlag: flag*: CpuFlag
     of JumpMode: label*: int
-    of InData: data*: StrId
+    of InData, InTls: data*: StrId
 
 proc immediateLoc*(ival: int64; size: int32): Location = Location(size: size, kind: ImmediateInt, ival: ival)
 proc immediateLoc*(uval: uint64; size: int32): Location = Location(size: size, kind: ImmediateUInt, uval: uval)
@@ -311,14 +314,14 @@ proc allocVar*(a: var RegAllocator; slot: AsmSlot; props: VarProps): Location =
 
 proc freeLocEnforced*(a: var RegAllocator; loc: Location) =
   case loc.kind
-  of InReg:
+  of InReg, InPushedReg:
     a.used.excl loc.reg
   of InRegFp:
     a.usedFloats.excl loc.regf
   else:
     discard "nothing to do"
 
-proc freeTemp*(a: var RegAllocator; loc: Location) =
+proc freeTempRaw*(a: var RegAllocator; loc: Location) =
   if loc.temp:
     freeLocEnforced a, loc
 

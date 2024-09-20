@@ -28,22 +28,23 @@ type
     syms: Table[LitId, AsmSlot]
   GeneratedCode* = object
     m: Module
-    data: TokenBuf
+    rodata, data: TokenBuf
     code: TokenBuf
     init: TokenBuf
     rega: RegAllocator
-    intmSize, inConst, stmtBegin, labels, temps: int
+    intmSize, inConst, labels, temps: int
     loopExits: seq[Label]
     generatedTypes: IntSet
     requestedSyms: HashSet[string]
     fields: Table[LitId, AsmSlot]
     types: Table[LitId, AsmSlot]
+    locals: Table[LitId, Location]
     strings: Table[string, int]
     scopes: seq[Scope]
     returnSlot: AsmSlot
     returnLoc: Location
     threadLocalsSize, globalsSize: int
-    globals: Table[string, AsmSlot]
+    globals: Table[LitId, AsmSlot]
 
   LitId = nifc_model.StrId
 
