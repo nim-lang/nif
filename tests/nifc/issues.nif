@@ -46,7 +46,7 @@
     1,4,hello.nim(call foo.m2)
     (call foo.m3)
 
-    (var :x . (i +8 .) (suf +12 "i8"))
+    (var :x.c . (i +8 .) (suf +12 "i8"))
     (var :x.m . (i +16 .) (suf -12 "i16"))
     (var :x1 . (i +32 .) (suf +12 "i32"))
     (var :y1 . (u +32 .) (suf +12 "u32"))
@@ -58,6 +58,7 @@
     (var :z2 . (ptr (c +8 .)) (cast (ptr (c +8 .)) (suf "hello" "r")))
 
     (var :add2.m . (i +32 .) (add (i +32 .) +214 +21))
+    (emit "(void)" x.c ";")
     (ret +0)
   ))
 )
