@@ -131,6 +131,7 @@ proc genSwitch(c: var GeneratedCode; t: Tree; caseStmt: NodePos) =
       else:
         let (cond, action) = sons2(t, n)
         c.genCaseCond t, cond
+        c.add Colon
         c.add CurlyLe
         genStmt c, t, action
         c.add CurlyRi
@@ -142,7 +143,7 @@ proc genSwitch(c: var GeneratedCode; t: Tree; caseStmt: NodePos) =
       if not hasElif:
         error c.m, "no `of` before `else` but got: ", t, n
       else:
-        c.add ElseKeyword
+        c.add DefaultKeyword
         c.add CurlyLe
         genStmt c, t, n.firstSon
         c.add CurlyRi
