@@ -14,7 +14,7 @@ proc genEmitStmt(c: var GeneratedCode; t: Tree; n: NodePos) =
     if t[ch].kind == StrLit:
       c.add c.m.lits.strings[t[ch].litId]
     else:
-      genx c, t, n
+      genx c, t, ch
 
 proc genStmt(c: var GeneratedCode; t: Tree; n: NodePos)
 
