@@ -31,6 +31,7 @@ type
     data: TokenBuf
     code: TokenBuf
     init: TokenBuf
+    rega: RegAllocator
     intmSize, inConst, stmtBegin, labels, temps: int
     loopExits: seq[Label]
     generatedTypes: IntSet
@@ -299,13 +300,13 @@ proc genProcDecl(c: var GeneratedCode; t: Tree; n: NodePos) =
   if t[prc.body].kind == Empty: return # ignore procs without body
   # (proc SYMBOLDEF Params Type ProcPragmas (OR . StmtList)
   c.openScope() # open scope for the parameters
-  var rega = initRegAllocator()
+  c.rega = initRegAllocator()
   c.buildTree ProcT, t[n].info:
     discard genSymDef(c, t, prc.name)
 
     if t[prc.returnType].kind != VoidC:
       c.returnSlot = getTypeSlot(c, prc.returnType)
-      allocResultWin64 rega, c.returnSlot, c.returnLoc
+      allocResultWin64 c.rega, c.returnSlot, c.returnLoc
 
     if t[prc.params].kind != Empty:
       var paramTypes: seq[AsmSlot] = @[]
@@ -317,7 +318,7 @@ proc genProcDecl(c: var GeneratedCode; t: Tree; n: NodePos) =
           paramLocs.add Location(kind: DontCare)
         else:
           error c.m, "expected SymbolDef but got: ", t, n
-      allocParamsWin64 rega, paramTypes, paramLocs
+      allocParamsWin64 c.rega, paramTypes, paramLocs
       var i = 0
       for ch in sons(t, prc.params):
         let d = asParamDecl(t, n)

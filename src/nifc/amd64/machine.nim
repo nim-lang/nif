@@ -152,7 +152,7 @@ type
     InFlag, # in a CPU flag
     JumpMode # not a value, but control flow
     InData # in some global data section
-  Location = object
+  Location* = object
     indirect*: bool # we only have the address of the thing, not the thing itself
     case kind: LocKind
     of DontCare: discard
@@ -165,6 +165,11 @@ type
     of InFlag: flag: CpuFlag
     of JumpMode: label: int
     of InData: data: StrId
+
+proc immediateLoc*(ival: int64): Location = Location(kind: ImmediateInt, ival: ival)
+proc immediateLoc*(uval: uint64): Location = Location(kind: ImmediateUInt, uval: uval)
+proc immediateLoc*(fval: float): Location = Location(kind: ImmediateFloat, fval: fval)
+proc stringData*(data: StrId): Location = Location(kind: InData, data: data)
 
 proc allocResultWin64*(a: var RegAllocator;
                        returnType: AsmSlot;
@@ -313,3 +318,14 @@ proc opcodeSuffix*(s: AsmSlot): string =
     of 4: "l" # long
     of 8: "q" # quad
     else: "bug"
+
+proc inMemory*(a: Location): bool {.inline.} = a.kind in {InStack, InData}
+proc isImmediate*(a: Location): bool {.inline.} = a.kind in {ImmediateInt, ImmediateUInt, ImmediateFloat}
+
+proc invalidCombination*(a, b: Location): bool =
+  if a.inMemory and b.inMemory:
+    result = true
+  elif a.isImmediate and b.isImmediate:
+    result = true
+  else:
+    result = false

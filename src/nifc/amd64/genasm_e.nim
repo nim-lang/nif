@@ -15,7 +15,17 @@ type
   XMode = enum
     WantValue, WantAddr
 
-proc genx(c: var GeneratedCode; t: Tree; n: NodePos; mode: XMode; dest: var Location)
+proc genx(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location)
+
+proc combine*(a, b: Location; opc: TagId) =
+  # x86 has no Mem-Mem operations for ALU operations, so instead of
+  # Mem[a] + Mem[b] we need to produce `mov reg, Mem[b]; Mem[a] + reg`
+  # We need a scratch register to accomplish that. If we have no available
+  # we push&pop a used register.
+  if invalidCombination(a, b):
+    discard "wip"
+  else:
+    discard "wip"
 
 template typedBinOp(opr) {.dirty.} =
   let (typ, a, b) = sons3(t, n)
@@ -47,7 +57,7 @@ proc genCall(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
     for ch in sons(t, n):
       genx c, t, ch, WantValue
 
-proc genLvalue(c: var GeneratedCode; t: Tree; n: NodePos; mode: XMode; dest: var Location) =
+proc genLvalue(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
   let info = t[n].info
   case t[n].kind
   of Sym:
@@ -196,7 +206,37 @@ proc genCond(c: var GeneratedCode; t: Tree; n: NodePos; opc: TagId) =
     c.code.add fullExpr[i]
   c.useTemp temp, info
 
-proc genx(c: var GeneratedCode; t: Tree; n: NodePos; mode: XMode; dest: var Location) =
+proc genFjmp(c: var GeneratedCode; t: Tree; n: NodePos; jmpTarget: Label; opc = FjmpT) =
+  let info = t[n].info
+  let k = t[n].kind
+  case k
+  of ParC:
+    genFjmp c, t, n.firstSon, jmpTarget, opc
+  of NotC:
+    genFjmp c, t, n.firstSon, jmpTarget, (if opc == FjmpT: TjmpT else: FjmpT)
+  of AndC, OrC:
+    if (k == AndC and opc == FjmpT) or
+       (k == OrC and opc == TjmpT):
+      # easy case
+      let (a, b) = sons2(t, n)
+      genFjmp c, t, a, jmpTarget, opc
+      genFjmp c, t, b, jmpTarget, opc
+    else:
+      # "or" case:
+      let (a, b) = sons2(t, n)
+      # "if not a: b"
+      let neg = (if opc == FjmpT: TjmpT else: FjmpT)
+      let lab = getLabel(c)
+      genFjmp c, t, a, lab, neg
+      genFjmp c, t, b, jmpTarget, opc
+      c.buildTree LabT, info:
+        c.defineLabel lab, info
+  else:
+    c.buildTree opc, info:
+      genx c, t, n, WantValue
+      c.useLabel jmpTarget, info
+
+proc genx(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
   let info = t[n].info
   case t[n].kind
   of IntLit:
@@ -219,7 +259,7 @@ proc genx(c: var GeneratedCode; t: Tree; n: NodePos; mode: XMode; dest: var Loca
       for ch in sonsFromX(t, n):
         c.genx t, ch, WantValue
     else:
-      error c.m, "runtime array constructor not supported: ", t, n
+      error c.m, "runtime array constructor not implemented: ", t, n
   of OconstrC:
     if c.inConst > 0:
       for ch in sonsFromX(t, n):
@@ -230,13 +270,12 @@ proc genx(c: var GeneratedCode; t: Tree; n: NodePos; mode: XMode; dest: var Loca
           let (_, v) = sons2(t, ch)
           c.genx t, v, WantValue
     else:
-      error c.m, "runtime object constructor not supported: ", t, n
+      error c.m, "runtime object constructor not implemented: ", t, n
   of ParC:
     let arg = n.firstSon
-    genx c, t, arg, mode
+    genx c, t, arg, dest
   of AddrC:
-    assert mode == WantValue
-    genx c, t, n.firstSon, WantAddr
+    genx c, t, n.firstSon, dest
   of SizeofC:
     # we evaluate it at compile-time:
     let a = getAsmSlot(c, n.firstSon)
