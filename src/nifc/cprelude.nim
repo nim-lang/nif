@@ -17,8 +17,7 @@ const
 #  endif
 #else
 #  include <stdbool.h>
-#  define NIM_NIL ((void*)0) /* C's NULL is fucked up in some C compilers, so
-                              the generated code does not rely on it anymore */
+#  define NIM_NIL NULL
 #endif
 
 #ifdef __cplusplus
