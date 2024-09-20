@@ -119,6 +119,7 @@ proc flagName*(f: CpuFlag): string =
 const
   wordSize = 8
   StackAlign = 16
+  StackRedZone* = 32
 
 type
   RegAllocator* = object
@@ -143,7 +144,7 @@ proc freeReg*(a: var RegAllocator; r: IntReg) =
 
 type
   LocKind* = enum
-    DontCare,
+    Undef,
     ImmediateInt,
     ImmediateUInt,
     ImmediateFloat,
@@ -153,9 +154,12 @@ type
     JumpMode # not a value, but control flow
     InData # in some global data section
   Location* = object
+    size*: int32
     indirect*: bool # we only have the address of the thing, not the thing itself
+    temp*: bool  # is a temporary, not a variable
+    fp*: bool
     case kind*: LocKind
-    of DontCare: discard
+    of Undef: discard
     of ImmediateInt: ival*: int64
     of ImmediateUInt: uval*: uint64
     of ImmediateFloat: fval*: float
@@ -166,10 +170,10 @@ type
     of JumpMode: label*: int
     of InData: data*: StrId
 
-proc immediateLoc*(ival: int64): Location = Location(kind: ImmediateInt, ival: ival)
-proc immediateLoc*(uval: uint64): Location = Location(kind: ImmediateUInt, uval: uval)
-proc immediateLoc*(fval: float): Location = Location(kind: ImmediateFloat, fval: fval)
-proc stringData*(data: StrId): Location = Location(kind: InData, data: data)
+proc immediateLoc*(ival: int64; size: int32): Location = Location(size: size, kind: ImmediateInt, ival: ival)
+proc immediateLoc*(uval: uint64; size: int32): Location = Location(size: size, kind: ImmediateUInt, uval: uval)
+proc immediateLoc*(fval: float; size: int32): Location = Location(size: size, kind: ImmediateFloat, fval: fval, fp: true)
+proc stringData*(data: StrId): Location = Location(size: -1'i32, kind: InData, data: data)
 
 proc allocResultWin64*(a: var RegAllocator;
                        returnType: AsmSlot;
@@ -185,35 +189,51 @@ proc allocResultWin64*(a: var RegAllocator;
     returnLoc = Location(indirect: true, kind: InReg, reg: Rcx)
     incl a.used, Rcx
 
-proc allocParamsWin64*(a: var RegAllocator;
-                       params: openArray[AsmSlot];
-                       res: var openArray[Location]) =
-  # Windows ABI specific code here!
-  assert params.len == res.len
-  for i in 0 ..< params.len:
-    if params[i].kind == AFloat:
-      # see https://learn.microsoft.com/en-us/cpp/build/x64-calling-convention?view=msvc-170
-      # Use XMM0L, XMM1L, XMM2L, and XMM3L.
-      block floatRegSearch:
-        for xmmIndex in 0..3:
-          let xmm = FloatReg(xmmIndex)
-          if not a.usedFloats.contains(xmm):
-            incl a.usedFloats, xmm
-            res[i] = Location(kind: InRegFp, regf: xmm)
-            break floatRegSearch
-        res[i] = Location(kind: InStack, slot: a.usedStackSpace)
-        inc a.usedStackSpace, wordSize
-    else:
-      let normal = params[i].size in [1, 2, 4, 8]
-      const attempts = [Rcx, Rdx, R8, R9]
-      block intRegSearch:
-        for att in attempts:
-          if not a.used.contains(att):
-            incl a.used, att
-            res[i] = Location(indirect: not normal, kind: InReg, reg: att)
-            break intRegSearch
-        res[i] = Location(indirect: not normal, kind: InStack, slot: a.usedStackSpace)
-        inc a.usedStackSpace, wordSize
+proc stackSpaceResultWin64*(returnType: AsmSlot): int =
+  if returnType.kind == AFloat:
+    result = 0 # no stack space required for the result
+  elif returnType.size in [1, 2, 4, 8]:
+    result = wordSize # passed back in Rax
+  else:
+    result = align(returnType.size, 8)
+
+proc resultWin64*(returnType: AsmSlot): Location =
+  # But no reason to mark anything as used!
+  if returnType.kind == AFloat:
+    result = Location(kind: InRegFp, regf: Xmm0)
+  elif returnType.size in [1, 2, 4, 8]:
+    # But no reason to mark it as used!
+    result = Location(kind: InReg, reg: Rax)
+  else:
+    # the tricky part:
+    result = Location(kind: InReg, reg: Rax)
+
+proc allocParamWin64*(a: var RegAllocator; param: AsmSlot): Location =
+  if param.kind == AFloat:
+    # see https://learn.microsoft.com/en-us/cpp/build/x64-calling-convention?view=msvc-170
+    # Use XMM0L, XMM1L, XMM2L, and XMM3L.
+    block floatRegSearch:
+      for xmmIndex in 0..3:
+        let xmm = FloatReg(xmmIndex)
+        if not a.usedFloats.contains(xmm):
+          incl a.usedFloats, xmm
+          result = Location(kind: InRegFp, regf: xmm)
+          break floatRegSearch
+      result = Location(kind: InStack, slot: a.usedStackSpace)
+      inc a.usedStackSpace, wordSize
+  else:
+    let normal = param.size in [1, 2, 4, 8]
+    const attempts = [Rcx, Rdx, R8, R9]
+    block intRegSearch:
+      for att in attempts:
+        if not a.used.contains(att):
+          incl a.used, att
+          result = Location(indirect: not normal, kind: InReg, reg: att)
+          break intRegSearch
+      result = Location(indirect: not normal, kind: InStack, slot: a.usedStackSpace)
+      inc a.usedStackSpace, wordSize
+
+proc reverseStackParamsWin64*(res: var openArray[Location]) =
   # reverse the stack slots since the ABI says stack slots
   # are passed from right to left:
   var front = 0
@@ -227,6 +247,14 @@ proc allocParamsWin64*(a: var RegAllocator;
       dec back
     inc front
 
+proc allocParamsWin64*(a: var RegAllocator;
+                       params: openArray[AsmSlot];
+                       res: var openArray[Location]) =
+  # Windows ABI specific code here!
+  assert params.len == res.len
+  for i in 0 ..< params.len:
+    res[i] = allocParamWin64(a, params[i])
+  reverseStackParamsWin64 res
 
 proc allocStack(a: var RegAllocator; slot: AsmSlot): Location =
   a.usedStackSpace = align(a.usedStackSpace, slot.align)
@@ -241,12 +269,21 @@ proc selectReg(a: var RegAllocator; slot: AsmSlot; regs: openArray[IntReg]): Loc
   # use the stack:
   result = allocStack(a, slot)
 
+const
+  allAttempts = [Rax, Rbx, Rcx, Rdx, Rsi, Rdi, Rbp, R8, R9, R10, R11, R12, R13, R14, R15]
+
+proc scratchReg*(a: var RegAllocator): Location =
+  for reg in allAttempts:
+    if not a.used.contains(reg):
+      a.used.incl reg
+      return Location(temp: true, kind: InReg, reg: reg)
+  result = Location(kind: Undef)
+
 proc allocVar*(a: var RegAllocator; slot: AsmSlot; props: VarProps): Location =
   # "The x64 ABI considers registers RBX, RBP, RDI, RSI, RSP, R12, R13, R14, R15, and XMM6-XMM15
   # nonvolatile. They must be saved and restored by a function that uses them."
   const
     safeAttempts = [Rbx, Rbp, Rdi, Rsi, R12, R13, R14, R15]
-    allAttempts = [Rax, Rbx, Rcx, Rdx, Rsi, Rdi, Rbp, R8, R9, R10, R11, R12, R13, R14, R15]
   #   ^ of course you cannot list the stack pointer Rsp here!
 
   if AddrTaken in props:
@@ -272,7 +309,7 @@ proc allocVar*(a: var RegAllocator; slot: AsmSlot; props: VarProps): Location =
       # use the stack:
       result = allocStack(a, slot)
 
-proc freeLoc*(a: var RegAllocator; loc: Location) =
+proc freeLocEnforced*(a: var RegAllocator; loc: Location) =
   case loc.kind
   of InReg:
     a.used.excl loc.reg
@@ -280,6 +317,10 @@ proc freeLoc*(a: var RegAllocator; loc: Location) =
     a.usedFloats.excl loc.regf
   else:
     discard "nothing to do"
+
+proc freeTemp*(a: var RegAllocator; loc: Location) =
+  if loc.temp:
+    freeLocEnforced a, loc
 
 proc freeScope*(a: var RegAllocator; vars: openArray[Location]) =
   # useful when we know that a scope exit is about to happen.

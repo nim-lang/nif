@@ -92,10 +92,10 @@ proc addIdent(c: var GeneratedCode; s: string; info: PackedLineInfo) =
 proc addEmpty(c: var GeneratedCode; info: PackedLineInfo) =
   c.code.add toToken(DotToken, 0'u32, info)
 
-proc addKeyw(c: var GeneratedCode; keyw: TagId; info: PackedLineInfo) =
+proc addKeyw(c: var GeneratedCode; keyw: TagId; info = NoLineInfo) =
   c.code.buildTree keyw, info: discard
 
-proc addKeywUnchecked(c: var GeneratedCode; keyw: string; info: PackedLineInfo) =
+proc addKeywUnchecked(c: var GeneratedCode; keyw: string; info = NoLineInfo) =
   c.code.buildTree pool.tags.getOrIncl(keyw), info: discard
 
 proc addSymDef(c: var TokenBuf; s: string; info: PackedLineInfo) =
@@ -127,7 +127,11 @@ proc defineTemp(c: var GeneratedCode; tmp: TempVar; info: PackedLineInfo) =
 proc useTemp(c: var GeneratedCode; tmp: TempVar; info: PackedLineInfo) =
   c.addSym "v." & $int(tmp), info
 
-template buildTree(c: var GeneratedCode; keyw: TagId; info: PackedLineInfo; body: untyped) =
+template buildTree(c: var GeneratedCode; keyw: TagId; body: untyped) =
+  c.code.buildTree keyw, NoLineInfo:
+    body
+
+template buildTreeI(c: var GeneratedCode; keyw: TagId; info: PackedLineInfo; body: untyped) =
   c.code.buildTree keyw, info:
     body
 
@@ -234,7 +238,7 @@ proc genVarDecl(c: var GeneratedCode; t: Tree; n: NodePos; vk: VarKind) =
       of IsLocal: VarT
       of IsGlobal: GvarT
       of IsThreadlocal: TvarT
-    c.buildTree opc, t[n].info:
+    c.buildTreeI opc, t[n].info:
       c.code.addSymDef name, t[d.name].info
       var alignOverride = -1
       genVarPragmas c, t, d.pragmas, alignOverride
@@ -256,7 +260,7 @@ proc genVarDecl(c: var GeneratedCode; t: Tree; n: NodePos; vk: VarKind) =
       c.globals[name] = dest
 
     if t[d.value].kind != Empty:
-      c.buildTree AsgnT, t[d.value].info:
+      c.buildTreeI AsgnT, t[d.value].info:
         genType c, d.typ, alignOverride
         c.addSym name, t[d.name].info
         genx c, t, d.value, WantValue
@@ -269,7 +273,7 @@ proc genConstDecl(c: var GeneratedCode; t: Tree; n: NodePos) =
     let lit = t[d.name].litId
     let name = c.m.lits.strings[lit]
 
-    c.buildTree ConstT, t[n].info:
+    c.buildTreeI ConstT, t[n].info:
       c.code.addSymDef name, t[d.name].info
       var alignOverride = -1
       genVarPragmas c, t, d.pragmas, alignOverride
@@ -302,11 +306,11 @@ proc genProcDecl(c: var GeneratedCode; t: Tree; n: NodePos) =
   # (proc SYMBOLDEF Params Type ProcPragmas (OR . StmtList)
   c.openScope() # open scope for the parameters
   c.rega = initRegAllocator()
-  c.buildTree ProcT, t[n].info:
+  c.buildTreeI ProcT, t[n].info:
     discard genSymDef(c, t, prc.name)
 
     if t[prc.returnType].kind != VoidC:
-      c.returnSlot = getTypeSlot(c, prc.returnType)
+      c.returnSlot = typeToSlot(c, prc.returnType)
       allocResultWin64 c.rega, c.returnSlot, c.returnLoc
 
     if t[prc.params].kind != Empty:
@@ -315,7 +319,7 @@ proc genProcDecl(c: var GeneratedCode; t: Tree; n: NodePos) =
       for ch in sons(t, prc.params):
         let d = asParamDecl(t, n)
         if t[d.name].kind == SymDef:
-          paramTypes.add getTypeSlot(c, d.typ)
+          paramTypes.add typeToSlot(c, d.typ)
           paramLocs.add Location(kind: DontCare)
         else:
           error c.m, "expected SymbolDef but got: ", t, n

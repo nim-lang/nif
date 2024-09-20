@@ -11,28 +11,28 @@
 
 proc emitLoc*(c: var GeneratedCode; loc: Location) =
   case loc.kind
-  of DontCare:
+  of Undef:
     assert false, "location should have been set"
   of ImmediateInt:
-    dest.add toToken(IntLit, pool.integers.getOrIncl(loc.ival), NoLineInfo)
+    c.code.add toToken(IntLit, pool.integers.getOrIncl(loc.ival), NoLineInfo)
   of ImmediateUInt:
-    dest.add toToken(UIntLit, pool.uintegers.getOrIncl(loc.uval), NoLineInfo)
+    c.code.add toToken(UIntLit, pool.uintegers.getOrIncl(loc.uval), NoLineInfo)
   of ImmediateFloat:
-    dest.add toToken(FloatLit, pool.floats.getOrIncl(loc.fval), NoLineInfo)
+    c.code.add toToken(FloatLit, pool.floats.getOrIncl(loc.fval), NoLineInfo)
   of InReg:
-    dest.addKeywUnchecked regName(loc.reg), NoLineInfo
+    c.addKeywUnchecked regName(loc.reg)
   of InRegFp:
-    dest.addKeywUnchecked regName(loc.regf), NoLineInfo
+    c.addKeywUnchecked regName(loc.regf)
   of InStack:
-    dest.buildTree Mem2T, NoLineInfo:
-      dest.addKeyw RspT, NoLineInfo
-      dest.add toToken(IntLit, pool.integers.getOrIncl(loc.slot), NoLineInfo)
+    c.buildTree Mem2T:
+      c.addKeyw RspT
+      c.code.add toToken(IntLit, pool.integers.getOrIncl(loc.slot), NoLineInfo)
   of InFlag:
     assert false, "not implemented"
   of JumpMode:
-    dest.add toToken(Ident, pool.strings.getOrIncl("L." & $loc.label))
+    c.code.add toToken(Ident, pool.strings.getOrIncl("L." & $loc.label), NoLineInfo)
   of InData:
-    dest.add toToken(Sym, pool.syms.getOrIncl(c.m.lits.strings[loc.data]))
+    c.code.add toToken(Symbol, pool.syms.getOrIncl(c.m.lits.strings[loc.data]), NoLineInfo)
 
 type
   XMode = enum
@@ -40,45 +40,128 @@ type
 
 proc genx(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location)
 
-proc combine*(a, b: Location; opc: TagId) =
+proc gen(c: var GeneratedCode; t: Tree; n: NodePos): Location =
+  result = Location(kind: Undef)
+  genx c, t, n, result
+
+proc combine(c: var GeneratedCode; a, b: Location; opc: TagId) =
   # x86 has no Mem-Mem operations for ALU operations, so instead of
   # Mem[a] + Mem[b] we need to produce `mov reg, Mem[b]; Mem[a] + reg`
   # We need a scratch register to accomplish that. If we have no available
   # we push&pop a used register.
   if invalidCombination(a, b):
-    discard "wip"
+    let tmp = scratchReg(c.rega)
+    if tmp.kind == Undef:
+      # no scratch register available! Make Rcx free by a push/pop sequence:
+      c.buildTree PushT:
+        c.addKeyw RcxT   # Rcx is as good as any other
+
+      # mov rcx, b
+      c.buildTree MovT:
+        c.addKeyw RcxT
+        emitLoc c, b
+      # op a, rcx
+      c.buildTree opc:
+        emitLoc c, a
+        c.addKeyw RcxT
+
+      c.buildTree PopT:
+        c.addKeyw RcxT
+    else:
+      # mov rcx, b
+      c.buildTree MovT:
+        emitLoc c, tmp
+        emitLoc c, b
+      # op a, rcx
+      c.buildTree opc:
+        emitLoc c, a
+        emitLoc c, tmp
+      c.rega.freeTemp tmp
   else:
-    discard "wip"
+    c.buildTree opc:
+      emitLoc c, a
+      emitLoc c, b
 
 template typedBinOp(opr) {.dirty.} =
   let (typ, a, b) = sons3(t, n)
-  c.buildTree opr, info:
-    genType c, typ
-    genx c, t, a, WantValue
-    genx c, t, b, WantValue
+  let x = gen(c, t, a)
+  let y = gen(c, t, b)
+  c.combine x, y, opr
+  freeTemp c, y
+  freeTemp c, x
 
 template cmpOp(opr) {.dirty.} =
-  c.buildTree opr, info:
+  c.buildTree opr:
     let (a, b) = sons2(t, n)
     genTypeof c, a
     genx c, t, a, WantValue
     genx c, t, b, WantValue
 
 template unOp(opr) {.dirty.} =
-  c.buildTree opr, info:
+  c.buildTree opr:
     genTypeof c, n.firstSon
     genx c, t, n.firstSon, WantValue
 
 template typedUnOp(opr) {.dirty.} =
   let (typ, a) = sons2(t, n)
-  c.buildTree opr, info:
+  c.buildTree opr:
     genType c, typ
     genx c, t, a, WantValue
 
+proc genAsgn(c: var GeneratedCode; dest, src: Location) =
+  if dest.fp:
+    c.buildTree MovapdT:
+      c.emitLoc dest
+      c.emitLoc src
+  elif dest.size < 0'i32 or dest.size > 8'i32:
+    assert dest.size > 0'i32, "size not set!"
+    assert false, "implement rep byte copy loop"
+  else:
+    c.buildTree MovT:
+      c.emitLoc dest
+      c.emitLoc src
+
 proc genCall(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
-  c.buildTree CallT, t[n].info:
-    for ch in sons(t, n):
-      genx c, t, ch, WantValue
+  var args: seq[NodePos] = @[] # so that we can also do it backwards
+  for ch in sons(t, n): args.add ch
+
+  let sig = asProcType(t, getType(c.m, t, n.firstSon).rawPos)
+  var stackSpace = StackRedZone
+  var argTypes: seq[AsmSlot] = @[]
+  for param in sons(t, sig.params):
+    let p = asParamDecl(t, param)
+    argTypes.add c.typeToSlot(p.typ)
+
+  # we use this "RegAllocator" here only to compute the where the
+  # expressions need to end up:
+  var regb = initRegAllocator()
+  if t[sig.returnType].kind in {VoidC, Empty}:
+    discard "no return type"
+  else:
+    let ts = c.typeToSlot(sig.returnType)
+    var dummy = default(Location)
+    allocResultWin64(regb, ts, dummy)
+  var argLocs: seq[Location] = @[]
+  for argType in argTypes:
+    argLocs.add regb.allocParamWin64(argType)
+  reverseStackParamsWin64 argLocs
+
+  for i in 1 ..< args.len:
+    genx c, t, args[i], argLocs[i-1]
+
+  let fn = gen(c, t, n.firstSon)
+  c.buildTreeI CallT, t[n].info:
+    c.emitLoc fn
+
+  if t[sig.returnType].kind in {VoidC, Empty}:
+    discard "no return type"
+  else:
+    let ts = c.typeToSlot(sig.returnType)
+    stackSpace += stackSpaceResultWin64(ts)
+    if dest.kind == Undef:
+      dest = resultWin64(ts)
+    else:
+      c.genAsgn(dest, resultWin64(ts))
 
 proc genLvalue(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
   let info = t[n].info

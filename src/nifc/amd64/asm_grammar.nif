@@ -56,6 +56,8 @@
 
 (RULE :Instruction (OR
   (mov Expr Expr)
+  (movapd Expr Expr)
+  (movsd Expr Expr)
   (lea Expr Expr Expr Expr)
   (add Expr Expr)
   (sub Expr Expr)
@@ -64,6 +66,13 @@
   (div Expr Expr)
   (idiv Expr Expr)
   (xor Expr Expr)
+  (addsd Expr Expr)
+  (subsd Expr Expr)
+  (mulsd Expr Expr)
+  (divsd Expr Expr)
+
+  (push Expr)
+  (pop Expr)
   (inc Expr)
   (dec Expr)
   (neg Expr)

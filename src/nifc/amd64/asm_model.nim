@@ -51,34 +51,42 @@ const
   ByteatT* = TagId(48)
   WordatT* = TagId(49)
   MovT* = TagId(50)
-  LeaT* = TagId(51)
-  AddT* = TagId(52)
-  SubT* = TagId(53)
-  MulT* = TagId(54)
-  ImulT* = TagId(55)
-  DivT* = TagId(56)
-  IdivT* = TagId(57)
-  XorT* = TagId(58)
-  IncT* = TagId(59)
-  DecT* = TagId(60)
-  NegT* = TagId(61)
-  CmpT* = TagId(62)
-  TestT* = TagId(63)
-  CallT* = TagId(64)
-  LabT* = TagId(65)
-  JmpT* = TagId(66)
-  JeT* = TagId(67)
-  JneT* = TagId(68)
-  JzT* = TagId(69)
-  JnzT* = TagId(70)
-  JgT* = TagId(71)
-  JgeT* = TagId(72)
-  JaT* = TagId(73)
-  JaeT* = TagId(74)
-  NopT* = TagId(75)
-  RetT* = TagId(76)
-  SyscallT* = TagId(77)
-  CommentT* = TagId(78)
+  MovapdT* = TagId(51)
+  MovsdT* = TagId(52)
+  LeaT* = TagId(53)
+  AddT* = TagId(54)
+  SubT* = TagId(55)
+  MulT* = TagId(56)
+  ImulT* = TagId(57)
+  DivT* = TagId(58)
+  IdivT* = TagId(59)
+  XorT* = TagId(60)
+  AddsdT* = TagId(61)
+  SubsdT* = TagId(62)
+  MulsdT* = TagId(63)
+  DivsdT* = TagId(64)
+  PushT* = TagId(65)
+  PopT* = TagId(66)
+  IncT* = TagId(67)
+  DecT* = TagId(68)
+  NegT* = TagId(69)
+  CmpT* = TagId(70)
+  TestT* = TagId(71)
+  CallT* = TagId(72)
+  LabT* = TagId(73)
+  JmpT* = TagId(74)
+  JeT* = TagId(75)
+  JneT* = TagId(76)
+  JzT* = TagId(77)
+  JnzT* = TagId(78)
+  JgT* = TagId(79)
+  JgeT* = TagId(80)
+  JaT* = TagId(81)
+  JaeT* = TagId(82)
+  NopT* = TagId(83)
+  RetT* = TagId(84)
+  SyscallT* = TagId(85)
+  CommentT* = TagId(86)
 
 proc registerTags*() =
   registerTag "global", GlobalT
@@ -129,6 +137,8 @@ proc registerTags*() =
   registerTag "byteat", ByteatT
   registerTag "wordat", WordatT
   registerTag "mov", MovT
+  registerTag "movapd", MovapdT
+  registerTag "movsd", MovsdT
   registerTag "lea", LeaT
   registerTag "add", AddT
   registerTag "sub", SubT
@@ -137,6 +147,12 @@ proc registerTags*() =
   registerTag "div", DivT
   registerTag "idiv", IdivT
   registerTag "xor", XorT
+  registerTag "addsd", AddsdT
+  registerTag "subsd", SubsdT
+  registerTag "mulsd", MulsdT
+  registerTag "divsd", DivsdT
+  registerTag "push", PushT
+  registerTag "pop", PopT
   registerTag "inc", IncT
   registerTag "dec", DecT
   registerTag "neg", NegT
