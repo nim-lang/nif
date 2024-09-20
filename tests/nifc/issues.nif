@@ -47,6 +47,15 @@
     )
   ))
 
+  (proc :foo.switch . (void) . (stmts
+    (var :x.c . (i +32 .) (suf +12 "i32"))
+    (case x.c
+      (of (ranges +1) (call printf.c "hello %d" x.c))
+      (of (ranges (range +3 +5)) (call printf.c "hello %d" x.c))
+      (else (call printf.c "hello %d" x.c))
+    )
+  ))
+
 
   (proc :main.c . (i +32 atomic) . (stmts
     1,1,hello.nim(var :x1.m . (i +32 .) +12)
@@ -55,6 +64,7 @@
     1,4,hello.nim(call foo.m2)
     (call foo.m3)
     (call foo.if)
+    (call foo.switch)
 
     (var :x.c . (i +8 .) (suf +12 "i8"))
     (var :x.m . (i +16 .) (suf -12 "i16"))
