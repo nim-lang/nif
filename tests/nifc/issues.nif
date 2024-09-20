@@ -39,12 +39,22 @@
     (var :z.c . (ptr (c +8 .)) (nil))
   ))
 
+  (proc :foo.if . (void) . (stmts
+    (const :x.c . (i +32 .) (suf +12 "i32"))
+    (if (elif (eq x.c +1) (call printf.c "v: %d\0A" x.c)) 
+        (elif (eq x.c +3) (call printf.c "v: %d\0A" x.c))
+        (else (call printf.c "v: %d\0A" x.c))
+    )
+  ))
+
+
   (proc :main.c . (i +32 atomic) . (stmts
     1,1,hello.nim(var :x1.m . (i +32 .) +12)
     1,2,hello.nim(var :z2.m . (ptr (c +8 .)) (cast (ptr (c +8 .)) (suf "hello" "r")))
     1,3,hello.nim(var :z3.m . (ptr (c +8 .)) (cast (ptr (c +8 .)) (suf "hello" "r")))
     1,4,hello.nim(call foo.m2)
     (call foo.m3)
+    (call foo.if)
 
     (var :x.c . (i +8 .) (suf +12 "i8"))
     (var :x.m . (i +16 .) (suf -12 "i16"))
