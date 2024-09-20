@@ -95,6 +95,9 @@ proc addEmpty(c: var GeneratedCode; info: PackedLineInfo) =
 proc addKeyw(c: var GeneratedCode; keyw: TagId; info: PackedLineInfo) =
   c.code.buildTree keyw, info: discard
 
+proc addKeywUnchecked(c: var GeneratedCode; keyw: string; info: PackedLineInfo) =
+  c.code.buildTree pool.tags.getOrIncl(keyw), info: discard
+
 proc addSymDef(c: var TokenBuf; s: string; info: PackedLineInfo) =
   c.add toToken(SymbolDef, pool.syms.getOrIncl(s), info)
 
@@ -135,7 +138,7 @@ include ".." / preasm / genpreasm_t
 # Procs
 
 proc genWas(c: var GeneratedCode; t: Tree; ch: NodePos) =
-  c.code.buildTree(WasT, t[ch].info):
+  c.code.buildTree(CommentT, t[ch].info):
     c.code.add toToken(Ident, pool.strings.getOrIncl(toString(t, ch.firstSon, c.m)), t[ch].info)
 
 type
@@ -181,15 +184,14 @@ proc genParamPragmas(c: var GeneratedCode; t: Tree; n: NodePos) =
   if t[n].kind == Empty:
     discard
   elif t[n].kind == PragmasC:
-    c.buildTree PragmasT, t[n].info:
-      for ch in sons(t, n):
-        case t[ch].kind
-        of AttrC:
-          discard "Ignore for now"
-        of WasC:
-          genWas c, t, ch
-        else:
-          error c.m, "invalid pragma: ", t, ch
+    for ch in sons(t, n):
+      case t[ch].kind
+      of AttrC:
+        discard "Ignore for now"
+      of WasC:
+        genWas c, t, ch
+      else:
+        error c.m, "invalid pragma: ", t, ch
   else:
     error c.m, "expected pragmas but got: ", t, n
 
@@ -197,18 +199,17 @@ proc genVarPragmas(c: var GeneratedCode; t: Tree; n: NodePos; alignOverride: var
   if t[n].kind == Empty:
     discard
   elif t[n].kind == PragmasC:
-    c.buildTree PragmasT, t[n].info:
-      for ch in sons(t, n):
-        case t[ch].kind
-        of AlignC:
-          let intId = t[ch.firstSon].litId
-          alignOverride = parseInt(c.m.lits.strings[intId])
-        of AttrC:
-          discard "ignore attribute"
-        of WasC:
-          genWas c, t, ch
-        else:
-          error c.m, "invalid pragma: ", t, ch
+    for ch in sons(t, n):
+      case t[ch].kind
+      of AlignC:
+        let intId = t[ch.firstSon].litId
+        alignOverride = parseInt(c.m.lits.strings[intId])
+      of AttrC:
+        discard "ignore attribute"
+      of WasC:
+        genWas c, t, ch
+      else:
+        error c.m, "invalid pragma: ", t, ch
   else:
     error c.m, "expected pragmas but got: ", t, n
 

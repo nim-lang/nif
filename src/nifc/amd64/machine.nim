@@ -142,7 +142,7 @@ proc freeReg*(a: var RegAllocator; r: IntReg) =
   excl a.used, r
 
 type
-  LocKind = enum
+  LocKind* = enum
     DontCare,
     ImmediateInt,
     ImmediateUInt,
@@ -154,17 +154,17 @@ type
     InData # in some global data section
   Location* = object
     indirect*: bool # we only have the address of the thing, not the thing itself
-    case kind: LocKind
+    case kind*: LocKind
     of DontCare: discard
-    of ImmediateInt: ival: int64
-    of ImmediateUInt: uval: uint64
-    of ImmediateFloat: fval: float
-    of InReg: reg: IntReg
-    of InRegFp: regf: FloatReg
-    of InStack: slot: int
-    of InFlag: flag: CpuFlag
-    of JumpMode: label: int
-    of InData: data: StrId
+    of ImmediateInt: ival*: int64
+    of ImmediateUInt: uval*: uint64
+    of ImmediateFloat: fval*: float
+    of InReg: reg*: IntReg
+    of InRegFp: regf*: FloatReg
+    of InStack: slot*: int
+    of InFlag: flag*: CpuFlag
+    of JumpMode: label*: int
+    of InData: data*: StrId
 
 proc immediateLoc*(ival: int64): Location = Location(kind: ImmediateInt, ival: ival)
 proc immediateLoc*(uval: uint64): Location = Location(kind: ImmediateUInt, uval: uval)

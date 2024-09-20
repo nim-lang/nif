@@ -2,107 +2,87 @@
 
 (GRAMMAR Module
 
-(RULE :IntType (i INTLIT (ZERO_OR_ONE INTLIT)))
-(RULE :UIntType (u INTLIT (ZERO_OR_ONE INTLIT)))
-(RULE :FloatType (f INTLIT (ZERO_OR_ONE INTLIT)))
-(RULE :MemType (m INTLIT (ZERO_OR_ONE INTLIT)))
-(COM "           ^ size   ^ align")
-(RULE :BoolType (b))
+(COM "This grammar reflects the fact that we produce NASM code.")
 
-(RULE :Type (OR IntType UIntType FloatType MemType BoolType))
+(RULE :Directive (global SYMBOL))
 
-(RULE :Lvalue (OR SYMBOL
-             (load Type Expr)))
+(RULE :Code (text SYMBOLDEF (ONE_OR_MANY Instruction)))
+(RULE :ExternDecl (extern SYMBOLDEF))
 
-(COM "addscaled Type Expr Expr  is (a+i*TypeSize)")
-
-(RULE :Call (call Type CallingConvention (OR . (varargs)) (ONE_OR_MANY Expr)))
-(RULE :Expr (OR INTLIT UINTLIT FLOATLIT CHARLITERAL
-         Lvalue
-         (vaddr Type SYMBOL)
-         (gaddr Type SYMBOL)
-         (taddr Type SYMBOL)
-         (not Type Expr)
-         (neg Type Expr)
-         (addscaled Type Expr Expr)
-         (add Type Expr Expr)
-         (sub Type Expr Expr)
-         (mul Type Expr Expr)
-         (div Type Expr Expr)
-         (mod Type Expr Expr)
-         (shr Type Expr Expr)
-         (shl Type Expr Expr)
-         (bitand Type Expr Expr)
-         (bitor Type Expr Expr)
-         (bitnot Type Expr Expr)
-         (bitxor Type Expr Expr)
-         (eq Type Expr Expr)
-         (neq Type Expr Expr)
-         (le Type Expr Expr)
-         (lt Type Expr Expr)
-         (sext Type Type Expr)
-         (zext Type Type Expr)
-         (fext Type Type Expr)
-         (fnarrow Type Type Expr)
-         (trunc Type Type Expr)
-         (ftoi Type Type Expr)
-         (ftou Type Type Expr)
-         (itof Type Type Expr)
-         (utof Type Type Expr)
-         Call
+(RULE :DataValue (OR STRINGLITERAL INTLIT UINTLIT FLOATLIT))
+(RULE :DataKey SYMBOLDEF (ONE_OR_MANY (OR DataValue (times INTLIT DataValue))))
+(RULE :DataDecl (OR
+  (db DataKey)
+  (dw DataKey)
+  (dd DataKey)
+  (dq DataKey)
 ))
 
-(RULE :VarDeclCommon SYMBOLDEF VarPragmas Type)
-(RULE :VarDecl (OR (var VarDeclCommon)
-            (gvar VarDeclCommon)
-            (tvar VarDeclCommon)))
+(RULE :Data (data (ZERO_OR_MANY DataDecl)))
+(RULE :Rodata (rodata (ZERO_OR_MANY DataDecl)))
 
-(RULE :ConstBody (values (ONE_OR_MANY (OR SYMBOL INTLIT UINTLIT FLOATLIT CHARLITERAL))))
-(RULE :ConstDecl (const SYMBOLDEF VarPragmas Type ConstBody))
-(RULE :AsciizDecl (asciiz SYMBOLDEF STRINGLITERAL))
-(RULE :EmitStmt (emit (ONE_OR_MANY Expr)))
+(RULE :Section (OR Directive ExternDecl Code Data Rodata))
 
-(RULE :Stmt (OR Call
-         VarDecl
-         EmitStmt
-         (asgn Type Lvalue Expr)
-         (store Type Lvalue Expr)
-         (lab SYMBOLDEF)
-         (loop SYMBOLDEF)
-         (tjmp Expr SYMBOL)
-         (fjmp Expr SYMBOL)
-         (jmp SYMBOL)
-         (jloop SYMBOL)
-         (ret Type Expr)))
+(RULE :Module (stmts (ZERO_OR_MANY Section)))
 
-(RULE :StmtList (stmts (ZERO_OR_MANY Stmt)))
+(RULE :Reg (OR
+  (rax) (rbx) (rcx) (rdx) (rsi) (rdi) (rbp) (rsp)
+  (r8) (r9) (r10) (r11) (r12) (r13) (r14) (r15)
+))
 
-(RULE :Param (param SYMBOLDEF ParamPragmas Type))
-(RULE :Params (OR . (ZERO_OR_MANY (params Param))))
+(RULE :FpReg (OR
+  (xmm0) (xmm1) (xmm2) (xmm3) (xmm4) (xmm6) (xmm7) (xmm8)
+  (xmm9) (xmm10) (xmm11) (xmm12) (xmm13) (xmm14) (xmm15)
+))
 
-(RULE :ProcDecl (proc SYMBOLDEF Params Type ProcPragmas (OR . StmtList)))
+(COM "We do not model the fact that most mem/mem instructions are invalid")
 
-(RULE :CallingConvention (OR (cdecl) (stdcall) (safecall) (syscall)
-                      (fastcall) (thiscall) (noconv) (member)))
+(RULE :Primary (OR
+  Reg FpReg
+  SYMBOL
+  (rel SYMBOL)
+  INTLIT UINTLIT
+))
 
-(RULE :Attribute (attr STRINGLITERAL))
-(RULE :Identifier (OR SYMBOL IDENT))
-(RULE :ProcPragma (OR CallingConvention (varargs) (was Identifier)
-               (selectany) Attribute))
+(RULE :Expr (OR
+  Primary
+  (mem2 Primary Primary)
+  (mem3 Primary Primary INTLIT)
+  (byteat Primary)
+  (wordat Primary)
+))
 
-(RULE :ProcPragmas (OR . (pragmas (ONE_OR_MANY ProcPragma))))
+(RULE :Label SYMBOL)
 
-(RULE :CommonPragma (OR (align INTLIT) (was Identifier) Attribute))
-(RULE :VarPragma CommonPragma)
-(RULE :VarPragmas (OR . (pragmas (ONE_OR_MANY VarPragma))))
-
-(RULE :ParamPragma (OR (was Identifier) Attribute))
-(RULE :ParamPragmas (OR . (pragmas (ONE_OR_MANY ParamPragma))))
-
-(RULE :ExternDecl (imp (OR ProcDecl VarDecl ConstDecl)))
-(RULE :Include (incl STRINGLITERAL))
-
-(RULE :TopLevelConstruct (OR ExternDecl ProcDecl VarDecl ConstDecl AsciizDecl
-                          Include EmitStmt))
-(RULE :Module (stmts (ZERO_OR_MANY TopLevelConstruct)))
+(RULE :Instruction (OR
+  (mov Expr Expr)
+  (lea Expr Expr Expr Expr)
+  (add Expr Expr)
+  (sub Expr Expr)
+  (mul Expr Expr)
+  (imul Expr Expr)
+  (div Expr Expr)
+  (idiv Expr Expr)
+  (xor Expr Expr)
+  (inc Expr)
+  (dec Expr)
+  (neg Expr)
+  (cmp Expr Expr)
+  (test Expr Expr)
+  (call Expr)
+  (lab SYMBOLDEF)
+  (jmp Label)
+  (je Label)
+  (jne Label)
+  (jz Label)
+  (jnz Label)
+  (jg Label)
+  (jge Label)
+  (ja Label)
+  (jae Label)
+  (nop)
+  (ret)
+  (syscall)
+  (comment (OR IDENT SYMBOL STRINGLITERAL))
+))
 )

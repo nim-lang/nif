@@ -9,7 +9,30 @@
 
 # included from genpreasm.nim
 
-import machine
+proc emitLoc*(c: var GeneratedCode; loc: Location) =
+  case loc.kind
+  of DontCare:
+    assert false, "location should have been set"
+  of ImmediateInt:
+    dest.add toToken(IntLit, pool.integers.getOrIncl(loc.ival), NoLineInfo)
+  of ImmediateUInt:
+    dest.add toToken(UIntLit, pool.uintegers.getOrIncl(loc.uval), NoLineInfo)
+  of ImmediateFloat:
+    dest.add toToken(FloatLit, pool.floats.getOrIncl(loc.fval), NoLineInfo)
+  of InReg:
+    dest.addKeywUnchecked regName(loc.reg), NoLineInfo
+  of InRegFp:
+    dest.addKeywUnchecked regName(loc.regf), NoLineInfo
+  of InStack:
+    dest.buildTree Mem2T, NoLineInfo:
+      dest.addKeyw RspT, NoLineInfo
+      dest.add toToken(IntLit, pool.integers.getOrIncl(loc.slot), NoLineInfo)
+  of InFlag:
+    assert false, "not implemented"
+  of JumpMode:
+    dest.add toToken(Ident, pool.strings.getOrIncl("L." & $loc.label))
+  of InData:
+    dest.add toToken(Sym, pool.syms.getOrIncl(c.m.lits.strings[loc.data]))
 
 type
   XMode = enum
