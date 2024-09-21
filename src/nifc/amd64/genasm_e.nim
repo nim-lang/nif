@@ -48,7 +48,10 @@ proc makeReg(c: var GeneratedCode; x: Location): Location =
   if x.kind != InReg:
     result = scratchReg(c.rega)
     if result.kind == Undef:
-      c.buildTree PushT:
+      c.buildTree MovT:
+        c.buildTree Mem2T:
+          c.addKeyw RspT
+          c.genIntLit getScratchStackSlot(c.rega), NoLineInfo
         c.addKeyw RcxT   # Rcx is as good as any other
       result = Location(kind: InPushedReg, reg: Rcx)
     c.buildTree MovT:
@@ -65,8 +68,11 @@ proc genForceReg(c: var GeneratedCode; t: Tree; n: NodePos): Location =
 proc freeTemp(c: var GeneratedCode; loc: Location) =
   if loc.kind == InPushedReg:
     assert(not loc.temp, "pushed reg must not be marked as temporary")
-    c.buildTree PopT:
-      emitLoc c, loc
+    c.buildTree MovT:
+      c.addKeyw RcxT
+      c.buildTree Mem2T:
+        c.addKeyw RspT
+        c.genIntLit getScratchStackSlot(c.rega), NoLineInfo
     # KEEP THE REGISTER MARKED AS "USED"! Do not call `freeTempRaw` here!
   else:
     freeTempRaw c.rega, loc
@@ -137,7 +143,7 @@ proc genCall(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
   for ch in sons(t, n): args.add ch
 
   let sig = asProcType(t, getType(c.m, t, n.firstSon).rawPos)
-  var stackSpace = StackRedZone
+  var stackSpace = HomeSpace
   var argTypes: seq[AsmSlot] = @[]
   for param in sons(t, sig.params):
     let p = asParamDecl(t, param)
@@ -208,7 +214,7 @@ proc genLvalue(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
       c.emitLoc tmp
     c.freeTemp tmp
   of AtC:
-    let elemType = getType(m, t, n)
+    let elemType = getType(c.m, t, n)
     let (a, i) = sons2(t, n)
     let tmp = gen(c, t, a)
 

@@ -27,6 +27,7 @@ type
   ProcBodyProps* = object
     vars*: Table[StrId, VarInfo]
     inlineStructs*: bool # candidate for struct inlining
+    hasCall*: bool
 
   Scope = object
     vars: seq[StrId]
@@ -45,7 +46,8 @@ proc closeScope(c: var Context) =
   if not finished.hasCall:
     for v in finished.vars:
       c.res.vars[v].props.incl AllRegs
-  elif c.scopes.len > 0:
+  else:
+    assert c.scopes.len > 0
     # a scope has a call if some inner scope has a call:
     c.scopes[^1].hasCall = true
 
@@ -146,5 +148,7 @@ proc analyseProcBody(m: Module; t: Tree; n: NodePos; c: var Context) =
 
 proc analyseProcBody*(m: Module; t: Tree; n: NodePos): ProcBodyProps =
   var c = Context()
+  c.scopes.add Scope() # there is always one scope
   analyseProcBody m, t, n, c
+  c.res.hasCall = c.scopes[0].hasCall
   result = ensureMove(c.res)

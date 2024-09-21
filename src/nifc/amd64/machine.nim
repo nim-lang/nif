@@ -119,16 +119,23 @@ proc flagName*(f: CpuFlag): string =
 const
   wordSize = 8
   StackAlign = 16
-  StackRedZone* = 32
+  HomeSpace* = 32
 
 type
   RegAllocator* = object
     used: set[IntReg]
     usedFloats: set[FloatReg]
     usedStackSpace, maxStackSpace: int
+    scratchStackSlot: int
 
 proc initRegAllocator*(): RegAllocator =
-  result = RegAllocator()
+  result = RegAllocator(scratchStackSlot: -1)
+
+proc getScratchStackSlot*(a: var RegAllocator): int =
+  if a.scratchStackSlot < 0:
+    a.scratchStackSlot = a.usedStackSpace
+    inc a.usedStackSpace, wordSize
+  result = a.scratchStackSlot
 
 proc getReg*(a: var RegAllocator): IntReg =
   result = IntReg(0)
