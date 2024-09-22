@@ -34,7 +34,7 @@ const
   Rsi = IntReg(4)
   Rdi = IntReg(5)
   Rbp = IntReg(6)
-  Rsp = IntReg(7)
+  Rsp* = IntReg(7)
   R8 = IntReg(8)
   R9 = IntReg(9)
   R10 = IntReg(10)
@@ -117,7 +117,7 @@ proc flagName*(f: CpuFlag): string =
 
 
 const
-  wordSize = 8
+  WordSize* = 8
   StackAlign = 16
   HomeSpace* = 32
 
@@ -134,7 +134,7 @@ proc initRegAllocator*(): RegAllocator =
 proc getScratchStackSlot*(a: var RegAllocator): int =
   if a.scratchStackSlot < 0:
     a.scratchStackSlot = a.usedStackSpace
-    inc a.usedStackSpace, wordSize
+    inc a.usedStackSpace, WordSize
   result = a.scratchStackSlot
 
 proc getReg*(a: var RegAllocator): IntReg =
@@ -156,20 +156,20 @@ type
     ImmediateUInt,
     ImmediateFloat,
     InReg,
-    InPushedReg, # it is a register that needs a `pop` operation
     InRegFp,
     InStack,
     InFlag, # in a CPU flag
     JumpMode # not a value, but control flow
     InData # in some global data section
     InTls  # in thread local storage
-    InRegReg  # address is (reg + reg)
     InRegOffset # address is (reg + offset)
     InRegRegScaledOffset # address is (reg + reg*scale + offset)
   LocFlag* = enum
     Reg1Temp, # reg1 is temp
     Reg2Temp, # reg2 is temp
     Indirect  # we only have the address of the thing, not the thing itself
+    Reg1NeedsPop
+    Reg2NeedsPop
   Location* = object
     typ*: AsmSlot # this already has an `offset` field that is used for `InRegOffset` etc.
     flags*: set[LocFlag]
@@ -178,7 +178,7 @@ type
     of ImmediateInt: ival*: int64
     of ImmediateUInt: uval*: uint64
     of ImmediateFloat: fval*: float
-    of InReg, InPushedReg, InRegOffset, InRegReg, InRegRegScaledOffset:
+    of InReg, InRegOffset, InRegRegScaledOffset:
       reg1*, reg2*: IntReg
     of InRegFp: regf*: FloatReg
     of InStack: slot*: int
@@ -209,7 +209,7 @@ proc stackSpaceResultWin64*(returnType: AsmSlot): int =
   if returnType.kind == AFloat:
     result = 0 # no stack space required for the result
   elif returnType.size in [1, 2, 4, 8]:
-    result = wordSize # passed back in Rax
+    result = WordSize # passed back in Rax
   else:
     result = align(returnType.size, 8)
 
@@ -236,7 +236,7 @@ proc allocParamWin64*(a: var RegAllocator; param: AsmSlot): Location =
           result = Location(kind: InRegFp, regf: xmm)
           break floatRegSearch
       result = Location(kind: InStack, slot: a.usedStackSpace)
-      inc a.usedStackSpace, wordSize
+      inc a.usedStackSpace, WordSize
   else:
     let flags = if param.size notin [1, 2, 4, 8]: {Indirect} else: {}
     const attempts = [Rcx, Rdx, R8, R9]
@@ -247,7 +247,7 @@ proc allocParamWin64*(a: var RegAllocator; param: AsmSlot): Location =
           result = Location(flags: flags, kind: InReg, reg1: att)
           break intRegSearch
       result = Location(flags: flags, kind: InStack, slot: a.usedStackSpace)
-      inc a.usedStackSpace, wordSize
+      inc a.usedStackSpace, WordSize
 
 proc reverseStackParamsWin64*(res: var openArray[Location]) =
   # reverse the stack slots since the ABI says stack slots
@@ -315,7 +315,7 @@ proc allocVar*(a: var RegAllocator; slot: AsmSlot; props: VarProps): Location =
     result = Location(kind: InStack, slot: a.usedStackSpace)
     inc a.usedStackSpace, 8
   else:
-    if slot.size <= wordSize:
+    if slot.size <= WordSize:
       # consider using a register
       if AllRegs in props:
         result = selectReg(a, slot, allAttempts)
@@ -327,11 +327,11 @@ proc allocVar*(a: var RegAllocator; slot: AsmSlot; props: VarProps): Location =
 
 proc freeLocEnforced*(a: var RegAllocator; loc: Location) =
   case loc.kind
-  of InReg, InPushedReg, InRegOffset:
+  of InReg, InRegOffset:
     a.used.excl loc.reg1
   of InRegFp:
     a.usedFloats.excl loc.regf
-  of InRegReg, InRegRegScaledOffset:
+  of InRegRegScaledOffset:
     a.used.excl loc.reg1
     a.used.excl loc.reg2
   else:
@@ -339,13 +339,13 @@ proc freeLocEnforced*(a: var RegAllocator; loc: Location) =
 
 proc freeTempRaw*(a: var RegAllocator; loc: Location) =
   case loc.kind
-  of InReg, InPushedReg, InRegOffset:
+  of InReg, InRegOffset:
     if Reg1Temp in loc.flags:
       a.used.excl loc.reg1
   of InRegFp:
     if Reg1Temp in loc.flags:
       a.usedFloats.excl loc.regf
-  of InRegReg, InRegRegScaledOffset:
+  of InRegRegScaledOffset:
     if Reg1Temp in loc.flags:
       a.used.excl loc.reg1
     if Reg2Temp in loc.flags:
@@ -362,7 +362,7 @@ proc freeScope*(a: var RegAllocator; vars: openArray[Location]) =
     case loc.kind
     of InReg, InRegOffset:
       a.used.excl loc.reg1
-    of InRegReg, InRegRegScaledOffset:
+    of InRegRegScaledOffset:
       a.used.excl loc.reg1
       a.used.excl loc.reg2
     of InRegFp:

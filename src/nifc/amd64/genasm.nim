@@ -74,6 +74,10 @@ proc genIntLit(c: var GeneratedCode; i: BiggestInt; info: PackedLineInfo) =
   let id = pool.integers.getOrIncl(i)
   c.code.add toToken(IntLit, id, info)
 
+proc genIntLit(c: var TokenBuf; i: BiggestInt; info: PackedLineInfo) =
+  let id = pool.integers.getOrIncl(i)
+  c.add toToken(IntLit, id, info)
+
 proc genUIntLit(c: var GeneratedCode; litId: LitId; info: PackedLineInfo) =
   let i = parseBiggestUInt(c.m.lits.strings[litId])
   let id = pool.uintegers.getOrIncl(i)
@@ -372,11 +376,11 @@ proc generateAsm*(inp, outp: string) =
   generateTypes(c, co)
 
   traverseCode c, c.m.code, StartPos
-  var f = open(outp, fmWrite)
-  f.write "(.nif24)\n(stmts"
-  f.write toString(c.data)
-  f.write toString(c.code)
-  f.write ")\n"
+  var f = ""
+  f.add "(.nif24)\n(stmts"
+  f.add toString(c.data)
+  f.add toString(c.code)
+  f.add ")\n"
   if c.init.len > 0:
     quit "no init code implemented"
-  f.close
+  produceAsmCode f, outp
