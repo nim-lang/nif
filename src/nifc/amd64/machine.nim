@@ -163,6 +163,9 @@ type
     JumpMode # not a value, but control flow
     InData # in some global data section
     InTls  # in thread local storage
+    InRegReg  # address is (reg + reg)
+    InRegOffset # address is (reg + offset)
+    InRegRegScaledOffset # address is (reg + reg*scale + offset)
   Location* = object
     size*: int32
     indirect*: bool # we only have the address of the thing, not the thing itself

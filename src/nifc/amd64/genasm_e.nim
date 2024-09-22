@@ -218,6 +218,8 @@ proc genLvalue(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
     let (a, i) = sons2(t, n)
     let tmp = gen(c, t, a)
 
+    let d = Location(indirect: true, )
+
     if mode == WantValue:
       c.code.addParLe LoadT, info
       genTypeof c, n
