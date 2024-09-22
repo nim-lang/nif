@@ -15,7 +15,7 @@ from std / os import changeFileExt, splitFile, extractFileName
 import .. / .. / lib / [bitabs, packedtrees, lineinfos, nifstreams, nifcursors]
 import ".." / [nifc_model, typenav]
 import ".." / native / [slots, analyser]
-import asm_model, machine
+import asm_model, machine, emitter
 
 type
   Label = distinct int

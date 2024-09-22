@@ -20,7 +20,7 @@ proc emitLoc*(c: var GeneratedCode; loc: Location) =
   of ImmediateFloat:
     c.code.add toToken(FloatLit, pool.floats.getOrIncl(loc.fval), NoLineInfo)
   of InReg, InPushedReg:
-    c.addKeywUnchecked regName(loc.reg)
+    c.addKeywUnchecked regName(loc.reg1)
   of InRegFp:
     c.addKeywUnchecked regName(loc.regf)
   of InStack:
@@ -37,6 +37,26 @@ proc emitLoc*(c: var GeneratedCode; loc: Location) =
   of InTls:
     c.buildTree FsT:
       c.code.add toToken(Symbol, pool.syms.getOrIncl(c.m.lits.strings[loc.data]), NoLineInfo)
+  of InRegReg:
+    c.buildTree Mem2T:
+      c.addKeywUnchecked regName(loc.reg1)
+      c.addKeywUnchecked regName(loc.reg2)
+  of InRegOffset:
+    c.buildTree Mem2T:
+      c.addKeywUnchecked regName(loc.reg1)
+      c.code.add toToken(IntLit, pool.integers.getOrIncl(loc.typ.offset), NoLineInfo)
+  of InRegRegScaledOffset:
+    if loc.typ.offset == 0:
+      c.buildTree Mem3T:
+        c.addKeywUnchecked regName(loc.reg1)
+        c.addKeywUnchecked regName(loc.reg2)
+        c.code.add toToken(IntLit, pool.integers.getOrIncl(loc.typ.size), NoLineInfo)
+    else:
+      c.buildTree Mem4T:
+        c.addKeywUnchecked regName(loc.reg1)
+        c.addKeywUnchecked regName(loc.reg2)
+        c.code.add toToken(IntLit, pool.integers.getOrIncl(loc.typ.size), NoLineInfo)
+        c.code.add toToken(IntLit, pool.integers.getOrIncl(loc.typ.offset), NoLineInfo)
 
 proc genx(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location)
 
@@ -53,7 +73,7 @@ proc makeReg(c: var GeneratedCode; x: Location): Location =
           c.addKeyw RspT
           c.genIntLit getScratchStackSlot(c.rega), NoLineInfo
         c.addKeyw RcxT   # Rcx is as good as any other
-      result = Location(kind: InPushedReg, reg: Rcx)
+      result = Location(kind: InPushedReg, reg1: Rcx)
     c.buildTree MovT:
       c.addKeyw RcxT
       emitLoc c, x
@@ -67,7 +87,7 @@ proc genForceReg(c: var GeneratedCode; t: Tree; n: NodePos): Location =
 
 proc freeTemp(c: var GeneratedCode; loc: Location) =
   if loc.kind == InPushedReg:
-    assert(not loc.temp, "pushed reg must not be marked as temporary")
+    assert(Reg1Temp notin loc.flags, "pushed reg must not be marked as temporary")
     c.buildTree MovT:
       c.addKeyw RcxT
       c.buildTree Mem2T:
@@ -120,12 +140,19 @@ template typedUnOp(opr) {.dirty.} =
     genx c, t, a, WantValue
 
 proc genAsgn(c: var GeneratedCode; dest, src: Location) =
-  if dest.fp:
+  if dest.kind == src.kind:
+    # don't generate `mov rax, rax` like things:
+    if dest.kind == InReg and dest.reg1 == src.reg1:
+      return
+    if dest.kind == InRegFp and dest.regf == src.regf:
+      return
+
+  if dest.typ.kind == AFloat:
     c.buildTree MovapdT:
       c.emitLoc dest
       c.emitLoc src
-  elif dest.size < 0'i32 or dest.size > 8'i32:
-    assert dest.size > 0'i32, "size not set!"
+  elif dest.typ.size < 0'i32 or dest.typ.size > 8'i32:
+    assert dest.typ.size > 0'i32, "size not set!"
     assert false, "implement rep byte copy loop"
   else:
     c.buildTree MovT:
@@ -180,26 +207,27 @@ proc genCall(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
     else:
       c.genAsgn(dest, resultWin64(ts))
 
-proc genLvalue(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
+proc genAddr(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
   let info = t[n].info
   case t[n].kind
   of Sym:
     let lit = t[n].litId
     let def = c.m.defs.getOrDefault(lit)
     case def.kind
-    of ConstC:
-      let cnst = asVarDecl(t, def.pos)
-      genLvalue(c, t, cnst.value, dest)
     of ProcC:
-      let d = Location(size: 8, kind: InData, data: lit)
+      let d = Location(typ: AsmSlot(kind: AInt, size: 8, align: 8), kind: InData, data: lit)
       into c, dest, d
     of VarC, ParamC:
-      into c, dest, c.locals[lit]
-    of GvarC:
-      let d = Location(indirect: true, size: 8, kind: InData, data: lit)
+      let d = c.locals[lit]
+      assert d.kind == InStack, "attempt to use addr() of a variable not in the stack"
+      into c, dest, d
+    of GvarC, ConstC:
+      let typ = c.globals[lit]
+      let d = Location(flags: {Indirect}, typ: typ, kind: InData, data: lit)
       into c, dest, d
     of TvarC:
-      let d = Location(indirect: true, size: 8, kind: InTls, data: lit)
+      let typ = c.globals[lit]
+      let d = Location(flags: {Indirect}, typ: typ, kind: InTls, data: lit)
       into c, dest, d
     of EfldC:
       assert false, "enum fields not implemented"
@@ -209,27 +237,54 @@ proc genLvalue(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
     #let name = c.m.lits.strings[lit]
     #c.addSym name, info
   of DerefC:
-    let tmp = genForceReg(c, t, n.firstSon)
-    c.buildTreeI Mem1T, t[n].info:
-      c.emitLoc tmp
-    c.freeTemp tmp
-  of AtC:
+    # genx means "produce value"
+    genx c, t, n.firstSon, dest
+    when false:
+      let tmp = genForceReg(c, t, n.firstSon)
+      assert(not tmp.indirect)
+      c.buildTreeI Mem1T, t[n].info:
+        c.emitLoc tmp
+      c.freeTemp tmp
+  of AtC, PatC:
     let elemType = getType(c.m, t, n)
     let (a, i) = sons2(t, n)
-    let tmp = gen(c, t, a)
+    var loc = Location(kind: Undef)
+    genAddr(c, t, a, loc)
+    loc.typ = c.typeToSlot elemType
+    assert loc.kind != Undef
+    let idx = genForceReg(c, t, i)
+    # materialize complex addressing:
+    case loc.kind:
+    of InRegReg:
+      c.buildTree AddT:
+        c.addKeywUnchecked regName(loc.reg1)
+        c.addKeywUnchecked regName(loc.reg2)
+      loc.kind = InReg
+    of InRegRegScaledOffset:
+      c.buildTree LeaT:
+        c.addKeywUnchecked regName(loc.reg1)
+        c.buildTree Mem3T:
+          c.addKeywUnchecked regName(loc.reg1)
+          c.addKeywUnchecked regName(loc.reg2)
+          c.code.add toToken(IntLit, pool.integers.getOrIncl(loc.typ.size), NoLineInfo)
+      loc.kind = InRegOffset
+    of InReg, InRegOffset, InPushedReg:
+      discard "nothing to do"
+    of InStack:
 
-    let d = Location(indirect: true, )
+    of InData:
 
-    if mode == WantValue:
-      c.code.addParLe LoadT, info
-      genTypeof c, n
-    c.buildTree AddscaledT, info:
-      genTypeof c, n
-      let (a, i) = sons2(t, n)
-      genx c, t, a, WantAddr
-      genx c, t, i, WantValue
-    if mode == WantValue:
-      c.code.addParRi()
+    of InTls:
+
+    case loc.kind
+    of InReg, InRegOffset:
+      loc.kind = InRegRegScaledOffset
+      loc.reg2 = idx.reg1
+      if Reg1Temp in reg1.flags:
+        loc.flags.incl Reg2Temp
+    else:
+      error c.m, "overly complex address computation: ", t, n
+
   of PatC:
     if mode == WantValue:
       c.code.addParLe LoadT, info

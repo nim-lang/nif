@@ -65,23 +65,9 @@ proc matchStringLit(c: var Context): bool =
   else:
     result = false
 
-proc matchEmpty(c: var Context): bool =
-  if c.current.kind == DotToken:
-    inc c.current
-    result = true
-  else:
-    result = false
-
 proc matchIdent(c: var Context): bool =
   if c.current.kind == Ident:
     c.dest.add pool.strings[c.current.litId]
-    inc c.current
-    result = true
-  else:
-    result = false
-
-proc matchIdent(c: var Context; s: string): bool =
-  if c.current.kind == Ident and pool.strings[c.current.litId] == s:
     inc c.current
     result = true
   else:
@@ -111,24 +97,6 @@ proc matchParRi(c: var Context): bool =
 
 proc peekParRi(c: var Context): bool {.inline.} =
   c.current.kind == ParRi
-
-proc matchAny(c: var Context): bool {.inline.} =
-  case c.current.kind
-  of UnknownToken, DotToken, Ident, Symbol, SymbolDef, StringLit, CharLit, IntLit, UIntLit, FloatLit:
-    inc c.current
-    result = true
-  of EofToken, ParRi:
-    result = false
-  of ParLe:
-    var nested = 0
-    while true:
-      let k = c.current.kind
-      inc c.current
-      if k == ParLe: inc nested
-      elif k == ParRi:
-        dec nested
-        if nested == 0: break
-    result = true
 
 proc emitTag(c: var Context; tag: string) =
   c.dest.add tag

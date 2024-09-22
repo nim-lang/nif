@@ -18,11 +18,11 @@ type
 proc inc(x: var IntReg) {.inline.} = inc byte(x)
 proc inc(x: var FloatReg) {.inline.} = inc byte(x)
 
-proc `==`(a, b: IntReg): bool {.borrow.}
+proc `==`*(a, b: IntReg): bool {.borrow.}
 proc `<=`(a, b: IntReg): bool {.borrow.}
 proc `<`(a, b: IntReg): bool {.borrow.}
 
-proc `==`(a, b: FloatReg): bool {.borrow.}
+proc `==`*(a, b: FloatReg): bool {.borrow.}
 proc `<=`(a, b: FloatReg): bool {.borrow.}
 proc `<`(a, b: FloatReg): bool {.borrow.}
 
@@ -166,27 +166,30 @@ type
     InRegReg  # address is (reg + reg)
     InRegOffset # address is (reg + offset)
     InRegRegScaledOffset # address is (reg + reg*scale + offset)
+  LocFlag* = enum
+    Reg1Temp, # reg1 is temp
+    Reg2Temp, # reg2 is temp
+    Indirect  # we only have the address of the thing, not the thing itself
   Location* = object
-    size*: int32
-    indirect*: bool # we only have the address of the thing, not the thing itself
-    temp*: bool  # is a temporary, not a variable
-    fp*: bool
+    typ*: AsmSlot # this already has an `offset` field that is used for `InRegOffset` etc.
+    flags*: set[LocFlag]
     case kind*: LocKind
     of Undef: discard
     of ImmediateInt: ival*: int64
     of ImmediateUInt: uval*: uint64
     of ImmediateFloat: fval*: float
-    of InReg, InPushedReg: reg*: IntReg
+    of InReg, InPushedReg, InRegOffset, InRegReg, InRegRegScaledOffset:
+      reg1*, reg2*: IntReg
     of InRegFp: regf*: FloatReg
     of InStack: slot*: int
     of InFlag: flag*: CpuFlag
     of JumpMode: label*: int
     of InData, InTls: data*: StrId
 
-proc immediateLoc*(ival: int64; size: int32): Location = Location(size: size, kind: ImmediateInt, ival: ival)
-proc immediateLoc*(uval: uint64; size: int32): Location = Location(size: size, kind: ImmediateUInt, uval: uval)
-proc immediateLoc*(fval: float; size: int32): Location = Location(size: size, kind: ImmediateFloat, fval: fval, fp: true)
-proc stringData*(data: StrId): Location = Location(size: -1'i32, kind: InData, data: data)
+proc immediateLoc*(ival: int64; typ: AsmSlot): Location = Location(typ: typ, kind: ImmediateInt, ival: ival)
+proc immediateLoc*(uval: uint64; typ: AsmSlot): Location = Location(typ: typ, kind: ImmediateUInt, uval: uval)
+proc immediateLoc*(fval: float; typ: AsmSlot): Location = Location(typ: typ, kind: ImmediateFloat, fval: fval)
+proc stringData*(data: StrId): Location = Location(kind: InData, data: data)
 
 proc allocResultWin64*(a: var RegAllocator;
                        returnType: AsmSlot;
@@ -196,10 +199,10 @@ proc allocResultWin64*(a: var RegAllocator;
     returnLoc = Location(kind: InRegFp, regf: Xmm0)
   elif returnType.size in [1, 2, 4, 8]:
     # But no reason to mark it as used!
-    returnLoc = Location(kind: InReg, reg: Rax)
+    returnLoc = Location(kind: InReg, reg1: Rax)
   else:
     # the tricky part:
-    returnLoc = Location(indirect: true, kind: InReg, reg: Rcx)
+    returnLoc = Location(flags: {Indirect}, kind: InReg, reg1: Rcx)
     incl a.used, Rcx
 
 proc stackSpaceResultWin64*(returnType: AsmSlot): int =
@@ -216,10 +219,10 @@ proc resultWin64*(returnType: AsmSlot): Location =
     result = Location(kind: InRegFp, regf: Xmm0)
   elif returnType.size in [1, 2, 4, 8]:
     # But no reason to mark it as used!
-    result = Location(kind: InReg, reg: Rax)
+    result = Location(kind: InReg, reg1: Rax)
   else:
     # the tricky part:
-    result = Location(kind: InReg, reg: Rax)
+    result = Location(kind: InReg, reg1: Rax)
 
 proc allocParamWin64*(a: var RegAllocator; param: AsmSlot): Location =
   if param.kind == AFloat:
@@ -235,15 +238,15 @@ proc allocParamWin64*(a: var RegAllocator; param: AsmSlot): Location =
       result = Location(kind: InStack, slot: a.usedStackSpace)
       inc a.usedStackSpace, wordSize
   else:
-    let normal = param.size in [1, 2, 4, 8]
+    let flags = if param.size notin [1, 2, 4, 8]: {Indirect} else: {}
     const attempts = [Rcx, Rdx, R8, R9]
     block intRegSearch:
       for att in attempts:
         if not a.used.contains(att):
           incl a.used, att
-          result = Location(indirect: not normal, kind: InReg, reg: att)
+          result = Location(flags: flags, kind: InReg, reg1: att)
           break intRegSearch
-      result = Location(indirect: not normal, kind: InStack, slot: a.usedStackSpace)
+      result = Location(flags: flags, kind: InStack, slot: a.usedStackSpace)
       inc a.usedStackSpace, wordSize
 
 proc reverseStackParamsWin64*(res: var openArray[Location]) =
@@ -278,7 +281,7 @@ proc selectReg(a: var RegAllocator; slot: AsmSlot; regs: openArray[IntReg]): Loc
   for reg in regs:
     if not a.used.contains(reg):
       a.used.incl reg
-      return Location(kind: InReg, reg: reg)
+      return Location(kind: InReg, reg1: reg)
   # use the stack:
   result = allocStack(a, slot)
 
@@ -289,7 +292,7 @@ proc scratchReg*(a: var RegAllocator): Location =
   for reg in allAttempts:
     if not a.used.contains(reg):
       a.used.incl reg
-      return Location(temp: true, kind: InReg, reg: reg)
+      return Location(flags: {Reg1Temp}, kind: InReg, reg1: reg)
   result = Location(kind: Undef)
 
 proc allocVar*(a: var RegAllocator; slot: AsmSlot; props: VarProps): Location =
@@ -324,16 +327,31 @@ proc allocVar*(a: var RegAllocator; slot: AsmSlot; props: VarProps): Location =
 
 proc freeLocEnforced*(a: var RegAllocator; loc: Location) =
   case loc.kind
-  of InReg, InPushedReg:
-    a.used.excl loc.reg
+  of InReg, InPushedReg, InRegOffset:
+    a.used.excl loc.reg1
   of InRegFp:
     a.usedFloats.excl loc.regf
+  of InRegReg, InRegRegScaledOffset:
+    a.used.excl loc.reg1
+    a.used.excl loc.reg2
   else:
     discard "nothing to do"
 
 proc freeTempRaw*(a: var RegAllocator; loc: Location) =
-  if loc.temp:
-    freeLocEnforced a, loc
+  case loc.kind
+  of InReg, InPushedReg, InRegOffset:
+    if Reg1Temp in loc.flags:
+      a.used.excl loc.reg1
+  of InRegFp:
+    if Reg1Temp in loc.flags:
+      a.usedFloats.excl loc.regf
+  of InRegReg, InRegRegScaledOffset:
+    if Reg1Temp in loc.flags:
+      a.used.excl loc.reg1
+    if Reg2Temp in loc.flags:
+      a.used.excl loc.reg2
+  else:
+    discard "nothing to do"
 
 proc freeScope*(a: var RegAllocator; vars: openArray[Location]) =
   # useful when we know that a scope exit is about to happen.
@@ -342,8 +360,11 @@ proc freeScope*(a: var RegAllocator; vars: openArray[Location]) =
   var m = a.usedStackSpace
   for loc in vars:
     case loc.kind
-    of InReg:
-      a.used.excl loc.reg
+    of InReg, InRegOffset:
+      a.used.excl loc.reg1
+    of InRegReg, InRegRegScaledOffset:
+      a.used.excl loc.reg1
+      a.used.excl loc.reg2
     of InRegFp:
       a.usedFloats.excl loc.regf
     of InStack:
