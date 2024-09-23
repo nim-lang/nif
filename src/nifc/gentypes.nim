@@ -189,7 +189,11 @@ proc genType(c: var GeneratedCode; types: TypeGraph; t: TypeId; name = "") =
     c.add BracketRi
   of ProctypeC:
     let decl = asProcType(types, t)
-    genType c, types, decl.returnType
+    if types[decl.returnType].kind == Empty:
+      c.add "void"
+      c.add Space
+    else:
+      genType c, types, decl.returnType
     c.add Space
     c.add ParLe
     var isVarargs = false

@@ -2,6 +2,7 @@
 (stmts
   (incl "<stdio.h>")
   (type :MyProc.e . (proctype . (params (param :x . (ptr MyObject3.m)) (param :y . (ptr MyObject4.m))) MyObject2.m . ))
+  (type :MyProc.e2 . (proctype . (params) . . ))
 
   (type :MyObject2.m .
   (object . (fld :a1 . (i +32 atomic))
@@ -25,12 +26,12 @@
   )
   )
 
-  (proc :foo.m2 . (void) . (stmts
+  (proc :foo.m2 . . . (stmts
     1,1,test1.nim(var :x.m . (i +32 .) +12)
     1,2,test1.nim(asgn x.m +15)
   ))
 
-  (proc :foo.m3 . (void) . (stmts
+  (proc :foo.m3 . . . (stmts
     (var :x.c . (bool .) (true))
     (var :y.c . (bool .) (false))
     (call printf.c "foo %d\0A" x.c)
@@ -39,7 +40,7 @@
     (var :z.c . (ptr (c +8 .)) (nil))
   ))
 
-  (proc :foo.if . (void) . (stmts
+  (proc :foo.if . . . (stmts
     (const :x.c . (i +32 .) (suf +12 "i32"))
     (if (elif (eq x.c +1) (call printf.c "v: %d\0A" x.c)) 
         (elif (eq x.c +3) (call printf.c "v: %d\0A" x.c))
@@ -47,7 +48,7 @@
     )
   ))
 
-  (proc :foo.switch . (void) . (stmts
+  (proc :foo.switch . . . (stmts
     (var :x.c . (i +32 .) (suf +12 "i32"))
     (case x.c
       (of (ranges +1) (call printf.c "hello %d" x.c))
@@ -56,7 +57,7 @@
     )
   ))
 
-  (proc :foo.while . (void) . (stmts
+  (proc :foo.while . . . (stmts
     (var :x.c . (i +32 .) (suf +12 "i32"))
     (while (not (lt x.c +8))
        (stmts 
@@ -67,7 +68,7 @@
     )
   ))
 
-  (proc :foo.neg . (void) . (stmts
+  (proc :foo.neg . . . (stmts
     (var :x.c . (i +32 .) (neg +12 ))
   )
   )
