@@ -288,9 +288,9 @@ proc genVarDecl(c: var GeneratedCode; t: Tree; n: NodePos; vk: VarKind) =
     let name = mangle(c.m.lits.strings[lit])
     if vk == IsConst:
       c.add ConstKeyword
-    genType c, t, d.typ, name
     if vk == IsThreadlocal:
-      c.add " __thread"
+      c.add "__thread "
+    genType c, t, d.typ, name
     genVarPragmas c, t, d.pragmas
     if t[d.value].kind != Empty:
       c.add AsgnOpr
@@ -407,7 +407,7 @@ proc genToplevel(c: var GeneratedCode; t: Tree; n: NodePos) =
   of NodeclC: genNodecl c, t, n
   of InclC: genInclude c, t, n
   of ProcC: genProcDecl c, t, n, false
-  of VarC: genStmt c, t, n
+  of VarC, GvarC, TvarC: genStmt c, t, n
   of ConstC: genStmt c, t, n
   of TypeC: discard "handled in a different pass"
   of EmitC: genEmitStmt c, t, n

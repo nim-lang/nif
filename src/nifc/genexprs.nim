@@ -220,6 +220,7 @@ proc genx(c: var GeneratedCode; t: Tree; n: NodePos) =
   of NotC: unOp "!"
   of NegC: unOp "-"
   of EqC: cmpOp " == "
+  of NeqC: cmpOp " != "
   of LeC: cmpOp " <= "
   of LtC: cmpOp " < "
   of CastC: typedUnOp ""

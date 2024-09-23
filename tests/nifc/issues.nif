@@ -73,6 +73,64 @@
   )
   )
 
+  (type :MyObject2.mc .
+      (object . (fld :a1 . (i +32 atomic))
+        (fld :a2.c . (i +64 atomic))
+        (fld :a3.c . (bool .))
+      )
+  )
+
+  (type :MyArray.mc .
+    (array (i +64 atomic) +3)
+  )
+
+  (gvar :x.gvar . (bool .) (true))
+  (tvar :x.tvar . (bool .) .)
+
+
+  (proc :foo.cs2 . . . (stmts
+        (scope
+    (call printf.c "hello %s" "file 1")
+    )
+
+    (asgn x.gvar (false))
+    (asgn x.tvar (false))
+
+    (jmp label.c)
+
+    (call printf.c "hello %s" "file 2")
+
+    (lab :label.c)
+    (call printf.c "hello %s" "file 3")
+
+    (var :x.c . (bool .) (true))
+    (call printf.c "hello %d" (sizeof x.c))
+
+    (var :y.c . MyObject2.mc (oconstr MyObject2.mc (kv a2.c +12) (kv a3.c (true))))
+
+    (call printf.c "hello %d\0A" (dot y.c a2.c +0))
+
+    (call printf.c "hello %d\0A" (sizeof x.c))
+
+    (call printf.c "hello %d\0A" (and (par +1) (par +0)))
+    (call printf.c "hello %d\0A" (or (par +1) (par -0)))
+
+    (var :z.c . MyArray.mc (aconstr MyArray.mc +1 +2 +3))
+
+    (call printf.c "hello %d\0A" (at z.c +0))
+    (call printf.c "hello %d\0A" (at z.c +1))
+    (call printf.c "hello %d\0A" (mul (i +64 atomic) (at z.c +1) (at z.c +2)))
+    (call printf.c "hello %d\0A" (mod (i +64 atomic) +9 +4))
+    (call printf.c "hello %d\0A" (div (i +64 atomic) +9 +4))
+    (call printf.c "hello %d\0A" (shr (i +64 atomic) +9 +1))
+    (call printf.c "hello %d\0A" (shl (i +64 atomic) +9 +4))
+    (call printf.c "hello %d\0A" (eq +9 +4))
+    (call printf.c "hello %d\0A" (neq +9 +4))
+    (call printf.c "hello %d\0A" (le +9 +4))
+    (call printf.c "hello %d\0A" (lt +9 +4))
+  )
+  )
+
   (proc :main.c . (i +32 atomic) . (stmts
     1,1,hello.nim(var :x1.m . (i +32 .) +12)
     1,2,hello.nim(var :z2.m . (ptr (c +8 .)) (cast (ptr (c +8 .)) (suf "hello" "r")))
@@ -83,6 +141,7 @@
     (call foo.switch)
     (call foo.while)
     (call foo.neg)
+    (call foo.cs2)
 
     (var :x.c . (i +8 .) (suf +12 "i8"))
     (var :x.m . (i +16 .) (suf -12 "i16"))
