@@ -134,7 +134,7 @@ proc error(m: Module; msg: string; tree: PackedTree[NifcKind]; n: NodePos) =
   write stdout, "[Error] "
   write stdout, msg
   writeLine stdout, toString(tree, n, m)
-  when defined(nifcdebug):
+  when defined(debug):
     echo getStackTrace()
   quit 1
 
