@@ -109,14 +109,6 @@ proc combine(c: var GeneratedCode; a, b: Location; opc: TagId) =
       emitLoc c, a
       emitLoc c, b
 
-template typedBinOp(opr) {.dirty.} =
-  let (typ, a, b) = sons3(t, n)
-  let x = gen(c, t, a)
-  let y = gen(c, t, b)
-  c.combine x, y, opr
-  freeTemp c, y
-  freeTemp c, x
-
 template cmpOp(opr) {.dirty.} =
   c.buildTree opr:
     let (a, b) = sons2(t, n)
@@ -129,27 +121,26 @@ template unOp(opr) {.dirty.} =
     genTypeof c, n.firstSon
     genx c, t, n.firstSon, WantValue
 
-template typedUnOp(opr) {.dirty.} =
-  let (typ, a) = sons2(t, n)
-  c.buildTree opr:
-    genType c, typ
-    genx c, t, a, WantValue
-
 proc genAsgn(c: var GeneratedCode; dest, src: Location) =
-  if dest.kind == src.kind:
-    # don't generate `mov rax, rax` like things:
-    if dest.kind == InReg and dest.reg1 == src.reg1:
-      return
-    if dest.kind == InRegFp and dest.regf == src.regf:
-      return
-
-  if dest.typ.kind == AFloat:
+  if sameLocation(dest, src):
+    discard "don't generate `mov rax, rax` etc"
+  elif Indirect in src.flags:
+    c.buildTree MovT:
+      c.emitLoc dest
+      c.emitLoc src
+  elif dest.typ.kind == AFloat:
     c.buildTree MovapdT:
       c.emitLoc dest
       c.emitLoc src
   elif dest.typ.size < 0'i32 or dest.typ.size > 8'i32:
     assert dest.typ.size > 0'i32, "size not set!"
     assert false, "implement rep byte copy loop"
+  elif invalidCombination(dest, src):
+    let tmp = makeReg(c, src)
+    c.buildTree MovT:
+      emitLoc c, dest
+      emitLoc c, tmp
+    c.freeTemp tmp
   else:
     c.buildTree MovT:
       c.emitLoc dest
@@ -221,20 +212,17 @@ proc genAddr(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
       assert d.kind == InStack, "attempt to use addr() of a variable not in the stack"
       into c, dest, d
     of GvarC, ConstC:
-      #let typ = c.globals[lit]
-      let d = Location(flags: {Indirect}, typ: AddrTyp, kind: InData, data: lit)
+      let typ = c.globals[lit]
+      let d = Location(flags: {Indirect}, typ: typ, kind: InData, data: lit)
       into c, dest, d
     of TvarC:
       let typ = c.globals[lit]
-      let d = Location(flags: {Indirect}, typ: AddrTyp, kind: InTls, data: lit)
+      let d = Location(flags: {Indirect}, typ: typ, kind: InTls, data: lit)
       into c, dest, d
     of EfldC:
       assert false, "enum fields not implemented"
     else:
       error c.m, "undeclared identifier: ", t, n
-    #let lit = t[n].litId
-    #let name = c.m.lits.strings[lit]
-    #c.addSym name, info
   of DerefC:
     # genx means "produce value"
     genx c, t, n.firstSon, dest
@@ -284,7 +272,7 @@ proc genAddr(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
     else:
       error c.m, "BUG: overly complex address computation B: ", t, n
     # we computed an address, so this must be reflected:
-    loc.typ = AddrTyp
+    loc.flags.incl Indirect
     into c, dest, loc
 
   of DotC:
@@ -313,7 +301,7 @@ proc genAddr(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
       error c.m, "BUG: overly complex address computation C: ", t, n
 
     # we computed an address, so this must be reflected:
-    loc.typ = AddrTyp
+    loc.flags.incl Indirect
     into c, dest, loc
   else:
     error c.m, "expected expression but got: ", t, n
@@ -410,6 +398,52 @@ proc genDataVal(c: var GeneratedCode; t: Tree; n: NodePos) =
   let d = gen(c, t, n)
   emitLoc c, d
 
+proc binArithOp(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location; opc: TagId) =
+  let (typ, a, b) = sons3(t, n)
+  if dest.kind == Undef:
+    # tmp = a + b
+    # -->
+    # tmp = a
+    # tmp += b
+    let x = gen(c, t, a)
+    let y = gen(c, t, b)
+    dest = makeReg(c, x, (if x.kind == InRegFp: MovapdT else: MovT))
+    c.buildTree opc:
+      emitLoc c, dest
+      emitLoc c, y
+    freeTemp c, y
+  else:
+    # easy case, we have an explicit dest we can work on directly:
+    genx(c, t, a, dest)
+    let y = gen(c, t, b)
+    c.buildTree opc:
+      emitLoc c, dest
+      emitLoc c, y
+    freeTemp c, y
+
+template typedBinOp(opc) =
+  binArithOp c, t, n, dest, opc
+
+proc unArithOp(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location; opc: TagId) =
+  let (typ, a) = sons2(t, n)
+  if dest.kind == Undef:
+    # tmp = a + b
+    # -->
+    # tmp = a
+    # tmp += b
+    let x = gen(c, t, a)
+    dest = makeReg(c, x, (if x.kind == InRegFp: MovapdT else: MovT))
+    c.buildTree opc:
+      emitLoc c, dest
+  else:
+    # easy case, we have an explicit dest we can work on directly:
+    genx(c, t, a, dest)
+    c.buildTree opc:
+      emitLoc c, dest
+
+template typedUnOp(opc) =
+  unArithOp c, t, n, dest, opc
+
 template immLit(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location;
                 typ: AsmSlot; parse: untyped) =
   let lit = t[n].litId
@@ -478,15 +512,15 @@ proc genx(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
   of CallC: genCall c, t, n, dest
   of AddC: typedBinOp AddT
   of SubC: typedBinOp SubT
-  of MulC: typedBinOp MulT
-  of DivC: typedBinOp DivT
-  of ModC: typedBinOp ModT
+  of MulC: typedBinOp ImulT
+  of DivC: typedBinOp IdivT
+  of ModC: typedBinOp IdivT # FIXME
   of ShlC: typedBinOp ShlT
   of ShrC: typedBinOp ShrT
-  of BitandC: typedBinOp BitandT
-  of BitorC: typedBinOp BitorT
-  of BitxorC: typedBinOp BitxorT
-  of BitnotC: typedUnOp BitnotT
+  of BitandC: typedBinOp AndT
+  of BitorC: typedBinOp OrT
+  of BitxorC: typedBinOp XorT
+  of BitnotC: typedUnOp NotT
   of AndC: genCond c, t, n, FjmpT
   of OrC: genCond c, t, n, TjmpT
   of NotC: unOp NotT

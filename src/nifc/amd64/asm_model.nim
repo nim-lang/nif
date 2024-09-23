@@ -64,32 +64,63 @@ const
   DivT* = TagId(61)
   IdivT* = TagId(62)
   XorT* = TagId(63)
-  AddsdT* = TagId(64)
-  SubsdT* = TagId(65)
-  MulsdT* = TagId(66)
-  DivsdT* = TagId(67)
-  PushT* = TagId(68)
-  PopT* = TagId(69)
-  IncT* = TagId(70)
-  DecT* = TagId(71)
-  NegT* = TagId(72)
-  CmpT* = TagId(73)
-  TestT* = TagId(74)
-  CallT* = TagId(75)
-  LabT* = TagId(76)
-  JmpT* = TagId(77)
-  JeT* = TagId(78)
-  JneT* = TagId(79)
-  JzT* = TagId(80)
-  JnzT* = TagId(81)
-  JgT* = TagId(82)
-  JgeT* = TagId(83)
-  JaT* = TagId(84)
-  JaeT* = TagId(85)
-  NopT* = TagId(86)
-  RetT* = TagId(87)
-  SyscallT* = TagId(88)
-  CommentT* = TagId(89)
+  OrT* = TagId(64)
+  AndT* = TagId(65)
+  ShlT* = TagId(66)
+  ShrT* = TagId(67)
+  SalT* = TagId(68)
+  SarT* = TagId(69)
+  AddsdT* = TagId(70)
+  SubsdT* = TagId(71)
+  MulsdT* = TagId(72)
+  DivsdT* = TagId(73)
+  PushT* = TagId(74)
+  PopT* = TagId(75)
+  IncT* = TagId(76)
+  DecT* = TagId(77)
+  NegT* = TagId(78)
+  NotT* = TagId(79)
+  CmpT* = TagId(80)
+  TestT* = TagId(81)
+  CallT* = TagId(82)
+  LabT* = TagId(83)
+  SeteT* = TagId(84)
+  SetaT* = TagId(85)
+  SetaeT* = TagId(86)
+  SetbT* = TagId(87)
+  SetbeT* = TagId(88)
+  SetgT* = TagId(89)
+  SetgeT* = TagId(90)
+  SetlT* = TagId(91)
+  SetleT* = TagId(92)
+  SetzT* = TagId(93)
+  SetcT* = TagId(94)
+  SetoT* = TagId(95)
+  SetsT* = TagId(96)
+  SetpT* = TagId(97)
+  SetneT* = TagId(98)
+  SetnaT* = TagId(99)
+  SetnaeT* = TagId(100)
+  SetnbT* = TagId(101)
+  SetnbeT* = TagId(102)
+  SetngT* = TagId(103)
+  SetngeT* = TagId(104)
+  SetnlT* = TagId(105)
+  SetnleT* = TagId(106)
+  SetnzT* = TagId(107)
+  JmpT* = TagId(108)
+  JeT* = TagId(109)
+  JneT* = TagId(110)
+  JzT* = TagId(111)
+  JnzT* = TagId(112)
+  JgT* = TagId(113)
+  JgeT* = TagId(114)
+  JaT* = TagId(115)
+  JaeT* = TagId(116)
+  NopT* = TagId(117)
+  RetT* = TagId(118)
+  SyscallT* = TagId(119)
+  CommentT* = TagId(120)
 
 proc registerTags*() =
   registerTag "global", GlobalT
@@ -153,6 +184,12 @@ proc registerTags*() =
   registerTag "div", DivT
   registerTag "idiv", IdivT
   registerTag "xor", XorT
+  registerTag "or", OrT
+  registerTag "and", AndT
+  registerTag "shl", ShlT
+  registerTag "shr", ShrT
+  registerTag "sal", SalT
+  registerTag "sar", SarT
   registerTag "addsd", AddsdT
   registerTag "subsd", SubsdT
   registerTag "mulsd", MulsdT
@@ -162,10 +199,35 @@ proc registerTags*() =
   registerTag "inc", IncT
   registerTag "dec", DecT
   registerTag "neg", NegT
+  registerTag "not", NotT
   registerTag "cmp", CmpT
   registerTag "test", TestT
   registerTag "call", CallT
   registerTag "lab", LabT
+  registerTag "sete", SeteT
+  registerTag "seta", SetaT
+  registerTag "setae", SetaeT
+  registerTag "setb", SetbT
+  registerTag "setbe", SetbeT
+  registerTag "setg", SetgT
+  registerTag "setge", SetgeT
+  registerTag "setl", SetlT
+  registerTag "setle", SetleT
+  registerTag "setz", SetzT
+  registerTag "setc", SetcT
+  registerTag "seto", SetoT
+  registerTag "sets", SetsT
+  registerTag "setp", SetpT
+  registerTag "setne", SetneT
+  registerTag "setna", SetnaT
+  registerTag "setnae", SetnaeT
+  registerTag "setnb", SetnbT
+  registerTag "setnbe", SetnbeT
+  registerTag "setng", SetngT
+  registerTag "setnge", SetngeT
+  registerTag "setnl", SetnlT
+  registerTag "setnle", SetnleT
+  registerTag "setnz", SetnzT
   registerTag "jmp", JmpT
   registerTag "je", JeT
   registerTag "jne", JneT

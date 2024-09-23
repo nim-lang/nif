@@ -705,8 +705,8 @@ proc genInstruction(c: var Context): bool =
       or2 = true
       break or3
     var kw15 = false
-    if isTag(c, AddsdT):
-      emitTag(c, "addsd")
+    if isTag(c, OrT):
+      emitTag(c, "or")
       if not genExpr(c):
         error(c, "Expr expected")
         break or3
@@ -719,8 +719,8 @@ proc genInstruction(c: var Context): bool =
       or2 = true
       break or3
     var kw16 = false
-    if isTag(c, SubsdT):
-      emitTag(c, "subsd")
+    if isTag(c, AndT):
+      emitTag(c, "and")
       if not genExpr(c):
         error(c, "Expr expected")
         break or3
@@ -733,8 +733,8 @@ proc genInstruction(c: var Context): bool =
       or2 = true
       break or3
     var kw17 = false
-    if isTag(c, MulsdT):
-      emitTag(c, "mulsd")
+    if isTag(c, ShlT):
+      emitTag(c, "shl")
       if not genExpr(c):
         error(c, "Expr expected")
         break or3
@@ -747,8 +747,8 @@ proc genInstruction(c: var Context): bool =
       or2 = true
       break or3
     var kw18 = false
-    if isTag(c, DivsdT):
-      emitTag(c, "divsd")
+    if isTag(c, ShrT):
+      emitTag(c, "shr")
       if not genExpr(c):
         error(c, "Expr expected")
         break or3
@@ -761,8 +761,12 @@ proc genInstruction(c: var Context): bool =
       or2 = true
       break or3
     var kw19 = false
-    if isTag(c, PushT):
-      emitTag(c, "push")
+    if isTag(c, SalT):
+      emitTag(c, "sal")
+      if not genExpr(c):
+        error(c, "Expr expected")
+        break or3
+      emit(c, ", ")
       if not genExpr(c):
         error(c, "Expr expected")
         break or3
@@ -771,8 +775,12 @@ proc genInstruction(c: var Context): bool =
       or2 = true
       break or3
     var kw20 = false
-    if isTag(c, PopT):
-      emitTag(c, "pop")
+    if isTag(c, SarT):
+      emitTag(c, "sar")
+      if not genExpr(c):
+        error(c, "Expr expected")
+        break or3
+      emit(c, ", ")
       if not genExpr(c):
         error(c, "Expr expected")
         break or3
@@ -781,8 +789,12 @@ proc genInstruction(c: var Context): bool =
       or2 = true
       break or3
     var kw21 = false
-    if isTag(c, IncT):
-      emitTag(c, "inc")
+    if isTag(c, AddsdT):
+      emitTag(c, "addsd")
+      if not genExpr(c):
+        error(c, "Expr expected")
+        break or3
+      emit(c, ", ")
       if not genExpr(c):
         error(c, "Expr expected")
         break or3
@@ -791,8 +803,12 @@ proc genInstruction(c: var Context): bool =
       or2 = true
       break or3
     var kw22 = false
-    if isTag(c, DecT):
-      emitTag(c, "dec")
+    if isTag(c, SubsdT):
+      emitTag(c, "subsd")
+      if not genExpr(c):
+        error(c, "Expr expected")
+        break or3
+      emit(c, ", ")
       if not genExpr(c):
         error(c, "Expr expected")
         break or3
@@ -801,8 +817,12 @@ proc genInstruction(c: var Context): bool =
       or2 = true
       break or3
     var kw23 = false
-    if isTag(c, NegT):
-      emitTag(c, "neg")
+    if isTag(c, MulsdT):
+      emitTag(c, "mulsd")
+      if not genExpr(c):
+        error(c, "Expr expected")
+        break or3
+      emit(c, ", ")
       if not genExpr(c):
         error(c, "Expr expected")
         break or3
@@ -811,8 +831,8 @@ proc genInstruction(c: var Context): bool =
       or2 = true
       break or3
     var kw24 = false
-    if isTag(c, CmpT):
-      emitTag(c, "cmp")
+    if isTag(c, DivsdT):
+      emitTag(c, "divsd")
       if not genExpr(c):
         error(c, "Expr expected")
         break or3
@@ -825,6 +845,80 @@ proc genInstruction(c: var Context): bool =
       or2 = true
       break or3
     var kw25 = false
+    if isTag(c, PushT):
+      emitTag(c, "push")
+      if not genExpr(c):
+        error(c, "Expr expected")
+        break or3
+      kw25 = matchParRi(c)
+    if kw25:
+      or2 = true
+      break or3
+    var kw26 = false
+    if isTag(c, PopT):
+      emitTag(c, "pop")
+      if not genExpr(c):
+        error(c, "Expr expected")
+        break or3
+      kw26 = matchParRi(c)
+    if kw26:
+      or2 = true
+      break or3
+    var kw27 = false
+    if isTag(c, IncT):
+      emitTag(c, "inc")
+      if not genExpr(c):
+        error(c, "Expr expected")
+        break or3
+      kw27 = matchParRi(c)
+    if kw27:
+      or2 = true
+      break or3
+    var kw28 = false
+    if isTag(c, DecT):
+      emitTag(c, "dec")
+      if not genExpr(c):
+        error(c, "Expr expected")
+        break or3
+      kw28 = matchParRi(c)
+    if kw28:
+      or2 = true
+      break or3
+    var kw29 = false
+    if isTag(c, NegT):
+      emitTag(c, "neg")
+      if not genExpr(c):
+        error(c, "Expr expected")
+        break or3
+      kw29 = matchParRi(c)
+    if kw29:
+      or2 = true
+      break or3
+    var kw30 = false
+    if isTag(c, NotT):
+      emitTag(c, "not")
+      if not genExpr(c):
+        error(c, "Expr expected")
+        break or3
+      kw30 = matchParRi(c)
+    if kw30:
+      or2 = true
+      break or3
+    var kw31 = false
+    if isTag(c, CmpT):
+      emitTag(c, "cmp")
+      if not genExpr(c):
+        error(c, "Expr expected")
+        break or3
+      emit(c, ", ")
+      if not genExpr(c):
+        error(c, "Expr expected")
+        break or3
+      kw31 = matchParRi(c)
+    if kw31:
+      or2 = true
+      break or3
+    var kw32 = false
     if isTag(c, TestT):
       emitTag(c, "test")
       if not genExpr(c):
@@ -834,119 +928,359 @@ proc genInstruction(c: var Context): bool =
       if not genExpr(c):
         error(c, "Expr expected")
         break or3
-      kw25 = matchParRi(c)
-    if kw25:
-      or2 = true
-      break or3
-    var kw26 = false
-    if isTag(c, CallT):
-      emitTag(c, "call")
-      if not genExpr(c):
-        error(c, "Expr expected")
-        break or3
-      kw26 = matchParRi(c)
-    if kw26:
-      or2 = true
-      break or3
-    var kw27 = false
-    if isTag(c, LabT):
-      emitTag(c, "lab")
-      var sym28 = declareSym(c)
-      if not success(sym28):
-        error(c, "SYMBOLDEF expected")
-        break or3
-      kw27 = matchParRi(c)
-    if kw27:
-      or2 = true
-      break or3
-    var kw29 = false
-    if isTag(c, JmpT):
-      emitTag(c, "jmp")
-      if not genLabel(c):
-        error(c, "Label expected")
-        break or3
-      kw29 = matchParRi(c)
-    if kw29:
-      or2 = true
-      break or3
-    var kw30 = false
-    if isTag(c, JeT):
-      emitTag(c, "je")
-      if not genLabel(c):
-        error(c, "Label expected")
-        break or3
-      kw30 = matchParRi(c)
-    if kw30:
-      or2 = true
-      break or3
-    var kw31 = false
-    if isTag(c, JneT):
-      emitTag(c, "jne")
-      if not genLabel(c):
-        error(c, "Label expected")
-        break or3
-      kw31 = matchParRi(c)
-    if kw31:
-      or2 = true
-      break or3
-    var kw32 = false
-    if isTag(c, JzT):
-      emitTag(c, "jz")
-      if not genLabel(c):
-        error(c, "Label expected")
-        break or3
       kw32 = matchParRi(c)
     if kw32:
       or2 = true
       break or3
     var kw33 = false
-    if isTag(c, JnzT):
-      emitTag(c, "jnz")
-      if not genLabel(c):
-        error(c, "Label expected")
+    if isTag(c, CallT):
+      emitTag(c, "call")
+      if not genExpr(c):
+        error(c, "Expr expected")
         break or3
       kw33 = matchParRi(c)
     if kw33:
       or2 = true
       break or3
     var kw34 = false
-    if isTag(c, JgT):
-      emitTag(c, "jg")
-      if not genLabel(c):
-        error(c, "Label expected")
+    if isTag(c, LabT):
+      emitTag(c, "lab")
+      var sym35 = declareSym(c)
+      if not success(sym35):
+        error(c, "SYMBOLDEF expected")
         break or3
       kw34 = matchParRi(c)
     if kw34:
       or2 = true
       break or3
-    var kw35 = false
-    if isTag(c, JgeT):
-      emitTag(c, "jge")
-      if not genLabel(c):
-        error(c, "Label expected")
-        break or3
-      kw35 = matchParRi(c)
-    if kw35:
-      or2 = true
-      break or3
     var kw36 = false
-    if isTag(c, JaT):
-      emitTag(c, "ja")
-      if not genLabel(c):
-        error(c, "Label expected")
+    if isTag(c, SeteT):
+      emitTag(c, "sete")
+      if not genExpr(c):
+        error(c, "Expr expected")
         break or3
       kw36 = matchParRi(c)
     if kw36:
       or2 = true
       break or3
     var kw37 = false
+    if isTag(c, SetaT):
+      emitTag(c, "seta")
+      if not genExpr(c):
+        error(c, "Expr expected")
+        break or3
+      kw37 = matchParRi(c)
+    if kw37:
+      or2 = true
+      break or3
+    var kw38 = false
+    if isTag(c, SetaeT):
+      emitTag(c, "setae")
+      if not genExpr(c):
+        error(c, "Expr expected")
+        break or3
+      kw38 = matchParRi(c)
+    if kw38:
+      or2 = true
+      break or3
+    var kw39 = false
+    if isTag(c, SetbT):
+      emitTag(c, "setb")
+      if not genExpr(c):
+        error(c, "Expr expected")
+        break or3
+      kw39 = matchParRi(c)
+    if kw39:
+      or2 = true
+      break or3
+    var kw40 = false
+    if isTag(c, SetbeT):
+      emitTag(c, "setbe")
+      if not genExpr(c):
+        error(c, "Expr expected")
+        break or3
+      kw40 = matchParRi(c)
+    if kw40:
+      or2 = true
+      break or3
+    var kw41 = false
+    if isTag(c, SetgT):
+      emitTag(c, "setg")
+      if not genExpr(c):
+        error(c, "Expr expected")
+        break or3
+      kw41 = matchParRi(c)
+    if kw41:
+      or2 = true
+      break or3
+    var kw42 = false
+    if isTag(c, SetgeT):
+      emitTag(c, "setge")
+      if not genExpr(c):
+        error(c, "Expr expected")
+        break or3
+      kw42 = matchParRi(c)
+    if kw42:
+      or2 = true
+      break or3
+    var kw43 = false
+    if isTag(c, SetlT):
+      emitTag(c, "setl")
+      if not genExpr(c):
+        error(c, "Expr expected")
+        break or3
+      kw43 = matchParRi(c)
+    if kw43:
+      or2 = true
+      break or3
+    var kw44 = false
+    if isTag(c, SetleT):
+      emitTag(c, "setle")
+      if not genExpr(c):
+        error(c, "Expr expected")
+        break or3
+      kw44 = matchParRi(c)
+    if kw44:
+      or2 = true
+      break or3
+    var kw45 = false
+    if isTag(c, SetzT):
+      emitTag(c, "setz")
+      if not genExpr(c):
+        error(c, "Expr expected")
+        break or3
+      kw45 = matchParRi(c)
+    if kw45:
+      or2 = true
+      break or3
+    var kw46 = false
+    if isTag(c, SetcT):
+      emitTag(c, "setc")
+      if not genExpr(c):
+        error(c, "Expr expected")
+        break or3
+      kw46 = matchParRi(c)
+    if kw46:
+      or2 = true
+      break or3
+    var kw47 = false
+    if isTag(c, SetoT):
+      emitTag(c, "seto")
+      if not genExpr(c):
+        error(c, "Expr expected")
+        break or3
+      kw47 = matchParRi(c)
+    if kw47:
+      or2 = true
+      break or3
+    var kw48 = false
+    if isTag(c, SetsT):
+      emitTag(c, "sets")
+      if not genExpr(c):
+        error(c, "Expr expected")
+        break or3
+      kw48 = matchParRi(c)
+    if kw48:
+      or2 = true
+      break or3
+    var kw49 = false
+    if isTag(c, SetpT):
+      emitTag(c, "setp")
+      if not genExpr(c):
+        error(c, "Expr expected")
+        break or3
+      kw49 = matchParRi(c)
+    if kw49:
+      or2 = true
+      break or3
+    var kw50 = false
+    if isTag(c, SetneT):
+      emitTag(c, "setne")
+      if not genExpr(c):
+        error(c, "Expr expected")
+        break or3
+      kw50 = matchParRi(c)
+    if kw50:
+      or2 = true
+      break or3
+    var kw51 = false
+    if isTag(c, SetnaT):
+      emitTag(c, "setna")
+      if not genExpr(c):
+        error(c, "Expr expected")
+        break or3
+      kw51 = matchParRi(c)
+    if kw51:
+      or2 = true
+      break or3
+    var kw52 = false
+    if isTag(c, SetnaeT):
+      emitTag(c, "setnae")
+      if not genExpr(c):
+        error(c, "Expr expected")
+        break or3
+      kw52 = matchParRi(c)
+    if kw52:
+      or2 = true
+      break or3
+    var kw53 = false
+    if isTag(c, SetnbT):
+      emitTag(c, "setnb")
+      if not genExpr(c):
+        error(c, "Expr expected")
+        break or3
+      kw53 = matchParRi(c)
+    if kw53:
+      or2 = true
+      break or3
+    var kw54 = false
+    if isTag(c, SetnbeT):
+      emitTag(c, "setnbe")
+      if not genExpr(c):
+        error(c, "Expr expected")
+        break or3
+      kw54 = matchParRi(c)
+    if kw54:
+      or2 = true
+      break or3
+    var kw55 = false
+    if isTag(c, SetngT):
+      emitTag(c, "setng")
+      if not genExpr(c):
+        error(c, "Expr expected")
+        break or3
+      kw55 = matchParRi(c)
+    if kw55:
+      or2 = true
+      break or3
+    var kw56 = false
+    if isTag(c, SetngeT):
+      emitTag(c, "setnge")
+      if not genExpr(c):
+        error(c, "Expr expected")
+        break or3
+      kw56 = matchParRi(c)
+    if kw56:
+      or2 = true
+      break or3
+    var kw57 = false
+    if isTag(c, SetnlT):
+      emitTag(c, "setnl")
+      if not genExpr(c):
+        error(c, "Expr expected")
+        break or3
+      kw57 = matchParRi(c)
+    if kw57:
+      or2 = true
+      break or3
+    var kw58 = false
+    if isTag(c, SetnleT):
+      emitTag(c, "setnle")
+      if not genExpr(c):
+        error(c, "Expr expected")
+        break or3
+      kw58 = matchParRi(c)
+    if kw58:
+      or2 = true
+      break or3
+    var kw59 = false
+    if isTag(c, SetnzT):
+      emitTag(c, "setnz")
+      if not genExpr(c):
+        error(c, "Expr expected")
+        break or3
+      kw59 = matchParRi(c)
+    if kw59:
+      or2 = true
+      break or3
+    var kw60 = false
+    if isTag(c, JmpT):
+      emitTag(c, "jmp")
+      if not genLabel(c):
+        error(c, "Label expected")
+        break or3
+      kw60 = matchParRi(c)
+    if kw60:
+      or2 = true
+      break or3
+    var kw61 = false
+    if isTag(c, JeT):
+      emitTag(c, "je")
+      if not genLabel(c):
+        error(c, "Label expected")
+        break or3
+      kw61 = matchParRi(c)
+    if kw61:
+      or2 = true
+      break or3
+    var kw62 = false
+    if isTag(c, JneT):
+      emitTag(c, "jne")
+      if not genLabel(c):
+        error(c, "Label expected")
+        break or3
+      kw62 = matchParRi(c)
+    if kw62:
+      or2 = true
+      break or3
+    var kw63 = false
+    if isTag(c, JzT):
+      emitTag(c, "jz")
+      if not genLabel(c):
+        error(c, "Label expected")
+        break or3
+      kw63 = matchParRi(c)
+    if kw63:
+      or2 = true
+      break or3
+    var kw64 = false
+    if isTag(c, JnzT):
+      emitTag(c, "jnz")
+      if not genLabel(c):
+        error(c, "Label expected")
+        break or3
+      kw64 = matchParRi(c)
+    if kw64:
+      or2 = true
+      break or3
+    var kw65 = false
+    if isTag(c, JgT):
+      emitTag(c, "jg")
+      if not genLabel(c):
+        error(c, "Label expected")
+        break or3
+      kw65 = matchParRi(c)
+    if kw65:
+      or2 = true
+      break or3
+    var kw66 = false
+    if isTag(c, JgeT):
+      emitTag(c, "jge")
+      if not genLabel(c):
+        error(c, "Label expected")
+        break or3
+      kw66 = matchParRi(c)
+    if kw66:
+      or2 = true
+      break or3
+    var kw67 = false
+    if isTag(c, JaT):
+      emitTag(c, "ja")
+      if not genLabel(c):
+        error(c, "Label expected")
+        break or3
+      kw67 = matchParRi(c)
+    if kw67:
+      or2 = true
+      break or3
+    var kw68 = false
     if isTag(c, JaeT):
       emitTag(c, "jae")
       if not genLabel(c):
         error(c, "Label expected")
         break or3
-      kw37 = matchParRi(c)
-    if kw37:
+      kw68 = matchParRi(c)
+    if kw68:
       or2 = true
       break or3
     if matchAndEmitTag(c, NopT, "nop"):
@@ -958,25 +1292,25 @@ proc genInstruction(c: var Context): bool =
     if matchAndEmitTag(c, SyscallT, "syscall"):
       or2 = true
       break or3
-    var kw38 = false
+    var kw69 = false
     if isTag(c, CommentT):
       emit(c, "; ")
-      var or39 = false
-      block or40:
+      var or70 = false
+      block or71:
         if matchIdent(c):
-          or39 = true
-          break or40
+          or70 = true
+          break or71
         if lookupSym(c):
-          or39 = true
-          break or40
+          or70 = true
+          break or71
         if matchStringLit(c):
-          or39 = true
-          break or40
-      if not or39:
+          or70 = true
+          break or71
+      if not or70:
         error(c, "invalid Instruction")
         break or3
-      kw38 = matchParRi(c)
-    if kw38:
+      kw69 = matchParRi(c)
+    if kw69:
       or2 = true
       break or3
   if not or2: return false

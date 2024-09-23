@@ -26,6 +26,10 @@ proc `==`*(a, b: FloatReg): bool {.borrow.}
 proc `<=`(a, b: FloatReg): bool {.borrow.}
 proc `<`(a, b: FloatReg): bool {.borrow.}
 
+proc `==`*(a, b: CpuFlag): bool {.borrow.}
+proc `<=`(a, b: CpuFlag): bool {.borrow.}
+proc `<`(a, b: CpuFlag): bool {.borrow.}
+
 const
   Rax = IntReg(0)
   Rbx = IntReg(1)
@@ -394,7 +398,7 @@ proc opcodeSuffix*(s: AsmSlot): string =
     of 8: "q" # quad
     else: "bug"
 
-proc inMemory*(a: Location): bool {.inline.} = a.kind in {InStack, InData}
+proc inMemory*(a: Location): bool {.inline.} = a.kind in {InStack, InData, InRegOffset, InRegRegScaledOffset}
 proc isImmediate*(a: Location): bool {.inline.} = a.kind in {ImmediateInt, ImmediateUInt, ImmediateFloat}
 
 proc invalidCombination*(a, b: Location): bool =
@@ -402,5 +406,35 @@ proc invalidCombination*(a, b: Location): bool =
     result = true
   elif a.isImmediate and b.isImmediate:
     result = true
+  else:
+    result = false
+
+proc sameLocation*(a, b: Location): bool =
+  if a.kind == b.kind:
+    case a.kind
+    of Undef: result = true
+    of InStack:
+      result = a.slot == b.slot
+    of ImmediateInt:
+      result = a.ival == b.ival
+    of ImmediateUInt:
+      result = a.uval == b.uval
+    of ImmediateFloat:
+      result = a.fval == b.fval
+    of InReg:
+      result = a.reg1 == b.reg1
+    of InRegOffset:
+      result = a.reg1 == b.reg1 and a.typ.offset == b.typ.offset
+    of InRegRegScaledOffset:
+      result = a.reg1 == b.reg1 and a.reg2 == b.reg2 and
+        a.typ.offset == b.typ.offset and a.typ.size == b.typ.size
+    of InRegFp:
+      result = a.regf == b.regf
+    of JumpMode:
+      result = a.label == b.label
+    of InFlag:
+      result = a.flag == b.flag
+    of InData, InTls:
+      result = a.data == b.data
   else:
     result = false
