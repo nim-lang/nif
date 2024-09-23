@@ -39,6 +39,7 @@
 
   (proc :foo.c . (void) . (stmts
     (call printf.c "foo %s\0A" "abc")
+    (ret .)
   ))
 
   (nodecl (proc :foo2.c . (void) . (stmts

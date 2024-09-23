@@ -65,7 +65,7 @@
          (lab SYMBOLDEF)
          (jmp SYMBOL)
          (scope StmtList)
-         (ret Expr)))
+         (ret (OR . Expr))))
 
 (RULE :StmtList (SCOPE (stmts (ZERO_OR_MANY Stmt))))
 

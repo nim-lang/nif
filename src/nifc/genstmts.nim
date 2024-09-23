@@ -197,7 +197,9 @@ proc genStmt(c: var GeneratedCode; t: Tree; n: NodePos) =
   of JmpC: genGoto c, t, n
   of RetC:
     c.add ReturnKeyword
-    c.genx t, n.firstSon
+    if t[n.firstSon].kind != Empty:
+      c.add Space
+      c.genx t, n.firstSon
     c.add Semicolon
   else:
     error c.m, "expected statement but got: ", t, n

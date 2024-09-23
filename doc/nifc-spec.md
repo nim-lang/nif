@@ -141,7 +141,7 @@ Stmt ::= Call |
          (lab SymbolDef) |
          (jmp Symbol) |
          (scope StmtList)
-         (ret Expr) # return statement
+         (ret [Empty | Expr]) # return statement
 
 StmtList ::= (stmts SCOPE Stmt*)
 

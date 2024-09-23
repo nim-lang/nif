@@ -191,7 +191,6 @@ proc genType(c: var GeneratedCode; types: TypeGraph; t: TypeId; name = "") =
     let decl = asProcType(types, t)
     if types[decl.returnType].kind == Empty:
       c.add "void"
-      c.add Space
     else:
       genType c, types, decl.returnType
     c.add Space
