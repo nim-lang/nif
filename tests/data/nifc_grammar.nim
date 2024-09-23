@@ -802,8 +802,16 @@ proc matchStmt(c: var Context; it: var Item): bool =
       break or3
     var kw18 = false
     if isTag(c, it, RetT):
-      if not matchExpr(c, it):
-        error(c, it, "Expr expected")
+      var or19 = false
+      block or20:
+        if matchEmpty(c, it):
+          or19 = true
+          break or20
+        if matchExpr(c, it):
+          or19 = true
+          break or20
+      if not or19:
+        error(c, it, "invalid Stmt")
         break or3
       kw18 = matchParRi(c, it)
     if kw18:

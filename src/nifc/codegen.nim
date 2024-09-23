@@ -54,7 +54,7 @@ type
     BreakKeyword = "break"
     NullPtr = "NIM_NIL"
     IfNot = "if (!("
-    ReturnKeyword = "return "
+    ReturnKeyword = "return"
     TypedefStruct = "typedef struct "
     TypedefUnion = "typedef union "
     TypedefKeyword = "typedef "

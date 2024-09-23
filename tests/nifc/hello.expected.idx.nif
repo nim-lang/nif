@@ -27,7 +27,7 @@
  (kv a3 +31)
  (kv a4 +25)
  (kv foo.c +36)
- (kv foo2.c +88)
+ (kv foo2.c +100)
  (kv x.c +32)
  (kv MyObject.ptr.flexarray +111)
  (kv a1 +47)
