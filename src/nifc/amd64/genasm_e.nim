@@ -334,6 +334,7 @@ proc genStrLit(c: var GeneratedCode; s: string; info: PackedLineInfo; dest: var 
   let d = Location(kind: InData, data: c.m.lits.strings.getOrIncl(symId))
   into c, dest, d
 
+#[
 proc genConv(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
   let (typ, arg) = sons2(t, n)
   let src = getAsmSlot(c, arg)
@@ -374,47 +375,6 @@ proc genConv(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
   if opc != ErrT:
     c.code.addParRi()
 
-proc declareBoolAndAsgn(c: var GeneratedCode; info: PackedLineInfo): TempVar =
-  result = getTempVar(c)
-  c.code.buildTree VarT, info:
-    c.defineTemp result, info
-    c.addEmpty info # no pragmas
-    c.addKeyw BT, info
-  c.code.addParLe AsgnT, info
-  c.addKeyw BT, info
-  c.useTemp result, info
-
-proc genCond(c: var GeneratedCode; t: Tree; n: NodePos; opc: TagId) =
-  assert opc == FjmpT or opc == TjmpT
-  # Preasm has no `and`/`or` operators and we might already be in deeply
-  # nested expression based code here. The solution is to "repair" the AST:
-  # `(call (add x (add y z)) (and a b)` is rewritten to
-  # `(var :tmp (bool)) (asgn tmp a) (fjmp tmp L1) (asgn tmp b)) (lab :L1); (call (add x (add y z)) tmp)`.
-  # For this we stored the beginning of the stmt in `c.stmtBegin`.
-  var fullExpr = default(TokenBuf)
-  for i in c.stmtBegin ..< c.code.len:
-    fullExpr.add c.code[i]
-  c.code.shrink c.stmtBegin
-
-  let info = t[n].info
-  let temp = declareBoolAndAsgn(c, info)
-  let (a, b) = sons2(t, n)
-  genx c, t, a, WantValue
-  c.code.addParRi() # assignment is over
-  let lab = getLabel(c)
-  c.buildTree opc, info:
-    c.useTemp temp, info
-    c.useLabel lab, info
-  c.buildTree AsgnT, info:
-    c.addKeyw BT, info
-    c.useTemp temp, info
-    genx c, t, b, WantValue
-  c.buildTree LabT, info:
-    c.defineLabel lab, info
-  for i in 0 ..< fullExpr.len:
-    c.code.add fullExpr[i]
-  c.useTemp temp, info
-
 proc genFjmp(c: var GeneratedCode; t: Tree; n: NodePos; jmpTarget: Label; opc = FjmpT) =
   let info = t[n].info
   let k = t[n].kind
@@ -444,29 +404,53 @@ proc genFjmp(c: var GeneratedCode; t: Tree; n: NodePos; jmpTarget: Label; opc = 
     c.buildTree opc, info:
       genx c, t, n, WantValue
       c.useLabel jmpTarget, info
+]#
+
+proc genDataVal(c: var GeneratedCode; t: Tree; n: NodePos) =
+  let d = gen(c, t, n)
+  emitLoc c, d
+
+template immLit(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location;
+                typ: AsmSlot; parse: untyped) =
+  let lit = t[n].litId
+  let d = immediateLoc(parse(c.m.lits.strings[lit]), typ)
+  into c, dest, d
 
 proc genx(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
   let info = t[n].info
   case t[n].kind
   of IntLit:
-    genIntLit c, t[n].litId, info
+    let typ = AsmSlot(kind: AInt, size: WordSize, align: WordSize)
+    immLit c, t, n, dest, typ, parseBiggestInt
   of UIntLit:
-    genUIntLit c, t[n].litId, info
+    let typ = AsmSlot(kind: AUInt, size: WordSize, align: WordSize)
+    immLit c, t, n, dest, typ, parseBiggestUInt
   of FloatLit:
-    genFloatLit c, t[n].litId, info
+    let typ = AsmSlot(kind: AFloat, size: WordSize, align: WordSize)
+    immLit c, t, n, dest, typ, parseFloat
   of CharLit:
+    let typ = AsmSlot(kind: AUInt, size: 1, align: 1)
     let ch = t[n].uoperand
-    genCharLit c, char(ch), info
-  of FalseC: genCharLit c, char(0), info
-  of TrueC: genCharLit c, char(1), info
+    let d = immediateLoc(ch, typ)
+    into c, dest, d
+  of FalseC:
+    let typ = AsmSlot(kind: AUInt, size: 1, align: 1)
+    let d = immediateLoc(0'u64, typ)
+    into c, dest, d
+  of TrueC:
+    let typ = AsmSlot(kind: AUInt, size: 1, align: 1)
+    let d = immediateLoc(1'u64, typ)
+    into c, dest, d
   of StrLit:
-    genStrLit(c, c.m.lits.strings[t[n].litId], info)
+    genStrLit(c, c.m.lits.strings[t[n].litId], info, dest)
   of NilC:
-    genIntLit c, 0, info
+    let typ = AsmSlot(kind: AUInt, size: WordSize, align: WordSize)
+    let d = immediateLoc(0'u64, typ)
+    into c, dest, d
   of AconstrC:
     if c.inConst > 0:
       for ch in sonsFromX(t, n):
-        c.genx t, ch, WantValue
+        c.genDataVal t, ch
     else:
       error c.m, "runtime array constructor not implemented: ", t, n
   of OconstrC:
@@ -474,22 +458,24 @@ proc genx(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
       for ch in sonsFromX(t, n):
         if t[ch].kind == OconstrC:
           # Inheritance
-          c.genx t, ch, WantValue
+          c.genDataVal t, ch
         else:
           let (_, v) = sons2(t, ch)
-          c.genx t, v, WantValue
+          c.genDataVal t, v
     else:
       error c.m, "runtime object constructor not implemented: ", t, n
   of ParC:
     let arg = n.firstSon
     genx c, t, arg, dest
   of AddrC:
-    genx c, t, n.firstSon, dest
+    genAddr c, t, n.firstSon, dest
   of SizeofC:
     # we evaluate it at compile-time:
     let a = getAsmSlot(c, n.firstSon)
-    genIntLit c, a.size, info
-  of CallC: genCall c, t, n
+    let typ = AsmSlot(kind: AUInt, size: WordSize, align: WordSize)
+    let d = immediateLoc(uint(a.size), typ)
+    into c, dest, d
+  of CallC: genCall c, t, n, dest
   of AddC: typedBinOp AddT
   of SubC: typedBinOp SubT
   of MulC: typedBinOp MulT
