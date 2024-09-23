@@ -317,7 +317,11 @@ proc genProcDecl(c: var GeneratedCode; t: Tree; n: NodePos; isExtern: bool) =
   if isExtern:
     c.add ExternKeyword
 
-  genType c, t, prc.returnType
+  if t[prc.returnType].kind == Empty:
+    c.add "void"
+    c.add Space
+  else:
+    genType c, t, prc.returnType
   c.add Space
   let name = genSymDef(c, t, prc.name)
 
