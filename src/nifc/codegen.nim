@@ -201,7 +201,7 @@ proc genProcPragmas(c: var GeneratedCode; t: Tree; n: NodePos;
       of InlineC:
         flags.incl isInline
       of AttrC:
-        c.add " __attribute__((" & toString(t, ch.firstSon, c.m) & "))"
+        c.add " __attribute__((" & c.m.lits.strings[t[ch.firstSon].litId] & "))"
       of NoinlineC:
         c.add " __attribute__((noinline))"
       of WasC:
@@ -228,7 +228,7 @@ proc genParamPragmas(c: var GeneratedCode; t: Tree; n: NodePos) =
     for ch in sons(t, n):
       case t[ch].kind
       of AttrC:
-        c.add " __attribute__((" & toString(t, ch.firstSon, c.m) & "))"
+        c.add " __attribute__((" & c.m.lits.strings[t[ch.firstSon].litId] & "))"
       of WasC:
         c.add "/* " & toString(t, ch.firstSon, c.m) & " */"
       else:
@@ -255,7 +255,7 @@ proc genVarPragmas(c: var GeneratedCode; t: Tree; n: NodePos) =
       of AlignC:
         c.add " NIM_ALIGN(" & toString(t, ch.firstSon, c.m) & ")"
       of AttrC:
-        c.add " __attribute__((" & toString(t, ch.firstSon, c.m) & "))"
+        c.add " __attribute__((" & c.m.lits.strings[t[ch.firstSon].litId] & "))"
       of WasC:
         c.add "/* " & toString(t, ch.firstSon, c.m) & " */"
       else:
@@ -321,7 +321,6 @@ proc genProcDecl(c: var GeneratedCode; t: Tree; n: NodePos; isExtern: bool) =
 
   if t[prc.returnType].kind == Empty:
     c.add "void"
-    c.add Space
   else:
     genType c, t, prc.returnType
   c.add Space
