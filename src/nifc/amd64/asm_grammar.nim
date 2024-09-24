@@ -1254,8 +1254,8 @@ proc genInstruction(c: var Context): bool =
       or2 = true
       break or3
     var kw66 = false
-    if isTag(c, JgeT):
-      emitTag(c, "jge")
+    if isTag(c, JngT):
+      emitTag(c, "jng")
       if not genLabel(c):
         error(c, "Label expected")
         break or3
@@ -1264,8 +1264,8 @@ proc genInstruction(c: var Context): bool =
       or2 = true
       break or3
     var kw67 = false
-    if isTag(c, JaT):
-      emitTag(c, "ja")
+    if isTag(c, JgeT):
+      emitTag(c, "jge")
       if not genLabel(c):
         error(c, "Label expected")
         break or3
@@ -1274,13 +1274,53 @@ proc genInstruction(c: var Context): bool =
       or2 = true
       break or3
     var kw68 = false
-    if isTag(c, JaeT):
-      emitTag(c, "jae")
+    if isTag(c, JngeT):
+      emitTag(c, "jnge")
       if not genLabel(c):
         error(c, "Label expected")
         break or3
       kw68 = matchParRi(c)
     if kw68:
+      or2 = true
+      break or3
+    var kw69 = false
+    if isTag(c, JaT):
+      emitTag(c, "ja")
+      if not genLabel(c):
+        error(c, "Label expected")
+        break or3
+      kw69 = matchParRi(c)
+    if kw69:
+      or2 = true
+      break or3
+    var kw70 = false
+    if isTag(c, JnaT):
+      emitTag(c, "jna")
+      if not genLabel(c):
+        error(c, "Label expected")
+        break or3
+      kw70 = matchParRi(c)
+    if kw70:
+      or2 = true
+      break or3
+    var kw71 = false
+    if isTag(c, JaeT):
+      emitTag(c, "jae")
+      if not genLabel(c):
+        error(c, "Label expected")
+        break or3
+      kw71 = matchParRi(c)
+    if kw71:
+      or2 = true
+      break or3
+    var kw72 = false
+    if isTag(c, JnaeT):
+      emitTag(c, "jnae")
+      if not genLabel(c):
+        error(c, "Label expected")
+        break or3
+      kw72 = matchParRi(c)
+    if kw72:
       or2 = true
       break or3
     if matchAndEmitTag(c, NopT, "nop"):
@@ -1292,25 +1332,36 @@ proc genInstruction(c: var Context): bool =
     if matchAndEmitTag(c, SyscallT, "syscall"):
       or2 = true
       break or3
-    var kw69 = false
+    var kw73 = false
+    if isTag(c, LabT):
+      emit(c, "")
+      var sym74 = declareSym(c)
+      if not success(sym74):
+        error(c, "SYMBOLDEF expected")
+        break or3
+      kw73 = matchParRi(c)
+    if kw73:
+      or2 = true
+      break or3
+    var kw75 = false
     if isTag(c, CommentT):
       emit(c, "; ")
-      var or70 = false
-      block or71:
+      var or76 = false
+      block or77:
         if matchIdent(c):
-          or70 = true
-          break or71
+          or76 = true
+          break or77
         if lookupSym(c):
-          or70 = true
-          break or71
+          or76 = true
+          break or77
         if matchStringLit(c):
-          or70 = true
-          break or71
-      if not or70:
+          or76 = true
+          break or77
+      if not or76:
         error(c, "invalid Instruction")
         break or3
-      kw69 = matchParRi(c)
-    if kw69:
+      kw75 = matchParRi(c)
+    if kw75:
       or2 = true
       break or3
   if not or2: return false

@@ -9,6 +9,36 @@
 
 # included from genpreasm.nim
 
+proc opposite(t: TagId): TagId =
+  case t
+  of JeT: JneT
+  of JneT: JeT
+  of JzT: JnzT
+  of JnzT: JzT
+  of JgT: JngT
+  of JgeT: JngeT
+  of JngeT: JgeT
+  of JaT: JnaT
+  of JnaT: JaT
+  of JaeT: JnaeT
+  of JnaeT: JaeT
+  else: NopT
+
+proc jumpToPutInstr(t: TagId): TagId =
+  case t
+  of JeT: SetneT
+  of JneT: SeteT
+  of JzT: SetnzT
+  of JnzT: SetzT
+  of JgT: SetngT
+  of JgeT: SetngeT
+  of JngeT: SetgeT
+  of JaT: SetnaT
+  of JnaT: SetaT
+  of JaeT: SetnaeT
+  of JnaeT: SetaeT
+  else: NopT
+
 proc emitLoc*(c: var GeneratedCode; loc: Location) =
   case loc.kind
   of Undef:
@@ -132,6 +162,10 @@ proc genAsgn(c: var GeneratedCode; dest, src: Location) =
     c.buildTree MovapdT:
       c.emitLoc dest
       c.emitLoc src
+  elif src.kind == InFlag:
+    assert dest.kind != InFlag
+    c.buildTree jumpToPutInstr(src.flag):
+      c.emitLoc dest
   elif dest.typ.size < 0'i32 or dest.typ.size > 8'i32:
     assert dest.typ.size > 0'i32, "size not set!"
     assert false, "implement rep byte copy loop"
@@ -149,6 +183,8 @@ proc genAsgn(c: var GeneratedCode; dest, src: Location) =
 proc into(c: var GeneratedCode; dest: var Location; src: Location) =
   if dest.kind == Undef:
     dest = src
+  elif dest.kind == InFlag and src.kind == InFlag and dest.flag == NopT:
+    dest.flag = src.flag
   else:
     genAsgn c, dest, src
 
@@ -306,6 +342,52 @@ proc genAddr(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
   else:
     error c.m, "expected expression but got: ", t, n
 
+proc genLoad(c: var GeneratedCode; dest: var Location; address: Location) =
+  if dest.kind == Undef:
+    dest = scratchReg(c.rega)
+  # XXX Floating point? What if it doesn't even fit a register?
+
+  let opc = if address.typ.kind == AFloat: MovapdT else: MovT
+  c.buildTree opc:
+    emitLoc c, dest
+    c.buildTree Mem1T:
+      emitLoc c, address
+
+proc genLvalue(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
+  let info = t[n].info
+  case t[n].kind
+  of Sym:
+    let lit = t[n].litId
+    let def = c.m.defs.getOrDefault(lit)
+    case def.kind
+    of ProcC:
+      let d = Location(typ: AddrTyp, kind: InData, data: lit)
+      into c, dest, d
+    of VarC, ParamC:
+      let d = c.locals[lit]
+      if d.kind in {InStack}:
+        genLoad c, dest, d
+      else:
+        into c, dest, d
+    of GvarC, ConstC:
+      let typ = c.globals[lit]
+      let d = Location(flags: {Indirect}, typ: typ, kind: InData, data: lit)
+      genLoad c, dest, d
+    of TvarC:
+      let typ = c.globals[lit]
+      let d = Location(flags: {Indirect}, typ: typ, kind: InTls, data: lit)
+      genLoad c, dest, d
+    of EfldC:
+      assert false, "enum fields not implemented"
+    else:
+      error c.m, "undeclared identifier: ", t, n
+  of DerefC, AtC, PatC, DotC:
+    var d = Location(kind: Undef)
+    genAddr c, t, n, d
+    genLoad c, dest, d
+  else:
+    error c.m, "expected expression but got: ", t, n
+
 proc genStrLit(c: var GeneratedCode; s: string; info: PackedLineInfo; dest: var Location) =
   var id = c.strings.getOrDefault(s, -1)
   var symId: string
@@ -393,6 +475,36 @@ proc genFjmp(c: var GeneratedCode; t: Tree; n: NodePos; jmpTarget: Label; opc = 
       genx c, t, n, WantValue
       c.useLabel jmpTarget, info
 ]#
+
+type
+  CondJmpKind = enum
+    Fjmp # jump if the condition is false (the `and` operator)
+    Tjmp # jump if the condition is true  (the `or` operator)
+
+proc genCond(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location; jk: CondJmpKind) =
+  let l1 = getLabel(c)
+  let (a, b) = sons2(t, n)
+  # tell the pipeline we need the result in a flag:
+  var destA = Location(kind: InFlag, flag: NopT)
+  genx(c, t, a, destA)
+  assert destA.kind == InFlag
+  let opc = if jk == Tjmp: destA.flag else: opposite(destA.flag)
+  c.buildTree opc:
+    c.useLabel l1, t[n].info
+  genx(c, t, b, dest)
+  c.defineLabel l1, t[n].info
+
+proc genCmp(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location; opc: TagId) =
+  var d = Location(kind: InFlag, flag: opc)
+  let (a, b) = sons2(t, n)
+  let x = gen(c, t, a)
+  let y = gen(c, t, b)
+  c.buildTree CmpT:
+    emitLoc c, x
+    emitLoc c, y
+  c.freeTemp y
+  c.freeTemp x
+  c.into dest, d
 
 proc genDataVal(c: var GeneratedCode; t: Tree; n: NodePos) =
   let d = gen(c, t, n)
@@ -521,18 +633,18 @@ proc genx(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
   of BitorC: typedBinOp OrT
   of BitxorC: typedBinOp XorT
   of BitnotC: typedUnOp NotT
-  of AndC: genCond c, t, n, FjmpT
-  of OrC: genCond c, t, n, TjmpT
-  of NotC: unOp NotT
-  of NegC: unOp NegT
-  of EqC: cmpOp EqT
-  of LeC: cmpOp LeT
-  of LtC: cmpOp LtT
-  of CastC, ConvC:
-    assert mode == WantValue
-    genConv c, t, n
-  of SufC:
-    let (value, suffix) = sons2(t, n)
-    genx(c, t, value, mode)
+  of NegC: typedUnOp NegT
+  of AndC: genCond c, t, n, dest, Fjmp
+  of OrC: genCond c, t, n, dest, Tjmp
+  of EqC: genCmp c, t, n, dest, JneT
+  of LeC: genCmp c, t, n, dest, JgT
+  of LtC: genCmp c, t, n, dest, JgeT
+
+  #of NotC: unOp NotT
+  #of CastC, ConvC:
+  #  genConv c, t, n
+  #of SufC:
+  #  let (value, suffix) = sons2(t, n)
+  #  genx(c, t, value, mode)
   else:
-    genLvalue c, t, n, mode, dest
+    genLvalue c, t, n, dest

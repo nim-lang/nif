@@ -114,13 +114,17 @@ const
   JzT* = TagId(111)
   JnzT* = TagId(112)
   JgT* = TagId(113)
-  JgeT* = TagId(114)
-  JaT* = TagId(115)
-  JaeT* = TagId(116)
-  NopT* = TagId(117)
-  RetT* = TagId(118)
-  SyscallT* = TagId(119)
-  CommentT* = TagId(120)
+  JngT* = TagId(114)
+  JgeT* = TagId(115)
+  JngeT* = TagId(116)
+  JaT* = TagId(117)
+  JnaT* = TagId(118)
+  JaeT* = TagId(119)
+  JnaeT* = TagId(120)
+  NopT* = TagId(121)
+  RetT* = TagId(122)
+  SyscallT* = TagId(123)
+  CommentT* = TagId(124)
 
 proc registerTags*() =
   registerTag "global", GlobalT
@@ -234,9 +238,13 @@ proc registerTags*() =
   registerTag "jz", JzT
   registerTag "jnz", JnzT
   registerTag "jg", JgT
+  registerTag "jng", JngT
   registerTag "jge", JgeT
+  registerTag "jnge", JngeT
   registerTag "ja", JaT
+  registerTag "jna", JnaT
   registerTag "jae", JaeT
+  registerTag "jnae", JnaeT
   registerTag "nop", NopT
   registerTag "ret", RetT
   registerTag "syscall", SyscallT

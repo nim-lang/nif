@@ -10,6 +10,8 @@
 import ".." / nifc_model
 import ".." / native / slots
 
+import nifstreams except StrId
+
 type
   IntReg* = distinct byte
   FloatReg* = distinct byte
@@ -95,15 +97,16 @@ proc regName*(r: FloatReg): string =
   result.addInt int(r)
 
 const
-  CarryFlag = CpuFlag(0)
-  ParityFlag = CpuFlag(2)
-  AuxFlag = CpuFlag(4)
-  ZeroFlag = CpuFlag(6)
-  SignFlag = CpuFlag(7)
-  TrapFlag = CpuFlag(8)
-  InterruptFlag = CpuFlag(9)
-  DirFlag = CpuFlag(10)
-  OverflowFlag = CpuFlag(11)
+  CarryFlag* = CpuFlag(0)
+  ParityFlag* = CpuFlag(2)
+  AuxFlag* = CpuFlag(4)
+  ZeroFlag* = CpuFlag(6)
+  SignFlag* = CpuFlag(7)
+  TrapFlag* = CpuFlag(8)
+  InterruptFlag* = CpuFlag(9)
+  DirFlag* = CpuFlag(10)
+  OverflowFlag* = CpuFlag(11)
+  UndefinedFlag* = CpuFlag(255)
   # Other flags not modelled as we don't need them.
 
 proc flagName*(f: CpuFlag): string =
@@ -186,7 +189,7 @@ type
       reg1*, reg2*: IntReg
     of InRegFp: regf*: FloatReg
     of InStack: slot*: int
-    of InFlag: flag*: CpuFlag
+    of InFlag: flag*: TagId
     of JumpMode: label*: int
     of InData, InTls: data*: StrId
 

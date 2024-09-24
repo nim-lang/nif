@@ -120,9 +120,6 @@ proc getTempVar(c: var GeneratedCode): TempVar =
   result = TempVar(c.temps)
   inc c.temps
 
-proc defineLabel(c: var GeneratedCode; lab: Label; info: PackedLineInfo) =
-  c.code.addSymDef "L." & $int(lab), info
-
 proc useLabel(c: var GeneratedCode; lab: Label; info: PackedLineInfo) =
   c.addSym "L." & $int(lab), info
 
@@ -139,6 +136,10 @@ template buildTree(c: var GeneratedCode; keyw: TagId; body: untyped) =
 template buildTreeI(c: var GeneratedCode; keyw: TagId; info: PackedLineInfo; body: untyped) =
   c.code.buildTree keyw, info:
     body
+
+proc defineLabel(c: var GeneratedCode; lab: Label; info: PackedLineInfo) =
+  c.code.buildTree LabT, info:
+    c.code.addSymDef "L." & $int(lab), info
 
 # Type graph
 
