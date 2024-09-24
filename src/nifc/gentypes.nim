@@ -110,7 +110,7 @@ proc traverseTypes(m: Module; o: var TypeOrder) =
     else: discard
 
 template integralBits(types: TypeGraph; t: TypeId): string =
-  let lit = types[t.firstSon].litId
+  let lit = types[t].litId
   let r = c.m.lits.strings[lit]
   let res = parseBiggestInt(r)
   case res
@@ -159,22 +159,42 @@ proc genFieldPragmas(c: var GeneratedCode; types: TypeGraph; n: NodePos; bits: v
   else:
     error c.m, "expected field pragmas but got: ", types, n
 
+proc getIntQualify(types: TypeGraph; t: TypeId): string =
+  case types[t].kind
+  of RoC:
+    result = "const "
+  of AtomicC, Empty:
+    # TODO: implements it
+    result = ""
+  else:
+    raiseAssert "unreachable: " & $types[t].kind
+
 proc genType(c: var GeneratedCode; types: TypeGraph; t: TypeId; name = "") =
   template maybeAddName =
     if name != "":
       c.add Space
       c.add name
 
-  template atom(s: string) =
+  template atom(s: string, qualifier: string = "") =
+    c.add qualifier
     c.add s
     maybeAddName()
   case types[t].kind
   of VoidC: atom "void"
-  of IntC: atom "NI" & types.integralBits(t)
-  of UIntC: atom "NU" & types.integralBits(t)
-  of FloatC: atom "NF" & types.integralBits(t)
-  of BoolC: atom "NB8"
-  of CharC: atom "NC" & types.integralBits(t)
+  of IntC:
+    let (bits, qualifier) = sons2(types, t)
+    atom("NI" & types.integralBits(bits), getIntQualify(types, qualifier))
+  of UIntC:
+    let (bits, qualifier) = sons2(types, t)
+    atom("NU" & types.integralBits(bits), getIntQualify(types, qualifier))
+  of FloatC:
+    let (bits, qualifier) = sons2(types, t)
+    atom("NF" & types.integralBits(bits), getIntQualify(types, qualifier))
+  of BoolC:
+    atom("NB8", getIntQualify(types, t.firstSon))
+  of CharC:
+    let (bits, qualifier) = sons2(types, t)
+    atom("NC" & types.integralBits(t), getIntQualify(types, qualifier))
   of Sym:
     atom mangle(c.m.lits.strings[types[t].litId])
   of PtrC, APtrC:
