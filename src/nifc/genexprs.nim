@@ -218,7 +218,7 @@ proc genx(c: var GeneratedCode; t: Tree; n: NodePos) =
   of AndC: cmpOp " && "
   of OrC: cmpOp " || "
   of NotC: unOp "!"
-  of NegC: unOp "-"
+  of NegC: typedUnOp "-"
   of EqC: cmpOp " == "
   of NeqC: cmpOp " != "
   of LeC: cmpOp " <= "

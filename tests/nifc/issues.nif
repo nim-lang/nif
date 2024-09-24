@@ -69,7 +69,7 @@
   ))
 
   (proc :foo.neg . . . (stmts
-    (var :x.c . (i +32 .) (neg +12 ))
+    (var :x.c . (i +32 .) (neg (i +32 .) +12 ))
   )
   )
 
