@@ -391,9 +391,6 @@ proc matchExpr(c: var Context; it: var Item): bool =
       if not matchExpr(c, it):
         error(c, it, "Expr expected")
         break or3
-      if not matchExpr(c, it):
-        error(c, it, "Expr expected")
-        break or3
       kw25 = matchParRi(c, it)
     if kw25:
       or2 = true
