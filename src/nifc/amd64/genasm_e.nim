@@ -151,7 +151,7 @@ template unOp(opr) {.dirty.} =
     genTypeof c, n.firstSon
     genx c, t, n.firstSon, WantValue
 
-proc genAsgn(c: var GeneratedCode; dest, src: Location) =
+proc genMov(c: var GeneratedCode; dest, src: Location) =
   if sameLocation(dest, src):
     discard "don't generate `mov rax, rax` etc"
   elif Indirect in src.flags:
@@ -186,7 +186,7 @@ proc into(c: var GeneratedCode; dest: var Location; src: Location) =
   elif dest.kind == InFlag and src.kind == InFlag and dest.flag == NopT:
     dest.flag = src.flag
   else:
-    genAsgn c, dest, src
+    genMov c, dest, src
 
 proc genCall(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
   var args: seq[NodePos] = @[] # so that we can also do it backwards
@@ -228,7 +228,7 @@ proc genCall(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
     if dest.kind == Undef:
       dest = resultWin64(ts)
     else:
-      c.genAsgn(dest, resultWin64(ts))
+      c.genMov(dest, resultWin64(ts))
 
 const
   AddrTyp = AsmSlot(kind: AInt, size: WordSize, align: WordSize, offset: 0)
@@ -352,6 +352,34 @@ proc genLoad(c: var GeneratedCode; dest: var Location; address: Location) =
     emitLoc c, dest
     c.buildTree Mem1T:
       emitLoc c, address
+
+proc genAsgn(c: var GeneratedCode; t: Tree; n: NodePos) =
+  let (a, b) = sons2(t, n)
+  # special case local variables as these can be in registers
+  # which have no address:
+  if t[a].kind == Sym:
+    let lit = t[a].litId
+    let def = c.m.defs.getOrDefault(lit)
+    case def.kind
+    of VarC, ParamC:
+      let d = c.locals[lit]
+
+      let y = gen(c, t, n)
+      genMov c, d, y
+      freeTemp c, y
+      return
+  var d = Location(kind: Undef)
+  genAddr c, t, a, d
+
+  let y = makeReg gen(c, t, n)
+
+  # XXX also handle case kind == AMem!
+  let opc = if address.typ.kind == AFloat: MovapdT else: MovT
+  c.buildTree opc:
+    c.buildTree Mem1T:
+      emitLoc c, d
+    emitLoc c, y
+  freeTemp c, y
 
 proc genLvalue(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
   let info = t[n].info

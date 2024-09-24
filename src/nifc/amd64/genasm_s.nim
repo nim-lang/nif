@@ -202,22 +202,12 @@ proc genSwitch(c: var GeneratedCode; t: Tree; caseStmt: NodePos) =
   c.buildTree LabT, t[caseStmt].info:
     c.defineLabel endif, t[caseStmt].info
 
-proc genAsgn(c: var GeneratedCode; t: Tree; n: NodePos) =
-  let (dest, src) = sons2(t, n)
-  let isAsgn = t[dest].kind == Sym
-  let opc = if isAsgn: AsgnT else: StoreT
-  c.buildTree opc, t[n].info:
-    genTypeof c, dest
-    genx c, t, dest, (if isAsgn: WantValue else: WantAddr)
-    genx c, t, src, WantValue
-
 proc genReturn(c: var GeneratedCode; t: Tree; n: NodePos) =
   c.buildTree RetT, t[n].info:
     genTypeof c, n.firstSon
     c.genx t, n.firstSon, WantValue
 
 proc genStmt(c: var GeneratedCode; t: Tree; n: NodePos) =
-  c.stmtBegin = c.code.len
   case t[n].kind
   of Empty:
     discard
