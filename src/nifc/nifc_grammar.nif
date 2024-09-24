@@ -17,7 +17,7 @@
          (and Expr Expr)
          (or Expr Expr)
          (not Expr)
-         (neg Expr)
+         (neg Type Expr)
          (sizeof Expr)
          (oconstr Type (ZERO_OR_MANY (kv SYMBOL Expr)))
          (aconstr Type (ZERO_OR_MANY Expr))
