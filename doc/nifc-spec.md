@@ -107,7 +107,7 @@ Expr ::= Number | CharLiteral | StringLiteral |
          (shl Type Expr Expr) |
          (bitand Type Expr Expr) |
          (bitor Type Expr Expr) |
-         (bitnot Type Expr Expr) |
+         (bitnot Type Expr) |
          (bitxor Type Expr Expr) |
          (eq Expr Expr) |
          (neq Expr Expr) |
