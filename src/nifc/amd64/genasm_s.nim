@@ -19,7 +19,7 @@ proc genBreak(c: var GeneratedCode; t: Tree; n: NodePos) =
   if c.loopExits.len == 0:
     error c.m, "`break` not within a loop: ", t, n
   else:
-    c.buildTree JmpT, t[n].info:
+    c.buildTreeI JmpT, t[n].info:
       c.useLabel c.loopExits[^1], t[n].info
 
 proc genWhile(c: var GeneratedCode; t: Tree; n: NodePos) =
@@ -35,13 +35,12 @@ proc genWhile(c: var GeneratedCode; t: Tree; n: NodePos) =
   let loopLabel = getLabel(c)
   c.loopExits.add exit
   let (cond, body) = sons2(t, n)
-  c.buildTree LoopT, t[n].info:
-    c.defineLabel loopLabel, t[n].info
-  c.buildTree FjmpT, t[cond].info:
-    c.genx t, cond, WantValue
-    c.useLabel exit, t[cond].info
+  c.defineLabel loopLabel, t[n].info, LooplabT
+  var d = Location(kind: JumpMode, label: int(exit))
+  c.genx t, cond, d
+  c.useLabel exit, t[cond].info
   c.genStmt t, body
-  c.buildTree JloopT, t[n].info:
+  c.buildTreeI JloopT, t[n].info:
     c.useLabel loopLabel, t[n].info
   discard c.loopExits.pop()
 
@@ -57,14 +56,12 @@ proc genIf(c: var GeneratedCode; t: Tree; ifStmt: NodePos) =
       else:
         let (cond, action) = sons2(t, n)
         let afterwards = getLabel(c)
-        c.buildTree FjmpT, t[n].info:
-          c.genx t, cond, WantValue
-          c.useLabel afterwards, t[n].info
+        var d = Location(kind: JumpMode, label: int(afterwards))
+        c.genx t, cond, d
         genStmt c, t, action
-        c.buildTree JmpT, t[n].info:
+        c.buildTreeI JmpT, t[n].info:
           c.useLabel endif, t[n].info
-        c.buildTree LabT, t[n].info:
-          c.defineLabel afterwards, t[n].info
+        c.defineLabel afterwards, t[n].info
       hasElif = true
     of ElseC:
       hasElse = true
@@ -76,8 +73,7 @@ proc genIf(c: var GeneratedCode; t: Tree; ifStmt: NodePos) =
       error c.m, "`if` expects `elif` or `else` but got: ", t, n
   if not hasElif and not hasElse:
     error c.m, "`if` expects `elif` or `else` but got: ", t, ifStmt
-  c.buildTree LabT, t[ifStmt].info:
-    c.defineLabel endif, t[ifStmt].info
+  c.defineLabel endif, t[ifStmt].info
 
 proc genLabel(c: var GeneratedCode; t: Tree; n: NodePos) =
   let dname = n.firstSon
@@ -166,8 +162,7 @@ proc genSwitch(c: var GeneratedCode; t: Tree; caseStmt: NodePos) =
         error c.m, "no `of` allowed after `else` but got: ", t, n
       else:
         if afterwards >= 0:
-          c.buildTree LabT, info:
-            c.defineLabel Label(afterwards), info
+          c.defineLabel Label(afterwards), info
         let action = getLabel(c)
         let (cond, stmts) = sons2(t, n)
         c.genCaseCond t, cond, sel, seltyp, action
@@ -176,14 +171,12 @@ proc genSwitch(c: var GeneratedCode; t: Tree; caseStmt: NodePos) =
         c.buildTree JmpT, info:
           c.useLabel Label(afterwards), info
 
-        c.buildTree LabT, info:
-          c.defineLabel action, info
+        c.defineLabel action, info
         genStmt c, t, stmts
 
         c.buildTree JmpT, info:
           c.useLabel endif, info
-        c.buildTree LabT, info:
-          c.defineLabel Label(afterwards), info
+        c.defineLabel Label(afterwards), info
 
       hasElif = true
     of ElseC:
@@ -192,15 +185,13 @@ proc genSwitch(c: var GeneratedCode; t: Tree; caseStmt: NodePos) =
         error c.m, "no `of` before `else` but got: ", t, n
       else:
         if afterwards >= 0:
-          c.buildTree LabT, info:
-            c.defineLabel Label(afterwards), info
+          c.defineLabel Label(afterwards), info
         genStmt c, t, n.firstSon
     else:
       error c.m, "`case` expects `of` or `else` but got: ", t, n
   if not hasElif and not hasElse:
     error c.m, "`case` expects `of` or `else` but got: ", t, caseStmt
-  c.buildTree LabT, t[caseStmt].info:
-    c.defineLabel endif, t[caseStmt].info
+  c.defineLabel endif, t[caseStmt].info
 
 proc genReturn(c: var GeneratedCode; t: Tree; n: NodePos) =
   c.buildTree RetT, t[n].info:

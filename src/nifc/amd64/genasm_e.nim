@@ -360,8 +360,7 @@ proc genAsgn(c: var GeneratedCode; t: Tree; n: NodePos) =
   if t[a].kind == Sym:
     let lit = t[a].litId
     let def = c.m.defs.getOrDefault(lit)
-    case def.kind
-    of VarC, ParamC:
+    if def.kind in {VarC, ParamC}:
       let d = c.locals[lit]
 
       let y = gen(c, t, n)
@@ -371,10 +370,10 @@ proc genAsgn(c: var GeneratedCode; t: Tree; n: NodePos) =
   var d = Location(kind: Undef)
   genAddr c, t, a, d
 
-  let y = makeReg gen(c, t, n)
+  let y = c.makeReg gen(c, t, n)
 
   # XXX also handle case kind == AMem!
-  let opc = if address.typ.kind == AFloat: MovapdT else: MovT
+  let opc = if d.typ.kind == AFloat: MovapdT else: MovT
   c.buildTree opc:
     c.buildTree Mem1T:
       emitLoc c, d

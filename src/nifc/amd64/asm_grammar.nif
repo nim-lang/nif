@@ -91,7 +91,8 @@
   (cmp Expr ", " Expr)
   (test Expr ", " Expr)
   (call Expr)
-  (lab SYMBOLDEF)
+  (lab "" SYMBOLDEF ":")
+  (looplab "" SYMBOLDEF ":")
 
   (sete Expr)
   (seta Expr)
@@ -119,6 +120,7 @@
   (setnz Expr)
 
   (jmp Label)
+  (jloop "jmp" Label)
   (je Label)
   (jne Label)
   (jz Label)
@@ -134,7 +136,6 @@
   (nop)
   (ret)
   (syscall)
-  (lab "" SYMBOLDEF)
   (comment "; " (OR IDENT SYMBOL STRINGLITERAL))
 ) (DO "nl"))
 )

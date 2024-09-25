@@ -137,8 +137,8 @@ template buildTreeI(c: var GeneratedCode; keyw: TagId; info: PackedLineInfo; bod
   c.code.buildTree keyw, info:
     body
 
-proc defineLabel(c: var GeneratedCode; lab: Label; info: PackedLineInfo) =
-  c.code.buildTree LabT, info:
+proc defineLabel(c: var GeneratedCode; lab: Label; info: PackedLineInfo; opc = LabT) =
+  c.code.buildTree opc, info:
     c.code.addSymDef "L." & $int(lab), info
 
 # Type graph
@@ -224,76 +224,6 @@ proc genVarPragmas(c: var GeneratedCode; t: Tree; n: NodePos; alignOverride: var
     error c.m, "expected pragmas but got: ", t, n
 
 include genasm_e
-
-type
-  VarKind = enum
-    IsLocal, IsGlobal, IsThreadlocal
-
-proc allocGlobal(size: var int; dest: var AsmSlot) =
-  size = align(size, dest.align)
-  dest.offset = size
-  inc size, dest.size
-
-proc genVarDecl(c: var GeneratedCode; t: Tree; n: NodePos; vk: VarKind) =
-  let d = asVarDecl(t, n)
-  if t[d.name].kind == SymDef:
-    let lit = t[d.name].litId
-    let name = c.m.lits.strings[lit]
-    let opc =
-      case vk
-      of IsLocal: VarT
-      of IsGlobal: GvarT
-      of IsThreadlocal: TvarT
-    c.buildTreeI opc, t[n].info:
-      c.code.addSymDef name, t[d.name].info
-      var alignOverride = -1
-      genVarPragmas c, t, d.pragmas, alignOverride
-
-      # genType inlined:
-      var dest = AsmSlot()
-      fillTypeSlot c, typeFromPos(n), dest
-      if alignOverride >= 0:
-        dest.align = alignOverride
-      genSlot c, dest, c.m.code[n].info
-    case vk
-    of IsLocal:
-      c.scopes[c.scopes.high].syms[name] = dest
-    of IsGlobal:
-      allocGlobal c.globalsSize, dest
-      c.globals[name] = dest
-    of IsThreadlocal:
-      allocGlobal c.threadLocalsSize, dest
-      c.globals[name] = dest
-
-    if t[d.value].kind != Empty:
-      c.buildTreeI AsgnT, t[d.value].info:
-        genType c, d.typ, alignOverride
-        c.addSym name, t[d.name].info
-        genx c, t, d.value, WantValue
-  else:
-    error c.m, "expected SymbolDef but got: ", t, n
-
-proc genConstDecl(c: var GeneratedCode; t: Tree; n: NodePos) =
-  let d = asVarDecl(t, n)
-  if t[d.name].kind == SymDef:
-    let lit = t[d.name].litId
-    let name = c.m.lits.strings[lit]
-
-    c.buildTreeI ConstT, t[n].info:
-      c.code.addSymDef name, t[d.name].info
-      var alignOverride = -1
-      genVarPragmas c, t, d.pragmas, alignOverride
-      genType c, d.typ, alignOverride
-
-      if t[d.value].kind != Empty:
-        c.buildTree ValuesT, t[d.value].info:
-          inc c.inConst
-          genx c, t, d.value, WantValue
-          dec c.inConst
-      else:
-        error c.m, "const needs a value: ", t, n
-  else:
-    error c.m, "expected SymbolDef but got: ", t, n
 
 template moveToDataSection(body: untyped) =
   let oldLen = c.code.len
