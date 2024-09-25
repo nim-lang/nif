@@ -187,28 +187,25 @@ proc genType(c: var GeneratedCode; types: TypeGraph; t: TypeId; name = "") =
       c.add Space
       c.add name
 
-  template atom(s: string, qualifiers: seq[string] = @[]) =
-    for qualifier in qualifiers:
-      c.add qualifier
+  template atom(s: string) =
     c.add s
     maybeAddName()
 
   template atomNumber(types: TypeGraph, t: TypeId, name: string, isBool = false) =
-    var qualifiers: seq[string] = @[]
-    var s: string = ""
     if isBool:
-      s = name
       for son in sons(types, t):
-        qualifiers.add getNumberQualify(types, son)
+        c.add getNumberQualify(types, son)
+      atom(name)
     else:
       var i = 0
+      var s = ""
       for son in sons(types, t):
         if i == 0:
           s = name & types.integralBits(son)
         else:
-          qualifiers.add getNumberQualify(types, son)
+          c.add getNumberQualify(types, son)
         inc i
-    atom(s, qualifiers)
+      atom(s)
 
   template atomPointer(types: TypeGraph, t: TypeId) =
     var i = 0
