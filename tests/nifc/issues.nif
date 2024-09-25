@@ -93,7 +93,7 @@
     (call printf.c "hello %s" "file 1")
     )
 
-    (var :x.mangled (pragmas (attr "used") (was "x")) (bool .) .)
+    (var :x.mangled (pragmas (attr "used") (was "x")) (bool) .)
 
     (asgn x.gvar (false))
     (asgn x.tvar (false))
