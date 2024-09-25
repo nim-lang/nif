@@ -159,13 +159,25 @@ proc genFieldPragmas(c: var GeneratedCode; types: TypeGraph; n: NodePos; bits: v
   else:
     error c.m, "expected field pragmas but got: ", types, n
 
-proc getIntQualify(types: TypeGraph; t: TypeId): string =
+proc getNumberQualify(types: TypeGraph; t: TypeId): string =
   case types[t].kind
   of RoC:
     result = "const "
-  of AtomicC, Empty:
-    # TODO: implements it
+  of AtomicC:
+    # TODO: cpp doesn't support _Atomic
     result = ""
+  else:
+    raiseAssert "unreachable: " & $types[t].kind
+
+proc getPtrQualify(types: TypeGraph; t: TypeId): string =
+  case types[t].kind
+  of RoC:
+    result = "const "
+  of AtomicC:
+    # TODO: cpp doesn't support _Atomic
+    result = ""
+  of RestrictC:
+    result = "restrict "
   else:
     raiseAssert "unreachable: " & $types[t].kind
 
@@ -175,33 +187,57 @@ proc genType(c: var GeneratedCode; types: TypeGraph; t: TypeId; name = "") =
       c.add Space
       c.add name
 
-  template atom(s: string, qualifier: string = "") =
-    c.add qualifier
+  template atom(s: string, qualifiers: seq[string] = @[]) =
+    for qualifier in qualifiers:
+      c.add qualifier
     c.add s
     maybeAddName()
-  case types[t].kind
-  of VoidC: atom "void"
-  of IntC:
-    let (bits, qualifier) = sons2(types, t)
-    atom("NI" & types.integralBits(bits), getIntQualify(types, qualifier))
-  of UIntC:
-    let (bits, qualifier) = sons2(types, t)
-    atom("NU" & types.integralBits(bits), getIntQualify(types, qualifier))
-  of FloatC:
-    let (bits, qualifier) = sons2(types, t)
-    atom("NF" & types.integralBits(bits), getIntQualify(types, qualifier))
-  of BoolC:
-    atom("NB8", getIntQualify(types, t.firstSon))
-  of CharC:
-    let (bits, qualifier) = sons2(types, t)
-    atom("NC" & types.integralBits(t), getIntQualify(types, qualifier))
-  of Sym:
-    atom mangle(c.m.lits.strings[types[t].litId])
-  of PtrC, APtrC:
-    # XXX implement `ro` etc annotations
+
+  template atomNumber(types: TypeGraph, t: TypeId, name: string, isBool = false) =
+    var qualifiers: seq[string] = @[]
+    var s: string = ""
+    if isBool:
+      s = name
+      for son in sons(types, t):
+        qualifiers.add getNumberQualify(types, son)
+    else:
+      var i = 0
+      for son in sons(types, t):
+        if i == 0:
+          s = name & types.integralBits(son)
+        else:
+          qualifiers.add getNumberQualify(types, son)
+        inc i
+    atom(s, qualifiers)
+
+  template atomPointer(types: TypeGraph, t: TypeId) =
+    var i = 0
+    for son in sons(types, t):
+      if i == 0:
+        discard
+      else:
+        c.add getPtrQualify(types, son)
+      inc i
     genType c, types, elementType(types, t)
     c.add Star
     maybeAddName()
+
+  case types[t].kind
+  of VoidC: atom "void"
+  of IntC:
+    atomNumber(types, t, "NI")
+  of UIntC:
+    atomNumber(types, t, "NU")
+  of FloatC:
+    atomNumber(types, t, "NF")
+  of BoolC:
+    atomNumber(types, t, "NB8", isBool = true)
+  of CharC:
+    atomNumber(types, t, "NC")
+  of Sym:
+    atom mangle(c.m.lits.strings[types[t].litId])
+  of PtrC, APtrC:
+    atomPointer(types, t)
   of FlexarrayC:
     genType c, types, elementType(types, t)
     maybeAddName()

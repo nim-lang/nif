@@ -5,43 +5,43 @@
   (type :MyProc.e2 . (proctype . (params) . . ))
 
   (type :MyObject2.m .
-  (object . (fld :a1 . (i +32 atomic))
-    (fld :a2 . (i +64 atomic))
-    (fld :a3 . (bool .))
+  (object . (fld :a1 . (i +32 (atomic)))
+    (fld :a2 . (i +64 (atomic)))
+    (fld :a3 . (bool (atomic)))
   )
   )
 
   (type :MyObject3.m .
-  (object . (fld :a1 . (i +32 atomic))
-    (fld :a2 . (i +64 atomic))
-    (fld :a3 . (bool .))
+  (object . (fld :a1 . (i +32 (atomic)))
+    (fld :a2 . (i +64 (atomic)))
+    (fld :a3 . (bool (ro)))
   )
   )
 
   
   (type :MyObject4.m .
-  (object . (fld :a1 . (i +32 atomic))
-    (fld :a2 . (i +64 atomic))
-    (fld :a3 . (bool .))
+  (object . (fld :a1 . (i +32 (atomic)))
+    (fld :a2 . (i +64 (atomic)))
+    (fld :a3 . (bool (ro)))
   )
   )
 
   (proc :foo.m2 . . . (stmts
-    1,1,test1.nim(var :x.m . (i +32 .) +12)
+    1,1,test1.nim(var :x.m . (i +32) +12)
     1,2,test1.nim(asgn x.m +15)
   ))
 
   (proc :foo.m3 . . . (stmts
-    (var :x.c . (bool .) (true))
-    (var :y.c . (bool .) (false))
+    (var :x.c . (bool) (true))
+    (var :y.c . (bool) (false))
     (call printf.c "foo %d\0A" x.c)
     (call printf.c "foo %d\0A" y.c)
     (call printf.c "foo %c\0A" 'm')
-    (var :z.c . (ptr (c +8 .)) (nil))
+    (var :z.c . (ptr (c +8 (ro))) (nil))
   ))
 
   (proc :foo.if . . . (stmts
-    (const :x.c . (i +32 .) (suf +12 "i32"))
+    (const :x.c . (i +32) (suf +12 "i32"))
     (if (elif (eq x.c +1) (call printf.c "v: %d\0A" x.c)) 
         (elif (eq x.c +3) (call printf.c "v: %d\0A" x.c))
         (else (call printf.c "v: %d\0A" x.c))
@@ -49,7 +49,7 @@
   ))
 
   (proc :foo.switch . . . (stmts
-    (var :x.c . (i +32 .) (suf +12 "i32"))
+    (var :x.c . (i +32) (suf +12 "i32"))
     (case x.c
       (of (ranges +1) (call printf.c "hello %d" x.c))
       (of (ranges (range +3 +5)) (call printf.c "hello %d" x.c))
@@ -58,34 +58,34 @@
   ))
 
   (proc :foo.while . . . (stmts
-    (var :x.c . (i +32 .) (suf +12 "i32"))
+    (var :x.c . (i +32 (atomic)) (suf +12 "i32"))
     (while (not (lt x.c +8))
        (stmts 
           (asgn x.c
-            (sub (i +32 .) x.c +1)
+            (sub (i +32) x.c +1)
           )
        )
     )
   ))
 
   (proc :foo.neg . . . (stmts
-    (var :x.c . (i +32 .) (neg (i +32 .) +12 ))
+    (var :x.c . (i +32) (neg (i +32) +12 ))
   )
   )
 
   (type :MyObject2.mc .
-      (object . (fld :a1 . (i +32 atomic))
-        (fld :a2.c . (i +64 atomic))
-        (fld :a3.c . (bool .))
+      (object . (fld :a1 . (i +32 (atomic)))
+        (fld :a2.c . (i +64 (atomic)))
+        (fld :a3.c . (bool))
       )
   )
 
   (type :MyArray.mc .
-    (array (i +64 atomic) +3)
+    (array (i +64 (atomic)) +3)
   )
 
-  (gvar :x.gvar . (bool .) (true))
-  (tvar :x.tvar . (bool .) .)
+  (gvar :x.gvar . (bool) (true))
+  (tvar :x.tvar . (bool) .)
 
 
   (proc :foo.cs2 . . . (stmts
@@ -103,7 +103,7 @@
     (lab :label.c)
     (call printf.c "hello %s" "file 3")
 
-    (var :x.c . (bool .) (true))
+    (var :x.c . (bool) (true))
     (call printf.c "hello %d" (sizeof x.c))
 
     (var :y.c . MyObject2.mc (oconstr MyObject2.mc (kv a2.c +12) (kv a3.c (true))))
@@ -119,11 +119,11 @@
 
     (call printf.c "hello %d\0A" (at z.c +0))
     (call printf.c "hello %d\0A" (at z.c +1))
-    (call printf.c "hello %d\0A" (mul (i +64 atomic) (at z.c +1) (at z.c +2)))
-    (call printf.c "hello %d\0A" (mod (i +64 atomic) +9 +4))
-    (call printf.c "hello %d\0A" (div (i +64 atomic) +9 +4))
-    (call printf.c "hello %d\0A" (shr (i +64 atomic) +9 +1))
-    (call printf.c "hello %d\0A" (shl (i +64 atomic) +9 +4))
+    (call printf.c "hello %d\0A" (mul (i +64 (atomic)) (at z.c +1) (at z.c +2)))
+    (call printf.c "hello %d\0A" (mod (i +64 (atomic)) +9 +4))
+    (call printf.c "hello %d\0A" (div (i +64 (atomic)) +9 +4))
+    (call printf.c "hello %d\0A" (shr (i +64 (atomic)) +9 +1))
+    (call printf.c "hello %d\0A" (shl (i +64 (atomic)) +9 +4))
     (call printf.c "hello %d\0A" (eq +9 +4))
     (call printf.c "hello %d\0A" (neq +9 +4))
     (call printf.c "hello %d\0A" (le +9 +4))
@@ -131,10 +131,10 @@
   )
   )
 
-  (proc :main.c . (i +32 atomic) . (stmts
-    1,1,hello.nim(var :x1.m . (i +32 .) +12)
-    1,2,hello.nim(var :z2.m . (ptr (c +8 .)) (cast (ptr (c +8 .)) (suf "hello" "r")))
-    1,3,hello.nim(var :z3.m . (ptr (c +8 .)) (cast (ptr (c +8 .)) (suf "hello" "r")))
+  (proc :main.c . (i +32 (atomic)) . (stmts
+    1,1,hello.nim(var :x1.m . (i +32) +12)
+    1,2,hello.nim(var :z2.m . (ptr (c +8)) (cast (ptr (c +8)) (suf "hello" "r")))
+    1,3,hello.nim(var :z3.m . (ptr (c +8)) (cast (ptr (c +8)) (suf "hello" "r")))
     1,4,hello.nim(call foo.m2)
     (call foo.m3)
     (call foo.if)
@@ -143,18 +143,18 @@
     (call foo.neg)
     (call foo.cs2)
 
-    (var :x.c . (i +8 .) (suf +12 "i8"))
-    (var :x.m . (i +16 .) (suf -12 "i16"))
-    (var :x1 . (i +32 .) (suf +12 "i32"))
-    (var :y1 . (u +32 .) (suf +12 "u32"))
-    (var :y2 . (u +64 .) (suf +12 "u64"))
-    (var :y3 . (u +16 .) (suf +12 "u16"))
-    (var :y4 . (u +8 .) (suf +12 "u8"))
-    (var :z . (f +32 .) (suf +12.5 "f32"))
-    (var :z1 . (f +64 .) (suf +12.5 "f64"))
-    (var :z2 . (ptr (c +8 .)) (cast (ptr (c +8 .)) (suf "hello" "r")))
+    (var :x.c . (i +8) (suf +12 "i8"))
+    (var :x.m . (i +16) (suf -12 "i16"))
+    (var :x1 . (i +32) (suf +12 "i32"))
+    (var :y1 . (u +32) (suf +12 "u32"))
+    (var :y2 . (u +64) (suf +12 "u64"))
+    (var :y3 . (u +16) (suf +12 "u16"))
+    (var :y4 . (u +8) (suf +12 "u8"))
+    (var :z . (f +32) (suf +12.5 "f32"))
+    (var :z1 . (f +64) (suf +12.5 "f64"))
+    (var :z2 . (ptr (c +8)) (cast (ptr (c +8)) (suf "hello" "r")))
 
-    (var :add2.m . (i +32 .) (add (i +32 .) +214 +21))
+    (var :add2.m . (i +32) (add (i +32) +214 +21))
     (emit "(void)" x.c ";")
     (ret +0)
   ))
