@@ -34,7 +34,7 @@ type
     hasCall: bool
 
   Context = object
-    inLoop, inAddr, inAsgnTarget: int
+    inLoop, inAddr, inAsgnTarget, inArrayIndex: int
     res: ProcBodyProps
     scopes: seq[Scope]
 
@@ -57,7 +57,8 @@ const
                  # used in loops more important.
 
 proc analyseProcBody(m: Module; t: Tree; n: NodePos; c: var Context) =
-  case t[n].kind
+  let k = t[n].kind
+  case k
   of Empty, Ident, SymDef, IntLit, UIntLit, FloatLit, CharLit, StrLit, Err,
      NilC, FalseC, TrueC, SizeofC:
     discard
@@ -96,7 +97,9 @@ proc analyseProcBody(m: Module; t: Tree; n: NodePos; c: var Context) =
       else:
         inc entry.usages
       inc entry.weight, c.inLoop*LoopWeight
-      if c.inAddr > 0:
+      if (c.inAddr + c.inArrayIndex) > 0:
+        # arrays on the stack cannot be in registers either as registers
+        # cannot be aliased!
         entry.props.incl AddrTaken
   of EmitC:
     for ch in sons(t, n):
@@ -108,7 +111,9 @@ proc analyseProcBody(m: Module; t: Tree; n: NodePos; c: var Context) =
     dec c.inLoop
   of AtC, PatC:
     let (a, idx) = sons2(t, n)
+    if k == AtC: inc c.inArrayIndex
     analyseProcBody(m, t, a, c)
+    if k == AtC: dec c.inArrayIndex
     # don't pessimize array indexes:
     let oldAddr = c.inAddr
     let oldTarget = c.inAsgnTarget

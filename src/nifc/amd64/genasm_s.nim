@@ -80,7 +80,7 @@ proc genLabel(c: var GeneratedCode; t: Tree; n: NodePos) =
   if t[dname].kind == SymDef:
     let lit = t[dname].litId
     let name = c.m.lits.strings[lit]
-    c.buildTree LabT, t[n].info:
+    c.buildTreeI LabT, t[n].info:
       c.code.addSymDef name, t[dname].info
   else:
     error c.m, "expected SymbolDef but got: ", t, n
@@ -90,11 +90,14 @@ proc genGoto(c: var GeneratedCode; t: Tree; n: NodePos) =
   if t[dname].kind == Sym:
     let lit = t[dname].litId
     let name = c.m.lits.strings[lit]
-    c.buildTree JmpT, t[n].info:
+    c.buildTreeI JmpT, t[n].info:
       c.addSym name, t[dname].info
   else:
     error c.m, "expected Symbol but got: ", t, n
 
+# XXX `case` not implemented
+
+#[
 proc genBranchValue(c: var GeneratedCode; t: Tree; n: NodePos) =
   if t[n].kind in {NifcKind.IntLit, UIntLit, CharLit, Sym}:
     c.genx t, n, WantValue
@@ -192,11 +195,36 @@ proc genSwitch(c: var GeneratedCode; t: Tree; caseStmt: NodePos) =
   if not hasElif and not hasElse:
     error c.m, "`case` expects `of` or `else` but got: ", t, caseStmt
   c.defineLabel endif, t[caseStmt].info
+]#
+
+proc genProlog*(c: var GeneratedCode) =
+  discard
+
+proc genEpilog*(c: var GeneratedCode) =
+  discard
+
+proc getExitProcLabel(c: var GeneratedCode): Label =
+  if c.exitProcLabel.int < 0:
+    c.exitProcLabel = getLabel(c)
+  result = c.exitProcLabel
 
 proc genReturn(c: var GeneratedCode; t: Tree; n: NodePos) =
-  c.buildTree RetT, t[n].info:
-    genTypeof c, n.firstSon
-    c.genx t, n.firstSon, WantValue
+  var d = resultWin64(getAsmSlot(c, n))
+  c.genx t, n.firstSon, d
+  let lab = getExitProcLabel(c)
+  # we don't generate a `ret` instruction as we might need to
+  # free the stack and we don't know yet how much stack we need!
+  c.buildTreeI JmpT, t[n].info:
+    c.useLabel lab, t[n].info
+
+proc genLocalVar(c: var GeneratedCode; t: Tree; n: NodePos) =
+  let v = asVarDecl(t, n)
+  var typ = typeToSlot(c, v.typ)
+  assert t[v.name].kind == SymDef
+  let name = t[v.name].litId
+  locals[name] = typ
+  if t[v.value].kind != Empty:
+    discard
 
 proc genStmt(c: var GeneratedCode; t: Tree; n: NodePos) =
   case t[n].kind
@@ -204,14 +232,14 @@ proc genStmt(c: var GeneratedCode; t: Tree; n: NodePos) =
     discard
   of StmtsC, ScopeC:
     c.openScope()
-    c.buildTree StmtsT, t[n].info:
-      for ch in sons(t, n):
-        genStmt(c, t, ch)
+    for ch in sons(t, n):
+      genStmt(c, t, ch)
     c.closeScope()
   of CallC:
-    genCall c, t, n
+    var d = Location(kind: Undef)
+    genCall c, t, n, d
   of VarC:
-    genVarDecl c, t, n, IsLocal
+    genLocalVar c, t, n
   of GvarC:
     moveToDataSection:
       genVarDecl c, t, n, IsGlobal
@@ -227,7 +255,7 @@ proc genStmt(c: var GeneratedCode; t: Tree; n: NodePos) =
   of IfC: genIf c, t, n
   of WhileC: genWhile c, t, n
   of BreakC: genBreak c, t, n
-  of CaseC: genSwitch c, t, n
+  #of CaseC: genSwitch c, t, n
   of LabC: genLabel c, t, n
   of JmpC: genGoto c, t, n
   of RetC: genReturn c, t, n

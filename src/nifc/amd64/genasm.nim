@@ -43,7 +43,7 @@ type
     scopes: seq[Scope]
     returnSlot: AsmSlot
     returnLoc: Location
-    threadLocalsSize, globalsSize: int
+    exitProcLabel: Label
     globals: Table[LitId, AsmSlot]
 
   LitId = nifc_model.StrId
@@ -237,6 +237,7 @@ include genasm_s
 proc genProcDecl(c: var GeneratedCode; t: Tree; n: NodePos) =
   c.labels = 0 # reset so that we produce nicer code
   c.temps = 0
+  c.exitProcLabel = Label(-1)
   let prc = asProcDecl(t, n)
   if t[prc.body].kind == Empty: return # ignore procs without body
   # (proc SYMBOLDEF Params Type ProcPragmas (OR . StmtList)

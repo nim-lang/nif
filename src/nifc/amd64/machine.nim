@@ -380,12 +380,6 @@ proc freeScope*(a: var RegAllocator; vars: openArray[Location]) =
       discard "nothing to do"
   a.usedStackSpace = m
 
-proc genProlog*(a: RegAllocator) =
-  discard
-
-proc genEpilog*(a: RegAllocator) =
-  discard
-
 proc opcodeSuffix*(s: AsmSlot): string =
   if s.kind == AFloat:
     case s.size
