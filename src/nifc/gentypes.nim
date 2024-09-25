@@ -159,7 +159,7 @@ proc genFieldPragmas(c: var GeneratedCode; types: TypeGraph; n: NodePos; bits: v
   else:
     error c.m, "expected field pragmas but got: ", types, n
 
-proc getNumberQualify(types: TypeGraph; t: TypeId): string =
+proc getNumberQualifier(types: TypeGraph; t: TypeId): string =
   case types[t].kind
   of RoC:
     result = "const "
@@ -169,7 +169,7 @@ proc getNumberQualify(types: TypeGraph; t: TypeId): string =
   else:
     raiseAssert "unreachable: " & $types[t].kind
 
-proc getPtrQualify(types: TypeGraph; t: TypeId): string =
+proc getPtrQualifier(types: TypeGraph; t: TypeId): string =
   case types[t].kind
   of RoC:
     result = "const "
@@ -194,7 +194,7 @@ proc genType(c: var GeneratedCode; types: TypeGraph; t: TypeId; name = "") =
   template atomNumber(types: TypeGraph, t: TypeId, name: string, isBool = false) =
     if isBool:
       for son in sons(types, t):
-        c.add getNumberQualify(types, son)
+        c.add getNumberQualifier(types, son)
       atom(name)
     else:
       var i = 0
@@ -203,7 +203,7 @@ proc genType(c: var GeneratedCode; types: TypeGraph; t: TypeId; name = "") =
         if i == 0:
           s = name & types.integralBits(son)
         else:
-          c.add getNumberQualify(types, son)
+          c.add getNumberQualifier(types, son)
         inc i
       atom(s)
 
@@ -213,7 +213,7 @@ proc genType(c: var GeneratedCode; types: TypeGraph; t: TypeId; name = "") =
       if i == 0:
         discard
       else:
-        c.add getPtrQualify(types, son)
+        c.add getPtrQualifier(types, son)
       inc i
     genType c, types, elementType(types, t)
     c.add Star
