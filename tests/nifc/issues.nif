@@ -89,9 +89,11 @@
 
 
   (proc :foo.cs2 . . . (stmts
-        (scope
+    (scope
     (call printf.c "hello %s" "file 1")
     )
+
+    (var :x.mangled (pragmas (attr "used") (was "x")) (bool .) .)
 
     (asgn x.gvar (false))
     (asgn x.tvar (false))
@@ -155,6 +157,8 @@
     (var :z2 . (ptr (c +8)) (cast (ptr (c +8)) (suf "hello" "r")))
 
     (var :add2.m . (i +32) (add (i +32) +214 +21))
+    (call printf.c "not: %d\0A" (bitnot (i +32) +12))
+
     (emit "(void)" x.c ";")
     (ret +0)
   ))
