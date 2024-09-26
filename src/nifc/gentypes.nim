@@ -181,63 +181,65 @@ proc getPtrQualifier(types: TypeGraph; t: TypeId): string =
   else:
     raiseAssert "unreachable: " & $types[t].kind
 
-proc genType(c: var GeneratedCode; types: TypeGraph; t: TypeId; name = "") =
-  template maybeAddName =
-    if name != "":
-      c.add Space
-      c.add name
+proc genType(c: var GeneratedCode; types: TypeGraph; t: TypeId; name = "")
 
-  template atom(s: string) =
-    c.add s
-    maybeAddName()
+template maybeAddName(c: var GeneratedCode; name: string) =
+  if name != "":
+    c.add Space
+    c.add name
 
-  template atomNumber(types: TypeGraph, t: TypeId, name: string, isBool = false) =
-    if isBool:
-      for son in sons(types, t):
-        c.add getNumberQualifier(types, son)
-      atom(name)
-    else:
-      var i = 0
-      var s = ""
-      for son in sons(types, t):
-        if i == 0:
-          s = name & types.integralBits(son)
-        else:
-          c.add getNumberQualifier(types, son)
-        inc i
-      atom(s)
+template atom(c: var GeneratedCode; s: string; name: string) =
+  c.add s
+  maybeAddName(c, name)
 
-  template atomPointer(types: TypeGraph, t: TypeId) =
+proc atomNumber(c: var GeneratedCode; types: TypeGraph, t: TypeId, typeName: string, name: string, isBool = false) =
+  if isBool:
+    for son in sons(types, t):
+      c.add getNumberQualifier(types, son)
+    atom(c, typeName, name)
+  else:
     var i = 0
+    var s = ""
     for son in sons(types, t):
       if i == 0:
-        discard
+        s = typeName & types.integralBits(son)
       else:
-        c.add getPtrQualifier(types, son)
+        c.add getNumberQualifier(types, son)
       inc i
-    genType c, types, elementType(types, t)
-    c.add Star
-    maybeAddName()
+    atom(c, s, name)
 
+proc atomPointer(c: var GeneratedCode; types: TypeGraph, t: TypeId; name: string) =
+  var i = 0
+  for son in sons(types, t):
+    if i == 0:
+      discard
+    else:
+      c.add getPtrQualifier(types, son)
+    inc i
+  genType c, types, elementType(types, t)
+  c.add Star
+  maybeAddName(c, name)
+
+proc genType(c: var GeneratedCode; types: TypeGraph; t: TypeId; name = "") =
   case types[t].kind
-  of VoidC: atom "void"
+  of VoidC: atom(c, "void", name)
   of IntC:
-    atomNumber(types, t, "NI")
+    atomNumber(c, types, t, "NI", name)
   of UIntC:
-    atomNumber(types, t, "NU")
+    atomNumber(c, types, t, "NU", name)
   of FloatC:
-    atomNumber(types, t, "NF")
+    atomNumber(c, types, t, "NF", name)
   of BoolC:
-    atomNumber(types, t, "NB8", isBool = true)
+    atomNumber(c, types, t, "NB8", name, isBool = true)
   of CharC:
-    atomNumber(types, t, "NC")
+    atomNumber(c, types, t, "NC", name)
   of Sym:
-    atom mangle(c.m.lits.strings[types[t].litId])
+    atom(c, mangle(c.m.lits.strings[types[t].litId]), name)
   of PtrC, APtrC:
-    atomPointer(types, t)
+    atomPointer(c, types, t, name)
   of FlexarrayC:
     genType c, types, elementType(types, t)
-    maybeAddName()
+    maybeAddName(c, name)
     c.add BracketLe
     c.add BracketRi
   of ProctypeC:
@@ -251,7 +253,7 @@ proc genType(c: var GeneratedCode; types: TypeGraph; t: TypeId; name = "") =
     var isVarargs = false
     genProcTypePragmas c, types, decl.pragmas, isVarargs
     c.add Star # "(*fn)"
-    maybeAddName()
+    maybeAddName(c, name)
     c.add ParRi
     c.add ParLe
     var i = 0
