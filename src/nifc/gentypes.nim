@@ -159,23 +159,29 @@ proc genFieldPragmas(c: var GeneratedCode; types: TypeGraph; n: NodePos; bits: v
   else:
     error c.m, "expected field pragmas but got: ", types, n
 
-proc getNumberQualifier(types: TypeGraph; t: TypeId): string =
+proc getNumberQualifier(c: var GeneratedCode; types: TypeGraph; t: TypeId): string =
   case types[t].kind
   of RoC:
     result = "const "
   of AtomicC:
-    # TODO: cpp doesn't support _Atomic
-    result = ""
+    if c.m.config.backend == backendC:
+      result = "_Atomic "
+    else:
+      # TODO: cpp doesn't support _Atomic
+      result = ""
   else:
     raiseAssert "unreachable: " & $types[t].kind
 
-proc getPtrQualifier(types: TypeGraph; t: TypeId): string =
+proc getPtrQualifier(c: var GeneratedCode; types: TypeGraph; t: TypeId): string =
   case types[t].kind
   of RoC:
     result = "const "
   of AtomicC:
-    # TODO: cpp doesn't support _Atomic
-    result = ""
+    if c.m.config.backend == backendC:
+      result = "_Atomic "
+    else:
+      # TODO: cpp doesn't support _Atomic
+      result = ""
   of RestrictC:
     result = "restrict "
   else:
@@ -195,7 +201,7 @@ template atom(c: var GeneratedCode; s: string; name: string) =
 proc atomNumber(c: var GeneratedCode; types: TypeGraph, t: TypeId, typeName: string, name: string, isBool = false) =
   if isBool:
     for son in sons(types, t):
-      c.add getNumberQualifier(types, son)
+      c.add getNumberQualifier(c, types, son)
     atom(c, typeName, name)
   else:
     var i = 0
@@ -204,7 +210,7 @@ proc atomNumber(c: var GeneratedCode; types: TypeGraph, t: TypeId, typeName: str
       if i == 0:
         s = typeName & types.integralBits(son)
       else:
-        c.add getNumberQualifier(types, son)
+        c.add getNumberQualifier(c, types, son)
       inc i
     atom(c, s, name)
 
@@ -214,7 +220,7 @@ proc atomPointer(c: var GeneratedCode; types: TypeGraph, t: TypeId; name: string
     if i == 0:
       discard
     else:
-      c.add getPtrQualifier(types, son)
+      c.add getPtrQualifier(c, types, son)
     inc i
   genType c, types, elementType(types, t)
   c.add Star
