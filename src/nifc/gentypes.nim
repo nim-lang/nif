@@ -110,7 +110,7 @@ proc traverseTypes(m: Module; o: var TypeOrder) =
     else: discard
 
 template integralBits(types: TypeGraph; t: TypeId): string =
-  let lit = types[t.firstSon].litId
+  let lit = types[t].litId
   let r = c.m.lits.strings[lit]
   let res = parseBiggestInt(r)
   case res
@@ -159,32 +159,93 @@ proc genFieldPragmas(c: var GeneratedCode; types: TypeGraph; n: NodePos; bits: v
   else:
     error c.m, "expected field pragmas but got: ", types, n
 
-proc genType(c: var GeneratedCode; types: TypeGraph; t: TypeId; name = "") =
-  template maybeAddName =
-    if name != "":
-      c.add Space
-      c.add name
-
-  template atom(s: string) =
-    c.add s
-    maybeAddName()
+proc getNumberQualifier(c: var GeneratedCode; types: TypeGraph; t: TypeId): string =
   case types[t].kind
-  of VoidC: atom "void"
-  of IntC: atom "NI" & types.integralBits(t)
-  of UIntC: atom "NU" & types.integralBits(t)
-  of FloatC: atom "NF" & types.integralBits(t)
-  of BoolC: atom "NB8"
-  of CharC: atom "NC" & types.integralBits(t)
+  of RoC:
+    result = "const "
+  of AtomicC:
+    if c.m.config.backend == backendC:
+      result = "_Atomic "
+    else:
+      # TODO: cpp doesn't support _Atomic
+      result = ""
+  else:
+    raiseAssert "unreachable: " & $types[t].kind
+
+proc getPtrQualifier(c: var GeneratedCode; types: TypeGraph; t: TypeId): string =
+  case types[t].kind
+  of RoC:
+    result = "const "
+  of AtomicC:
+    if c.m.config.backend == backendC:
+      result = "_Atomic "
+    else:
+      # TODO: cpp doesn't support _Atomic
+      result = ""
+  of RestrictC:
+    result = "restrict "
+  else:
+    raiseAssert "unreachable: " & $types[t].kind
+
+proc genType(c: var GeneratedCode; types: TypeGraph; t: TypeId; name = "")
+
+template maybeAddName(c: var GeneratedCode; name: string) =
+  if name != "":
+    c.add Space
+    c.add name
+
+template atom(c: var GeneratedCode; s: string; name: string) =
+  c.add s
+  maybeAddName(c, name)
+
+proc atomNumber(c: var GeneratedCode; types: TypeGraph, t: TypeId, typeName: string, name: string, isBool = false) =
+  if isBool:
+    for son in sons(types, t):
+      c.add getNumberQualifier(c, types, son)
+    atom(c, typeName, name)
+  else:
+    var i = 0
+    var s = ""
+    for son in sons(types, t):
+      if i == 0:
+        s = typeName & types.integralBits(son)
+      else:
+        c.add getNumberQualifier(c, types, son)
+      inc i
+    atom(c, s, name)
+
+proc atomPointer(c: var GeneratedCode; types: TypeGraph, t: TypeId; name: string) =
+  var i = 0
+  for son in sons(types, t):
+    if i == 0:
+      discard
+    else:
+      c.add getPtrQualifier(c, types, son)
+    inc i
+  genType c, types, elementType(types, t)
+  c.add Star
+  maybeAddName(c, name)
+
+proc genType(c: var GeneratedCode; types: TypeGraph; t: TypeId; name = "") =
+  case types[t].kind
+  of VoidC: atom(c, "void", name)
+  of IntC:
+    atomNumber(c, types, t, "NI", name)
+  of UIntC:
+    atomNumber(c, types, t, "NU", name)
+  of FloatC:
+    atomNumber(c, types, t, "NF", name)
+  of BoolC:
+    atomNumber(c, types, t, "NB8", name, isBool = true)
+  of CharC:
+    atomNumber(c, types, t, "NC", name)
   of Sym:
-    atom mangle(c.m.lits.strings[types[t].litId])
+    atom(c, mangle(c.m.lits.strings[types[t].litId]), name)
   of PtrC, APtrC:
-    # XXX implement `ro` etc annotations
-    genType c, types, elementType(types, t)
-    c.add Star
-    maybeAddName()
+    atomPointer(c, types, t, name)
   of FlexarrayC:
     genType c, types, elementType(types, t)
-    maybeAddName()
+    maybeAddName(c, name)
     c.add BracketLe
     c.add BracketRi
   of ProctypeC:
@@ -198,7 +259,7 @@ proc genType(c: var GeneratedCode; types: TypeGraph; t: TypeId; name = "") =
     var isVarargs = false
     genProcTypePragmas c, types, decl.pragmas, isVarargs
     c.add Star # "(*fn)"
-    maybeAddName()
+    maybeAddName(c, name)
     c.add ParRi
     c.add ParLe
     var i = 0

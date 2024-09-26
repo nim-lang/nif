@@ -3,36 +3,36 @@
   (incl "<stdio.h>")
   (type 1,1,hello.nim :MyObject.c . (object . ))
   (type :MyProc.e . (proctype . (params) (void) . ))
-  (type :MyEnum.e . (enum (u +8 .)
+  (type :MyEnum.e . (enum (u +8)
     (efld :ValueA +0)
     (efld :ValueB +1)
     (efld :ValueC +6)
   ))
 
   (type :MyObject2.m .
-  (object . (fld :a1 . (i +32 atomic))
-    (fld :a2 . (i +64 atomic))
-    (fld :a3 . (bool .))
+  (object . (fld :a1 . (i +32 (atomic)))
+    (fld :a2 . (i +64 (atomic)))
+    (fld :a3 . (bool (ro)))
     (fld :a4 . MyObject3.m)
   )
   )
 
   (type :MyArray.m .
-  (array (i +64 atomic) +10)
+  (array (i +64 (atomic)) +10)
   )
 
   (type :MyObject3.m .
-  (object . (fld :a1 . (i +32 atomic))
-    (fld :a2 . (i +64 atomic))
-    (fld :a3 . (bool .))
+  (object . (fld :a1 . (i +32 (atomic)))
+    (fld :a2 . (i +64 (atomic)))
+    (fld :a3 . (bool (atomic)))
     (fld :a4 . MyArray.m)
   )
   )
 
   (type :MyObject4.m .
-  (union . (fld :a1 . (i +32 atomic))
-    (fld :a2 . (i +64 atomic))
-    (fld :a3 . (bool .))
+  (union . (fld :a1 . (i +32 (atomic)))
+    (fld :a2 . (i +64 (atomic)))
+    (fld :a3 . (bool (ro)))
     (fld :a4 . MyObject3.m)
   )
   )
@@ -43,67 +43,67 @@
   ))
 
   (nodecl (proc :foo2.c . (void) . (stmts
-    (var :x.c . (i +32 .) +12)
+    (var :x.c . (i +32 (ro)) +12)
     (call printf.c "foo %s\0A" "abc")
     (call printf.c "foo %d\0A" x.c)
   )))
 
   (type :MyObject.ptr.flexarray .
-  (object . (fld :a1 . (i +32 atomic))
-    (fld :a2 . (i +64 atomic))
-    (fld :a3 . (bool .))
+  (object . (fld :a1 . (i +32 (atomic)))
+    (fld :a2 . (i +64 (atomic)))
+    (fld :a3 . (bool))
     (fld :a4 . (ptr MyObject.flexarray))
   )
   )
 
   (type :MyObject.flexarray .
-  (object . (fld :a1 . (i +32 atomic))
-    (fld :a2 . (i +64 atomic))
-    (fld :a3 . (bool .))
-    (fld :a4 . (flexarray (i +64 .)))
+  (object . (fld :a1 . (i +32 (atomic)))
+    (fld :a2 . (i +64 (atomic)))
+    (fld :a3 . (bool))
+    (fld :a4 . (flexarray (i +64)))
   )
   )
 
   (type :MyObject.ptr .
-  (object . (fld :a1 . (i +32 atomic))
-    (fld :a2 . (i +64 atomic))
-    (fld :a3 . (bool .))
-    (fld :a4 . (ptr (i +64 .)))
+  (object . (fld :a1 . (i +32 (atomic)))
+    (fld :a2 . (i +64 (atomic)))
+    (fld :a3 . (bool (atomic) (ro)))
+    (fld :a4 . (ptr (i +64 (ro))))
   )
   )
 
   (type :MyObject.aptr .
-  (object . (fld :a1 . (i +32 atomic))
-    (fld :a2 . (i +64 atomic))
-    (fld :a3 . (bool .))
-    (fld :a4 . (aptr (i +64 .)))
+  (object . (fld :a1 . (i +32 (atomic)))
+    (fld :a2 . (i +64 (atomic)))
+    (fld :a3 . (bool))
+    (fld :a4 . (aptr (i +64) (ro)))
   )
   )
 
   (type :MyObject.ptr.object .
-  (object . (fld :a1 . (i +32 atomic))
-    (fld :a2 . (i +64 atomic))
-    (fld :a3 . (bool .))
-    (fld :a4 . (ptr MyObject3.m .))
+  (object . (fld :a1 . (i +32 (atomic)))
+    (fld :a2 . (i +64 (atomic)))
+    (fld :a3 . (bool))
+    (fld :a4 . (ptr MyObject3.m))
   )
   )
 
 
   (type :MyObject.my.sequence .
   (object .
-    (fld :len . (i -1 .))
-    (fld :p . (ptr MyObject.sequence.base .))
+    (fld :len . (i -1))
+    (fld :p . (ptr MyObject.sequence.base (ro)))
   )
   )
 
   (type :MyObject.sequence.base .
     (object .
-      (fld :cap . (i -1 .))
-      (fld :data . (flexarray (i +64 .)))
+      (fld :cap . (i -1 (ro)))
+      (fld :data . (flexarray (i +64)))
   ))
 
-  (proc :main.c . (i +32 atomic) . (stmts
-    (var :x.c . (i +32 .) +12)
+  (proc :main.c . (i +32 (atomic)) . (stmts
+    (var :x.c . (i +32 (ro)) +12)
     (call printf.c "hello %s\0A" "abc")
     (call printf.c "hello %d\0A" (suf +12 "i64"))
     (call printf.c "hello %d\0A" x.c)
