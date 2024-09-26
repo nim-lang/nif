@@ -88,12 +88,13 @@
   (tvar :x.tvar . (bool) .)
 
 
+  (var :x.mangled (pragmas (attr "used") (was "x")) (bool) .)
+
   (proc :foo.cs2 . . . (stmts
     (scope
     (call printf.c "hello %s" "file 1")
     )
 
-    (var :x.mangled (pragmas (attr "used") (was "x")) (bool) .)
 
     (asgn x.gvar (false))
     (asgn x.tvar (false))
@@ -106,26 +107,26 @@
     (call printf.c "hello %s" "file 3")
 
     (var :x.c . (bool) (true))
-    (call printf.c "hello %d" (sizeof x.c))
+    (call printf.c "hello %lu" (sizeof x.c))
 
     (var :y.c . MyObject2.mc (oconstr MyObject2.mc (kv a2.c +12) (kv a3.c (true))))
 
-    (call printf.c "hello %d\0A" (dot y.c a2.c +0))
+    (call printf.c "hello %ld\0A" (dot y.c a2.c +0))
 
-    (call printf.c "hello %d\0A" (sizeof x.c))
+    (call printf.c "hello %lu\0A" (sizeof x.c))
 
     (call printf.c "hello %d\0A" (and (par +1) (par +0)))
     (call printf.c "hello %d\0A" (or (par +1) (par -0)))
 
     (var :z.c . MyArray.mc (aconstr MyArray.mc +1 +2 +3))
 
-    (call printf.c "hello %d\0A" (at z.c +0))
-    (call printf.c "hello %d\0A" (at z.c +1))
-    (call printf.c "hello %d\0A" (mul (i +64 (atomic)) (at z.c +1) (at z.c +2)))
-    (call printf.c "hello %d\0A" (mod (i +64 (atomic)) +9 +4))
-    (call printf.c "hello %d\0A" (div (i +64 (atomic)) +9 +4))
-    (call printf.c "hello %d\0A" (shr (i +64 (atomic)) +9 +1))
-    (call printf.c "hello %d\0A" (shl (i +64 (atomic)) +9 +4))
+    (call printf.c "hello %ld\0A" (at z.c +0))
+    (call printf.c "hello %ld\0A" (at z.c +1))
+    (call printf.c "hello %ld\0A" (mul (i +64) (at z.c +1) (at z.c +2)))
+    (call printf.c "hello %ld\0A" (mod (i +64) +9 +4))
+    (call printf.c "hello %ld\0A" (div (i +64) +9 +4))
+    (call printf.c "hello %ld\0A" (shr (i +64) +9 +1))
+    (call printf.c "hello %ld\0A" (shl (i +64) +9 +4))
     (call printf.c "hello %d\0A" (eq +9 +4))
     (call printf.c "hello %d\0A" (neq +9 +4))
     (call printf.c "hello %d\0A" (le +9 +4))
@@ -133,7 +134,7 @@
   )
   )
 
-  (proc :main.c . (i +32 (atomic)) . (stmts
+  (proc :main.c . (i +32) . (stmts
     1,1,hello.nim(var :x1.m . (i +32) +12)
     1,2,hello.nim(var :z2.m . (ptr (c +8)) (cast (ptr (c +8)) (suf "hello" "r")))
     1,3,hello.nim(var :z3.m . (ptr (c +8)) (cast (ptr (c +8)) (suf "hello" "r")))
