@@ -360,25 +360,22 @@ proc freeTempRaw*(a: var RegAllocator; loc: Location) =
   else:
     discard "nothing to do"
 
-proc freeScope*(a: var RegAllocator; vars: openArray[Location]) =
+proc freeScope*(a: var RegAllocator; loc: Location) =
   # useful when we know that a scope exit is about to happen.
   # We then free stack slots so that they can be reused.
-  a.maxStackSpace = max(a.maxStackSpace, a.usedStackSpace)
-  var m = a.usedStackSpace
-  for loc in vars:
-    case loc.kind
-    of InReg, InRegOffset:
-      a.used.excl loc.reg1
-    of InRegRegScaledOffset:
-      a.used.excl loc.reg1
-      a.used.excl loc.reg2
-    of InRegFp:
-      a.usedFloats.excl loc.regf
-    of InStack:
-      m = min(m, loc.slot)
-    else:
-      discard "nothing to do"
-  a.usedStackSpace = m
+  case loc.kind
+  of InReg, InRegOffset:
+    a.used.excl loc.reg1
+  of InRegRegScaledOffset:
+    a.used.excl loc.reg1
+    a.used.excl loc.reg2
+  of InRegFp:
+    a.usedFloats.excl loc.regf
+  of InStack:
+    a.maxStackSpace = max(a.maxStackSpace, a.usedStackSpace)
+    a.usedStackSpace = min(a.usedStackSpace, loc.slot)
+  else:
+    discard "nothing to do"
 
 proc opcodeSuffix*(s: AsmSlot): string =
   if s.kind == AFloat:

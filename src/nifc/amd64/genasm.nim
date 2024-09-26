@@ -23,9 +23,8 @@ type
 
 type
   Scope = object
-    # usedRegisters: RegisterSet # XXX later once we have a `frame` abstraction
-    # usedMem: (int, int)
-    syms: Table[LitId, AsmSlot]
+    vars: seq[LitId]
+
   GeneratedCode* = object
     m: Module
     rodata, data: TokenBuf
@@ -47,12 +46,6 @@ type
     globals: Table[LitId, AsmSlot]
 
   LitId = nifc_model.StrId
-
-proc openScope(c: var GeneratedCode) =
-  c.scopes.add Scope()
-
-proc closeScope(c: var GeneratedCode) =
-  discard c.scopes.pop()
 
 proc initGeneratedCode*(m: sink Module; intmSize: int): GeneratedCode =
   result = GeneratedCode(m: m, intmSize: intmSize)
@@ -232,6 +225,7 @@ template moveToDataSection(body: untyped) =
     c.data.add c.code[i]
   shrink c.code, oldLen
 
+include register_allocator
 include genasm_s
 
 proc genProcDecl(c: var GeneratedCode; t: Tree; n: NodePos) =

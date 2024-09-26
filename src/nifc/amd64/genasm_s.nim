@@ -217,12 +217,6 @@ proc genReturn(c: var GeneratedCode; t: Tree; n: NodePos) =
   c.buildTreeI JmpT, t[n].info:
     c.useLabel lab, t[n].info
 
-proc allocRegsForVars(c: var GeneratedCode; t: Tree; props: ProcBodyProps) =
-  for v in props.vars:
-    let decl = asVarDecl(t, v.decl)
-    var typ = typeToSlot(c, decl.typ)
-    c.locals[v.name] = allocVar(c.rega, typ, v.props)
-
 proc genLocalVar(c: var GeneratedCode; t: Tree; n: NodePos) =
   let v = asVarDecl(t, n)
   assert t[v.name].kind == SymDef
@@ -230,17 +224,25 @@ proc genLocalVar(c: var GeneratedCode; t: Tree; n: NodePos) =
   assert c.locals.hasKey(name)
   if t[v.value].kind != Empty:
     # generate the assignment:
-    discard
+    genx c, t, v.value, c.locals[name]
+
+proc genGlobalVar(c: var GeneratedCode; t: Tree; n: NodePos) =
+  let v = asVarDecl(t, n)
+  assert t[v.name].kind == SymDef
+  let name = t[v.name].litId
+
+  assert c.globals.hasKey(name)
+  if t[v.value].kind != Empty:
+    # generate the assignment:
+    genx c, t, v.value, c.globals[name]
 
 proc genStmt(c: var GeneratedCode; t: Tree; n: NodePos) =
   case t[n].kind
   of Empty:
     discard
   of StmtsC, ScopeC:
-    c.openScope()
     for ch in sons(t, n):
       genStmt(c, t, ch)
-    c.closeScope()
   of CallC:
     var d = Location(kind: Undef)
     genCall c, t, n, d
@@ -255,8 +257,8 @@ proc genStmt(c: var GeneratedCode; t: Tree; n: NodePos) =
   of ConstC:
     moveToDataSection:
       genConstDecl c, t, n
-  of EmitC:
-    genEmitStmt c, t, n
+  #of EmitC:
+  #  genEmitStmt c, t, n
   of AsgnC: genAsgn c, t, n
   of IfC: genIf c, t, n
   of WhileC: genWhile c, t, n
