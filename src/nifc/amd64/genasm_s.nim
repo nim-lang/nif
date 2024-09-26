@@ -217,13 +217,19 @@ proc genReturn(c: var GeneratedCode; t: Tree; n: NodePos) =
   c.buildTreeI JmpT, t[n].info:
     c.useLabel lab, t[n].info
 
+proc allocRegsForVars(c: var GeneratedCode; t: Tree; props: ProcBodyProps) =
+  for v in props.vars:
+    let decl = asVarDecl(t, v.decl)
+    var typ = typeToSlot(c, decl.typ)
+    c.locals[v.name] = allocVar(c.rega, typ, v.props)
+
 proc genLocalVar(c: var GeneratedCode; t: Tree; n: NodePos) =
   let v = asVarDecl(t, n)
-  var typ = typeToSlot(c, v.typ)
   assert t[v.name].kind == SymDef
   let name = t[v.name].litId
-  locals[name] = typ
+  assert c.locals.hasKey(name)
   if t[v.value].kind != Empty:
+    # generate the assignment:
     discard
 
 proc genStmt(c: var GeneratedCode; t: Tree; n: NodePos) =

@@ -139,18 +139,6 @@ proc combine(c: var GeneratedCode; a, b: Location; opc: TagId) =
       emitLoc c, a
       emitLoc c, b
 
-template cmpOp(opr) {.dirty.} =
-  c.buildTree opr:
-    let (a, b) = sons2(t, n)
-    genTypeof c, a
-    genx c, t, a, WantValue
-    genx c, t, b, WantValue
-
-template unOp(opr) {.dirty.} =
-  c.buildTree opr:
-    genTypeof c, n.firstSon
-    genx c, t, n.firstSon, WantValue
-
 proc genMov(c: var GeneratedCode; dest, src: Location) =
   if sameLocation(dest, src):
     discard "don't generate `mov rax, rax` etc"
@@ -163,9 +151,13 @@ proc genMov(c: var GeneratedCode; dest, src: Location) =
       c.emitLoc dest
       c.emitLoc src
   elif src.kind == InFlag:
-    assert dest.kind != InFlag
-    c.buildTree jumpToPutInstr(src.flag):
-      c.emitLoc dest
+    if dest.kind == JumpMode:
+      c.buildTree src.flag:
+        c.emitLoc dest
+    else:
+      assert dest.kind != InFlag
+      c.buildTree jumpToPutInstr(src.flag):
+        c.emitLoc dest
   elif dest.typ.size < 0'i32 or dest.typ.size > 8'i32:
     assert dest.typ.size > 0'i32, "size not set!"
     assert false, "implement rep byte copy loop"

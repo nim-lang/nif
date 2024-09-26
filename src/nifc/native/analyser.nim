@@ -9,7 +9,7 @@
 
 ## Collect useful information for a native code generator.
 
-import std / [assertions, syncio, tables, sets, intsets, strutils]
+import std / [assertions, syncio, tables, sets, intsets, strutils, algorithm]
 
 import bitabs, packedtrees
 import .. / nifc_model
@@ -20,21 +20,24 @@ import slots
 
 type
   VarInfo* = object
+    decl*: NodePos
+    name*: StrId
     defs*, usages*: int # how often the variable is defined&used.
     weight*: int # similar to `usages` but takes into consideration
                  # whether the variable is used within a loop.
     props*: set[VarProp]
+
   ProcBodyProps* = object
-    vars*: Table[StrId, VarInfo]
+    vars*: seq[VarInfo]
     inlineStructs*: bool # candidate for struct inlining
     hasCall*: bool
 
   Scope = object
-    vars: seq[StrId]
+    vars: seq[int] # index into ProcBodyProps.vars
     hasCall: bool
 
   Context = object
-    inLoop, inAddr, inAsgnTarget, inArrayIndex: int
+    inLoops, inAddr, inAsgnTarget, inArrayIndex: int
     res: ProcBodyProps
     scopes: seq[Scope]
 
@@ -78,37 +81,41 @@ proc analyseProcBody(m: Module; t: Tree; n: NodePos; c: var Context) =
     assert t[v.name].kind == SymDef
     let vn = t[v.name].litId
     let hasValue = t[v.value].kind != Empty
-    c.res.vars[vn] = VarInfo(defs: ord(hasValue))
-    c.scopes[^1].vars.add vn
+    c.res.vars.add VarInfo(defs: ord(hasValue), decl: n, name: vn)
+    c.scopes[^1].vars.add c.res.vars.len
     if hasValue:
       analyseProcBody(m, t, v.value, c)
   of ParamC:
     let v = asParamDecl(t, n)
     assert t[v.name].kind == SymDef
     let vn = t[v.name].litId
-    c.res.vars[vn] = VarInfo(defs: 1) # it is a parameter, it has a value
-    c.scopes[^1].vars.add vn
+    c.res.vars.add VarInfo(defs: 1, decl: n, name: vn)
+    # `defs: 1` because it is a parameter, it has a value
+    c.scopes[^1].vars.add c.res.vars.len
   of Sym:
     let vn = t[n].litId
-    if c.res.vars.hasKey(vn):
-      let entry = addr(c.res.vars[vn])
-      if c.inAsgnTarget > 0:
-        inc entry.defs
-      else:
-        inc entry.usages
-      inc entry.weight, c.inLoop*LoopWeight
-      if (c.inAddr + c.inArrayIndex) > 0:
-        # arrays on the stack cannot be in registers either as registers
-        # cannot be aliased!
-        entry.props.incl AddrTaken
+    # XXX Maybe improve this linear search
+    for i in countdown(c.res.vars.len-1, 0):
+      if c.res.vars[i].name == vn:
+        let entry = addr(c.res.vars[i])
+        if c.inAsgnTarget > 0:
+          inc entry.defs
+        else:
+          inc entry.usages
+        inc entry.weight, c.inLoops*LoopWeight
+        if (c.inAddr + c.inArrayIndex) > 0:
+          # arrays on the stack cannot be in registers either as registers
+          # cannot be aliased!
+          entry.props.incl AddrTaken
+        break
   of EmitC:
     for ch in sons(t, n):
       analyseProcBody(m, t, ch, c)
   of WhileC:
-    inc c.inLoop
+    inc c.inLoops
     for ch in sons(t, n):
       analyseProcBody(m, t, ch, c)
-    dec c.inLoop
+    dec c.inLoops
   of AtC, PatC:
     let (a, idx) = sons2(t, n)
     if k == AtC: inc c.inArrayIndex
@@ -151,9 +158,16 @@ proc analyseProcBody(m: Module; t: Tree; n: NodePos; c: var Context) =
      PragmasC, AlignC, BitsC, VectorC, ImpC, NodeclC, InclC, SufC:
     discard "do not traverse these"
 
+proc cmpVars(a, b: VarInfo): int =
+  a.weight - b.weight
+
+proc sortVars(a: var openArray[VarInfo]) =
+  sort a, cmpVars
+
 proc analyseProcBody*(m: Module; t: Tree; n: NodePos): ProcBodyProps =
   var c = Context()
   c.scopes.add Scope() # there is always one scope
   analyseProcBody m, t, n, c
   c.res.hasCall = c.scopes[0].hasCall
   result = ensureMove(c.res)
+  sortVars result.vars
