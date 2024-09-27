@@ -43,7 +43,7 @@ type
     returnSlot: AsmSlot
     returnLoc: Location
     exitProcLabel: Label
-    globals: Table[LitId, AsmSlot]
+    globals: Table[LitId, Location]
 
   LitId = nifc_model.StrId
 
@@ -237,7 +237,7 @@ proc genProcDecl(c: var GeneratedCode; t: Tree; n: NodePos) =
   # (proc SYMBOLDEF Params Type ProcPragmas (OR . StmtList)
   c.openScope() # open scope for the parameters
   c.rega = initRegAllocator()
-  c.buildTreeI ProcT, t[n].info:
+  c.buildTreeI TextT, t[n].info:
     discard genSymDef(c, t, prc.name)
 
     if t[prc.returnType].kind != VoidC:
@@ -251,7 +251,7 @@ proc genProcDecl(c: var GeneratedCode; t: Tree; n: NodePos) =
         let d = asParamDecl(t, n)
         if t[d.name].kind == SymDef:
           paramTypes.add typeToSlot(c, d.typ)
-          paramLocs.add Location(kind: DontCare)
+          paramLocs.add Location(kind: Undef)
         else:
           error c.m, "expected SymbolDef but got: ", t, n
       allocParamsWin64 c.rega, paramTypes, paramLocs
@@ -260,7 +260,7 @@ proc genProcDecl(c: var GeneratedCode; t: Tree; n: NodePos) =
         let d = asParamDecl(t, n)
         if t[d.name].kind == SymDef:
           let lit = t[d.name].litId
-          c.scopes[^1].syms[lit] = paramLocs[i]
+          c.locals[lit] = paramLocs[i]
           inc i
 
     var flags: set[ProcFlag] = {}

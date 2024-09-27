@@ -226,15 +226,86 @@ proc genLocalVar(c: var GeneratedCode; t: Tree; n: NodePos) =
     # generate the assignment:
     genx c, t, v.value, c.locals[name]
 
+proc genConstData(c: var GeneratedCode; t: Tree; n: NodePos) =
+  let info = t[n].info
+  case t[n].kind
+  of Sym:
+    # reference to a proc or to some other address that will be resolved
+    # during linking:
+    c.addSym c.m.lits.strings[t[n].litId], info
+  of CharLit:
+    let ch = t[n].uoperand
+    c.genIntLit int(ch), info
+  of FloatLit:
+    c.genFloatLit t[n].litId, info
+  of IntLit:
+    c.genIntLit t[n].litId, info
+  of UIntLit:
+    c.genUIntLit t[n].litId, info
+  of FalseC:
+    c.genIntLit 0, info
+  of TrueC:
+    c.genIntLit 1, info
+  of StrLit:
+    var dest = Location(kind: Undef)
+    genStrLit(c, c.m.lits.strings[t[n].litId], info, dest)
+    c.addSym c.m.lits.strings[dest.data], info
+  of NilC:
+    c.genIntLit 0, info
+  of AconstrC:
+    for ch in sonsFromX(t, n):
+      c.genConstData t, ch
+  of OconstrC:
+    for ch in sonsFromX(t, n):
+      if t[ch].kind == OconstrC:
+        # Inheritance
+        c.genConstData t, ch
+      else:
+        let (_, v) = sons2(t, ch)
+        c.genConstData t, v
+  of ParC:
+    let arg = n.firstSon
+    genConstData c, t, arg
+  of SizeofC:
+    let a = getAsmSlot(c, n.firstSon)
+    c.genIntLit a.size, info
+  else:
+    error c.m, "unsupported expression for const: ", t, n
+
 proc genGlobalVar(c: var GeneratedCode; t: Tree; n: NodePos) =
+  let where = if t[n].kind == TvarC: InTls else: InData
   let v = asVarDecl(t, n)
   assert t[v.name].kind == SymDef
   let name = t[v.name].litId
+  var d = Location(flags: {Indirect}, typ: typeToSlot(c, v.typ), kind: where)
+  d.data = name
+  c.globals[name] = d
 
-  assert c.globals.hasKey(name)
-  if t[v.value].kind != Empty:
-    # generate the assignment:
-    genx c, t, v.value, c.globals[name]
+  let opc =
+    case d.typ.align
+    of 1: DbT
+    of 2: DwT
+    of 4: DdT
+    of 8: DqT
+    else: DqT # bigger alignments are not really supported for now
+
+  if t[n].kind == ConstC:
+    c.buildTreeI RodataT, t[n].info:
+      c.buildTree opc:
+        c.code.addSymDef c.m.lits.strings[name], t[v.name].info
+        c.genConstData t, v.value
+
+  else:
+    c.buildTreeI DataT, t[n].info:
+      c.buildTree opc:
+        c.code.addSymDef c.m.lits.strings[name], t[v.name].info
+        c.buildTree TimesT:
+          c.genIntLit d.typ.size div min(d.typ.align, 8), t[n].info
+          c.genIntLit 0, t[n].info
+
+    if t[v.value].kind != Empty:
+      # generate the assignment:
+      genx c, t, v.value, d
 
 proc genStmt(c: var GeneratedCode; t: Tree; n: NodePos) =
   case t[n].kind
@@ -248,15 +319,9 @@ proc genStmt(c: var GeneratedCode; t: Tree; n: NodePos) =
     genCall c, t, n, d
   of VarC:
     genLocalVar c, t, n
-  of GvarC:
+  of GvarC, TvarC, ConstC:
     moveToDataSection:
-      genVarDecl c, t, n, IsGlobal
-  of TvarC:
-    moveToDataSection:
-      genVarDecl c, t, n, IsThreadlocal
-  of ConstC:
-    moveToDataSection:
-      genConstDecl c, t, n
+      genGlobalVar c, t, n
   #of EmitC:
   #  genEmitStmt c, t, n
   of AsgnC: genAsgn c, t, n

@@ -25,6 +25,7 @@ proc opposite(t: TagId): TagId =
   else: NopT
 
 proc jumpToPutInstr(t: TagId): TagId =
+  # negation is not a bug here!
   case t
   of JeT: SetneT
   of JneT: SeteT
@@ -240,12 +241,10 @@ proc genAddr(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
       assert d.kind == InStack, "attempt to use addr() of a variable not in the stack"
       into c, dest, d
     of GvarC, ConstC:
-      let typ = c.globals[lit]
-      let d = Location(flags: {Indirect}, typ: typ, kind: InData, data: lit)
+      let d = c.globals[lit]
       into c, dest, d
     of TvarC:
-      let typ = c.globals[lit]
-      let d = Location(flags: {Indirect}, typ: typ, kind: InTls, data: lit)
+      let d = c.globals[lit]
       into c, dest, d
     of EfldC:
       assert false, "enum fields not implemented"
@@ -389,12 +388,10 @@ proc genLvalue(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
       else:
         into c, dest, d
     of GvarC, ConstC:
-      let typ = c.globals[lit]
-      let d = Location(flags: {Indirect}, typ: typ, kind: InData, data: lit)
+      let d = c.globals[lit]
       genLoad c, dest, d
     of TvarC:
-      let typ = c.globals[lit]
-      let d = Location(flags: {Indirect}, typ: typ, kind: InTls, data: lit)
+      let d = c.globals[lit]
       genLoad c, dest, d
     of EfldC:
       assert false, "enum fields not implemented"
