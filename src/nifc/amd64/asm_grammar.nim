@@ -25,7 +25,7 @@ proc genCode(c: var Context): bool =
     var before1 = save(c)
   var kw2 = false
   if isTag(c, TextT):
-    emitTag(c, "text")
+    emit(c, ".text ")
     var sym3 = declareSym(c)
     if not success(sym3):
       error(c, "SYMBOLDEF expected")
@@ -201,7 +201,7 @@ proc genData(c: var Context): bool =
     var before1 = save(c)
   var kw2 = false
   if isTag(c, DataT):
-    emitTag(c, "data")
+    emit(c, ".data ")
     var zm3 = true
     while not peekParRi(c):
       if not genDataDecl(c):
@@ -223,7 +223,7 @@ proc genRodata(c: var Context): bool =
     var before1 = save(c)
   var kw2 = false
   if isTag(c, RodataT):
-    emitTag(c, "rodata")
+    emit(c, ".rodata ")
     var zm3 = true
     while not peekParRi(c):
       if not genDataDecl(c):

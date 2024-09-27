@@ -13,6 +13,7 @@ import nifreader, nifstreams, nifcursors, bitabs, lineinfos
 from strutils import escape
 
 import asm_model
+import ".." / mangler
 
 type
   Context = object
@@ -121,7 +122,7 @@ proc nl(c: var Context) = c.dest.add "\n"
 
 proc lookupSym(c: var Context): bool =
   if c.current.kind == Symbol:
-    c.dest.add pool.syms[c.current.symId]
+    c.dest.add mangle(pool.syms[c.current.symId])
     inc c.current
     result = true
   else:
@@ -129,7 +130,7 @@ proc lookupSym(c: var Context): bool =
 
 proc declareSym(c: var Context): bool =
   if c.current.kind == SymbolDef:
-    c.dest.add pool.syms[c.current.symId]
+    c.dest.add mangle(pool.syms[c.current.symId])
     inc c.current
     result = true
   else:

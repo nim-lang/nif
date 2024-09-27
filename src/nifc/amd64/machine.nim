@@ -169,6 +169,7 @@ type
     JumpMode # not a value, but control flow
     InData # in some global data section
     InTls  # in thread local storage
+    InTextSection # proc name (its address)
     InRegOffset # address is (reg + offset)
     InRegRegScaledOffset # address is (reg + reg*scale + offset)
   LocFlag* = enum
@@ -191,7 +192,7 @@ type
     of InStack: slot*: int
     of InFlag: flag*: TagId
     of JumpMode: label*: int
-    of InData, InTls: data*: StrId
+    of InData, InTls, InTextSection: data*: StrId
 
 proc immediateLoc*(ival: int64; typ: AsmSlot): Location = Location(typ: typ, kind: ImmediateInt, ival: ival)
 proc immediateLoc*(uval: uint64; typ: AsmSlot): Location = Location(typ: typ, kind: ImmediateUInt, uval: uval)
@@ -392,7 +393,8 @@ proc opcodeSuffix*(s: AsmSlot): string =
     of 8: "q" # quad
     else: "bug"
 
-proc inMemory*(a: Location): bool {.inline.} = a.kind in {InStack, InData, InRegOffset, InRegRegScaledOffset}
+proc inMemory*(a: Location): bool {.inline.} =
+  a.kind in {InStack, InData, InTextSection, InRegOffset, InRegRegScaledOffset}
 proc isImmediate*(a: Location): bool {.inline.} = a.kind in {ImmediateInt, ImmediateUInt, ImmediateFloat}
 
 proc invalidCombination*(a, b: Location): bool =
@@ -428,7 +430,7 @@ proc sameLocation*(a, b: Location): bool =
       result = a.label == b.label
     of InFlag:
       result = a.flag == b.flag
-    of InData, InTls:
+    of InData, InTls, InTextSection:
       result = a.data == b.data
   else:
     result = false

@@ -40,6 +40,9 @@ proc jumpToPutInstr(t: TagId): TagId =
   of JnaeT: SetaeT
   else: NopT
 
+proc emitDataRaw(c: var GeneratedCode; loc: Location) =
+  c.code.add toToken(Symbol, pool.syms.getOrIncl(c.m.lits.strings[loc.data]), NoLineInfo)
+
 proc emitLoc*(c: var GeneratedCode; loc: Location) =
   case loc.kind
   of Undef:
@@ -64,10 +67,12 @@ proc emitLoc*(c: var GeneratedCode; loc: Location) =
     c.code.add toToken(Ident, pool.strings.getOrIncl("L." & $loc.label), NoLineInfo)
   of InData:
     c.buildTree RelT:
-      c.code.add toToken(Symbol, pool.syms.getOrIncl(c.m.lits.strings[loc.data]), NoLineInfo)
+      c.emitDataRaw loc
+  of InTextSection:
+    c.emitDataRaw loc
   of InTls:
     c.buildTree FsT:
-      c.code.add toToken(Symbol, pool.syms.getOrIncl(c.m.lits.strings[loc.data]), NoLineInfo)
+      c.emitDataRaw loc
   of InRegOffset:
     c.buildTree Mem2T:
       c.addKeywUnchecked regName(loc.reg1)
@@ -238,7 +243,7 @@ proc genAddr(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
     let def = c.m.defs.getOrDefault(lit)
     case def.kind
     of ProcC:
-      let d = Location(typ: AddrTyp, kind: InData, data: lit)
+      let d = Location(typ: AddrTyp, kind: InTextSection, data: lit)
       into c, dest, d
     of VarC, ParamC:
       let d = c.locals[lit]
@@ -383,7 +388,7 @@ proc genLvalue(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
     let def = c.m.defs.getOrDefault(lit)
     case def.kind
     of ProcC:
-      let d = Location(typ: AddrTyp, kind: InData, data: lit)
+      let d = Location(typ: AddrTyp, kind: InTextSection, data: lit)
       into c, dest, d
     of VarC, ParamC:
       let d = c.locals[lit]
