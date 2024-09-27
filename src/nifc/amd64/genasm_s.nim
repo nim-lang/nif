@@ -209,8 +209,9 @@ proc getExitProcLabel(c: var GeneratedCode): Label =
   result = c.exitProcLabel
 
 proc genReturn(c: var GeneratedCode; t: Tree; n: NodePos) =
-  var d = resultWin64(getAsmSlot(c, n))
-  c.genx t, n.firstSon, d
+  let retVal = n.firstSon
+  var d = resultWin64(getAsmSlot(c, retVal))
+  c.genx t, retVal, d
   let lab = getExitProcLabel(c)
   # we don't generate a `ret` instruction as we might need to
   # free the stack and we don't know yet how much stack we need!
