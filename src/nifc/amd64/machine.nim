@@ -55,7 +55,7 @@ const
 proc regName*(r: IntReg): string =
   case r
   of Rax: result = "rax"
-  of Rbx: result = "rbc"
+  of Rbx: result = "rbx"
   of Rcx: result = "rcx"
   of Rdx: result = "rdx"
   of Rsi: result = "rsi"

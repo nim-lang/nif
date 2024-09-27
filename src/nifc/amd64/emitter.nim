@@ -86,6 +86,8 @@ proc error(c: var Context; msg: string) =
     echo "[Error] ", pool.files[f] & "(" & $line & ", " & $col & "): " & msg
   else:
     echo "[Error] ???: " & msg
+  when defined(debug):
+    writeStackTrace()
   quit 1
 
 proc matchParRi(c: var Context): bool =
