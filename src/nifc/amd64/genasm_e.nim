@@ -183,14 +183,18 @@ proc into(c: var GeneratedCode; dest: var Location; src: Location) =
 
 proc genCall(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
   var args: seq[NodePos] = @[] # so that we can also do it backwards
-  for ch in sons(t, n): args.add ch
+  for ch in sonsFromX(t, n): args.add ch
 
   let sig = asProcType(t, getType(c.m, t, n.firstSon).rawPos)
   var stackSpace = HomeSpace
   var argTypes: seq[AsmSlot] = @[]
-  for param in sons(t, sig.params):
-    let p = asParamDecl(t, param)
-    argTypes.add c.typeToSlot(p.typ)
+  if t[sig.params].kind == ParamsC:
+    for param in sons(t, sig.params):
+      let p = asParamDecl(t, param)
+      argTypes.add c.typeToSlot(p.typ)
+  # can happen for varargs:
+  for i in argTypes.len ..< args.len:
+    argTypes.add c.getAsmSlot(args[i])
 
   # we use this "RegAllocator" here only to compute the where the
   # expressions need to end up:
@@ -206,8 +210,8 @@ proc genCall(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
     argLocs.add regb.allocParamWin64(argType)
   reverseStackParamsWin64 argLocs
 
-  for i in 1 ..< args.len:
-    genx c, t, args[i], argLocs[i-1]
+  for i in 0 ..< args.len:
+    genx c, t, args[i], argLocs[i]
 
   let fn = gen(c, t, n.firstSon)
   c.buildTreeI CallT, t[n].info:
@@ -578,6 +582,52 @@ template immLit(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location;
   let d = immediateLoc(parse(c.m.lits.strings[lit]), typ)
   into c, dest, d
 
+proc genSuffix(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
+  let (value, suffix) = sons2(t, n)
+  case t[value].kind
+  of StrLit:
+    genx c, t, n, dest
+  of IntLit:
+    let typ =
+      case c.m.lits.strings[t[suffix].litId]
+      of "i64":
+        AsmSlot(kind: AInt, size: 8, align: 8)
+      of "i32":
+        AsmSlot(kind: AInt, size: 4, align: 4)
+      of "i16":
+        AsmSlot(kind: AInt, size: 2, align: 2)
+      of "i8":
+        AsmSlot(kind: AInt, size: 1, align: 1)
+      else:
+        quit "unsupported suffix"
+    immLit c, t, value, dest, typ, parseBiggestInt
+  of UIntLit:
+    let typ =
+      case c.m.lits.strings[t[suffix].litId]
+      of "u64":
+        AsmSlot(kind: AUInt, size: 8, align: 8)
+      of "u32":
+        AsmSlot(kind: AUInt, size: 4, align: 4)
+      of "u16":
+        AsmSlot(kind: AUInt, size: 2, align: 2)
+      of "u8":
+        AsmSlot(kind: AUInt, size: 1, align: 1)
+      else:
+        quit "unsupported suffix"
+    immLit c, t, value, dest, typ, parseBiggestUInt
+  of FloatLit:
+    let typ =
+      case c.m.lits.strings[t[suffix].litId]
+      of "f64":
+        AsmSlot(kind: AFloat, size: 8, align: 8)
+      of "f32":
+        AsmSlot(kind: AFloat, size: 4, align: 4)
+      else:
+        quit "unsupported suffix"
+    immLit c, t, value, dest, typ, parseFloat
+  else:
+    error c.m, "unsupported suffix ", t, n
+
 proc genx(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
   let info = t[n].info
   case t[n].kind
@@ -659,8 +709,7 @@ proc genx(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
   #of NotC: unOp NotT
   #of CastC, ConvC:
   #  genConv c, t, n
-  #of SufC:
-  #  let (value, suffix) = sons2(t, n)
-  #  genx(c, t, value, mode)
+  of SufC:
+    genSuffix(c, t, n, dest)
   else:
     genLvalue c, t, n, dest
