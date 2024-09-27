@@ -173,6 +173,10 @@ proc genMov(c: var GeneratedCode; dest, src: Location) =
       emitLoc c, dest
       emitLoc c, tmp
     c.freeTemp tmp
+  elif src.kind == InData:
+    c.buildTree LeaT:
+      c.emitLoc dest
+      c.emitLoc src
   else:
     c.buildTree MovT:
       c.emitLoc dest

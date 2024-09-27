@@ -416,10 +416,11 @@ proc genPrimary(c: var Context): bool =
       break or3
     var kw4 = false
     if isTag(c, RelT):
-      emitTag(c, "rel")
+      emit(c, "[rip+")
       if not lookupSym(c):
         error(c, "SYMBOL expected")
         break or3
+      emit(c, "]")
       kw4 = matchParRi(c)
     if kw4:
       or2 = true

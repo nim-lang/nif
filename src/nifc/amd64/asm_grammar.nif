@@ -42,7 +42,7 @@
 (RULE :Primary (OR
   Reg FpReg
   SYMBOL
-  (rel SYMBOL)
+  (rel "[rip+" SYMBOL "]")
   (fs "fs:[" SYMBOL "@TPOFF]")
   INTLIT UINTLIT
 ))
