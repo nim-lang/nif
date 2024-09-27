@@ -85,6 +85,8 @@ proc getType*(m: var Module; t: Tree; n: NodePos): TypeDesc =
       result = getType(m, t, d.pos)
     else:
       result = errorType()
+  of ProcC:
+    result = TypeDesc(p: n)
   of GvarC, TvarC, ConstC, VarC:
     let v = asVarDecl(t, n)
     result = TypeDesc(p: v.typ)
@@ -147,7 +149,7 @@ proc getType*(m: var Module; t: Tree; n: NodePos): TypeDesc =
   of NegC, AddC, SubC, MulC, DivC, ModC, ShrC, ShlC,
      BitandC, BitorC, BitxorC, BitnotC:
     result = typeFromPos n.firstSon
-  of AsgnC, RetC, BreakC, WhileC, ProcC, StmtsC, KvC,
+  of AsgnC, RetC, BreakC, WhileC, StmtsC, KvC,
      RangeC, RangesC, EmitC, IfC, ElifC, ElseC, CaseC,
      OfC, LabC, JmpC,  ParamsC, UnionC, ObjectC, EnumC,
      ProctypeC, AtomicC, RoC, RestrictC, IntC, UIntC, FloatC, CharC, BoolC,

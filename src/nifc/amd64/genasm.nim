@@ -265,6 +265,7 @@ proc genProcDecl(c: var GeneratedCode; t: Tree; n: NodePos) =
 
     var flags: set[ProcFlag] = {}
     genProcPragmas c, t, prc.pragmas, flags
+    allocateVars c, t, prc.body
     genStmt c, t, prc.body
   c.closeScope() # close parameter scope
 
