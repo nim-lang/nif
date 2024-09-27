@@ -269,6 +269,8 @@ proc genProcDecl(c: var GeneratedCode; t: Tree; n: NodePos) =
     genProcPragmas c, t, prc.pragmas, flags
     allocateVars c, t, prc.body
     genStmt c, t, prc.body
+    if c.exitProcLabel.int >= 0:
+      c.defineLabel(c.exitProcLabel, t[n].info)
   c.closeScope() # close parameter scope
 
 proc genToplevel(c: var GeneratedCode; t: Tree; n: NodePos) =
@@ -310,6 +312,10 @@ proc generateAsm*(inp, outp: string) =
   f.add toString(c.data)
   f.add toString(c.code)
   f.add ")\n"
+
+  when defined(debug):
+    echo f
+
   if c.init.len > 0:
     quit "no init code implemented"
   produceAsmCode f, outp

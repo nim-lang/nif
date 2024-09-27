@@ -54,22 +54,22 @@ const
 
 proc regName*(r: IntReg): string =
   case r
-  of Rax: result = "RAX"
-  of Rbx: result = "RBX"
-  of Rcx: result = "RCX"
-  of Rdx: result = "RDX"
-  of Rsi: result = "RCX"
-  of Rdi: result = "RCX"
-  of Rbp: result = "RCX"
-  of Rsp: result = "RCX"
-  of R8: result = "R8"
-  of R9: result = "R9"
-  of R10: result = "R10"
-  of R11: result = "R11"
-  of R12: result = "R12"
-  of R13: result = "R13"
-  of R14: result = "R14"
-  of R15: result = "R15"
+  of Rax: result = "rax"
+  of Rbx: result = "rbc"
+  of Rcx: result = "rcx"
+  of Rdx: result = "rdx"
+  of Rsi: result = "rsi"
+  of Rdi: result = "rdi"
+  of Rbp: result = "rbp"
+  of Rsp: result = "rsp"
+  of R8: result = "r8"
+  of R9: result = "r9"
+  of R10: result = "r10"
+  of R11: result = "r11"
+  of R12: result = "r12"
+  of R13: result = "r13"
+  of R14: result = "r14"
+  of R15: result = "r15"
   else: result = "<bug: invalid register>"
 
 const
@@ -93,7 +93,7 @@ const
   LastFloatReg = Xmm15
 
 proc regName*(r: FloatReg): string =
-  result = "XMM"
+  result = "xmm"
   result.addInt int(r)
 
 const
