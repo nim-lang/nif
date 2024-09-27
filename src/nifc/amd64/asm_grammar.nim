@@ -270,7 +270,9 @@ proc genModule(c: var Context): bool =
     var before1 = save(c)
   var kw2 = false
   if isTag(c, StmtsT):
-    emit(c, "")
+    emit(c, ".intel_syntax noprefix")
+    nl(c)
+    nl(c)
     var zm3 = true
     while not peekParRi(c):
       if not genSection(c):

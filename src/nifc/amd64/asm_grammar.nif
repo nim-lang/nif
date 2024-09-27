@@ -25,7 +25,7 @@
 
 (RULE :Section (OR Directive ExternDecl Code Data Rodata))
 
-(RULE :Module (stmts "" (ZERO_OR_MANY Section)))
+(RULE :Module (stmts ".intel_syntax noprefix" (DO "nl") (DO "nl") (ZERO_OR_MANY Section)))
 
 (RULE :Reg (OR
   (rax) (rbx) (rcx) (rdx) (rsi) (rdi) (rbp) (rsp)
