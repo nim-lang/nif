@@ -432,3 +432,6 @@ proc sameLocation*(a, b: Location): bool =
       result = a.data == b.data
   else:
     result = false
+
+proc getTotalStackSpace*(a: RegAllocator): int {.inline.} =
+  result = max(a.maxStackSpace, a.usedStackSpace)

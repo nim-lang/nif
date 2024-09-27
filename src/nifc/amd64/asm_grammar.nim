@@ -30,6 +30,8 @@ proc genCode(c: var Context): bool =
     if not success(sym3):
       error(c, "SYMBOLDEF expected")
       return false
+    emit(c, ":")
+    nl(c)
     var om4 = false
     while not peekParRi(c):
       if not genInstruction(c):
@@ -41,6 +43,8 @@ proc genCode(c: var Context): bool =
       return false
     kw2 = matchParRi(c)
   if not kw2: return false
+  nl(c)
+  
   when declared(handleCode):
     handleCode(c, before1)
   return true
@@ -125,6 +129,10 @@ proc genDataKey(c: var Context): bool =
     var before1 = save(c)
   var sym2 = declareSym(c)
   if not success(sym2): return false
+  emit(c, ":")
+  
+  nl(c)
+  
   if not genTimes(c): return false
   var zm3 = true
   while not peekParRi(c):
@@ -262,7 +270,7 @@ proc genModule(c: var Context): bool =
     var before1 = save(c)
   var kw2 = false
   if isTag(c, StmtsT):
-    emitTag(c, "stmts")
+    emit(c, "")
     var zm3 = true
     while not peekParRi(c):
       if not genSection(c):

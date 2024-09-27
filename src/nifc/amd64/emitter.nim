@@ -111,7 +111,9 @@ proc matchAndEmitTag(c: var Context; tag: TagId; asStr: string): bool =
   if c.current.kind == ParLe and c.current.tagId == tag:
     emit c, asStr
     inc c.current
-    result = true
+    result = c.current.kind == ParRi
+    if result:
+      inc c.current
   else:
     result = false
 

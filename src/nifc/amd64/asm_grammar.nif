@@ -6,13 +6,13 @@
 
 (RULE :Directive (global SYMBOL (DO "nl")))
 
-(RULE :Code (text SYMBOLDEF (ONE_OR_MANY Instruction)))
+(RULE :Code (text SYMBOLDEF ":" (DO "nl") (ONE_OR_MANY Instruction)) (DO "nl"))
 (RULE :ExternDecl (extern SYMBOLDEF (DO "nl")))
 
 (RULE :DataValue (OR STRINGLITERAL INTLIT UINTLIT FLOATLIT))
 (RULE :Times (OR DataValue (times INTLIT DataValue)))
 (RULE :Times2 ", " Times)
-(RULE :DataKey SYMBOLDEF Times (ZERO_OR_MANY Times2))
+(RULE :DataKey SYMBOLDEF ":" (DO "nl") Times (ZERO_OR_MANY Times2))
 (RULE :DataDecl (OR
   (db DataKey)
   (dw DataKey)
@@ -25,7 +25,7 @@
 
 (RULE :Section (OR Directive ExternDecl Code Data Rodata))
 
-(RULE :Module (stmts (ZERO_OR_MANY Section)))
+(RULE :Module (stmts "" (ZERO_OR_MANY Section)))
 
 (RULE :Reg (OR
   (rax) (rbx) (rcx) (rdx) (rsi) (rdi) (rbp) (rsp)

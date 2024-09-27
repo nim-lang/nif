@@ -415,10 +415,11 @@ proc genStrLit(c: var GeneratedCode; s: string; info: PackedLineInfo; dest: var 
     id = c.strings.len + 1
     c.strings[s] = id
     symId = "str." & $id
-    c.rodata.buildTree DbT, info:
-      c.rodata.addSymDef symId, info
-      c.rodata.addStrLit s, info
-      c.rodata.genIntLit 0, info
+    c.data.buildTree RodataT, info:
+      c.data.buildTree DbT, info:
+        c.data.addSymDef symId, info
+        c.data.addStrLit s, info
+        c.data.genIntLit 0, info
   else:
     symId = "str." & $id
   let d = Location(kind: InData, data: c.m.lits.strings.getOrIncl(symId))

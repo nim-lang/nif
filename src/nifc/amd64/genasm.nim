@@ -27,7 +27,7 @@ type
 
   GeneratedCode* = object
     m: Module
-    rodata, data: TokenBuf
+    data: TokenBuf
     code: TokenBuf
     init: TokenBuf
     rega: RegAllocator
@@ -40,7 +40,6 @@ type
     locals: Table[LitId, Location]
     strings: Table[string, int]
     scopes: seq[Scope]
-    returnSlot: AsmSlot
     returnLoc: Location
     exitProcLabel: Label
     globals: Table[LitId, Location]
@@ -243,8 +242,8 @@ proc genProcDecl(c: var GeneratedCode; t: Tree; n: NodePos) =
     discard genSymDef(c, t, prc.name)
 
     if t[prc.returnType].kind != VoidC:
-      c.returnSlot = typeToSlot(c, prc.returnType)
-      allocResultWin64 c.rega, c.returnSlot, c.returnLoc
+      let returnSlot = typeToSlot(c, prc.returnType)
+      allocResultWin64 c.rega, returnSlot, c.returnLoc
 
     if t[prc.params].kind != Empty:
       var paramTypes: seq[AsmSlot] = @[]
@@ -319,3 +318,40 @@ proc generateAsm*(inp, outp: string) =
   if c.init.len > 0:
     quit "no init code implemented"
   produceAsmCode f, outp
+
+when isMainModule:
+  const
+    TestCode = """(.nif24)
+(stmts
+(text :main.c
+ (mov
+  (rbx) +12)
+ (mov
+  (rcx)
+  (rel str.1))
+ (mov
+  (rdx)
+  (rel str.2))
+ (call
+  (rel printf.c))
+ (mov
+  (rcx)
+  (rel str.3))
+ (mov
+  (rdx) +12)
+ (call
+  (rel printf.c))
+ (mov
+  (rcx)
+  (rel str.3))
+ (mov
+  (rdx)
+  (rbx))
+ (call
+  (rel printf.c))
+ (mov
+  (rax) +0)
+ (jmp L.0)
+ (lab :L.0)))"""
+
+  produceAsmCode TestCode, "foobar.asm"
