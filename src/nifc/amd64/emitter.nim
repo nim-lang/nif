@@ -124,7 +124,7 @@ proc lookupSym(c: var Context): bool =
     result = false
 
 proc declareSym(c: var Context): bool =
-  if c.current.kind == Symbol:
+  if c.current.kind == SymbolDef:
     c.dest.add pool.syms[c.current.symId]
     inc c.current
     result = true
