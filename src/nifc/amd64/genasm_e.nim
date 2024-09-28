@@ -106,7 +106,7 @@ proc makeReg(c: var GeneratedCode; x: Location; opc = MovT): Location =
         c.addKeyw RcxT   # Rcx is as good as any other
       result = Location(typ: x.typ, kind: InReg, reg1: Rcx, flags: {Reg1NeedsPop})
     c.buildTree opc:
-      c.addKeyw RcxT
+      emitLoc c, result
       emitLoc c, x
   else:
     result = x
@@ -405,7 +405,9 @@ proc genAsgn(c: var GeneratedCode; t: Tree; n: NodePos) =
   var d = Location(kind: Undef)
   genAddr c, t, a, d
 
-  let y = c.makeReg gen(c, t, b)
+  var y = gen(c, t, b)
+  if y.inMemory:
+    y = c.makeReg(y)
 
   # XXX also handle case kind == AMem!
   let opc = if d.typ.kind == AFloat: MovapdT else: MovT
