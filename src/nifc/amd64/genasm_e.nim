@@ -43,6 +43,9 @@ proc jumpToPutInstr(t: TagId): TagId =
 proc emitDataRaw(c: var GeneratedCode; loc: Location) =
   c.code.add toToken(Symbol, pool.syms.getOrIncl(c.m.lits.strings[loc.data]), NoLineInfo)
 
+proc emitImmediate*(c: var GeneratedCode; ival: int) =
+  c.code.add toToken(IntLit, pool.integers.getOrIncl(ival), NoLineInfo)
+
 proc emitLoc*(c: var GeneratedCode; loc: Location) =
   case loc.kind
   of Undef:
@@ -101,7 +104,7 @@ proc makeReg(c: var GeneratedCode; x: Location; opc = MovT): Location =
           c.addKeyw RspT
           c.genIntLit getScratchStackSlot(c.rega), NoLineInfo
         c.addKeyw RcxT   # Rcx is as good as any other
-      result = Location(kind: InReg, reg1: Rcx, flags: {Reg1NeedsPop})
+      result = Location(typ: x.typ, kind: InReg, reg1: Rcx, flags: {Reg1NeedsPop})
     c.buildTree opc:
       c.addKeyw RcxT
       emitLoc c, x
@@ -235,6 +238,40 @@ proc genCall(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
 const
   AddrTyp = AsmSlot(kind: AInt, size: WordSize, align: WordSize, offset: 0)
 
+from math import isPowerOfTwo
+
+proc genMulImm(c: var GeneratedCode; dest: Location; imm: int) =
+  if isPowerOfTwo(imm):
+    var shift = 0
+    var imm = imm
+    while imm > 1:
+      inc shift
+      imm = imm shr 1
+    if shift > 0:
+      c.buildTree ShlT:
+        emitLoc c, dest
+        emitImmediate c, shift
+  else:
+    c.buildTree MulT:
+      emitLoc c, dest
+      emitImmediate c, imm
+
+proc ensureTempReg(c: var GeneratedCode; loc: Location): Location =
+  if loc.kind == InReg and Reg1Temp in loc.flags:
+    result = loc
+  else:
+    result = scratchReg(c.rega)
+    if result.kind == Undef:
+      c.buildTree MovT:
+        c.buildTree Mem2T:
+          c.addKeyw RspT
+          c.genIntLit getScratchStackSlot(c.rega), NoLineInfo
+        c.addKeyw RcxT   # Rcx is as good as any other
+      result = Location(typ: loc.typ, kind: InReg, reg1: Rcx, flags: {Reg1NeedsPop})
+    c.buildTree MovT:
+      c.addKeyw RcxT
+      emitLoc c, loc
+
 proc genAddr(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
   let info = t[n].info
   case t[n].kind
@@ -280,15 +317,7 @@ proc genAddr(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
     # materialize complex addressing:
     case loc.kind:
     of InRegRegScaledOffset:
-      # XXX This is only correct for:
-      assert Reg1Temp in loc.flags
-      c.buildTree LeaT:
-        c.addKeywUnchecked regName(loc.reg1)
-        c.buildTree Mem3T:
-          c.addKeywUnchecked regName(loc.reg1)
-          c.addKeywUnchecked regName(loc.reg2)
-          c.code.add toToken(IntLit, pool.integers.getOrIncl(loc.typ.size), NoLineInfo)
-      loc.kind = InRegOffset
+      loc = makeReg(c, loc, LeaT)
     of InReg, InRegOffset:
       discard "nothing to do"
     of InData, InTls:
@@ -298,10 +327,23 @@ proc genAddr(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
 
     case loc.kind
     of InReg, InRegOffset:
-      loc.kind = InRegRegScaledOffset
-      loc.reg2 = idx.reg1
-      if Reg1Temp in idx.flags:
-        loc.flags.incl Reg2Temp
+      if loc.typ.size in [1, 2, 4, 8]:
+        loc.kind = InRegRegScaledOffset
+        loc.reg2 = idx.reg1
+        if Reg1NeedsPop in idx.flags:
+          loc.flags.incl Reg2NeedsPop
+        elif Reg1Temp in idx.flags:
+          loc.flags.incl Reg2Temp
+      else:
+        let idx = ensureTempReg(c, idx)
+        genMulImm c, idx, loc.typ.size
+        loc.kind = InRegRegScaledOffset
+        loc.typ.size = 1 # scale is unused
+        if Reg1NeedsPop in idx.flags:
+          loc.flags.incl Reg2NeedsPop
+        else:
+          loc.flags.incl Reg2Temp
+        loc.reg2 = idx.reg1
     else:
       error c.m, "BUG: overly complex address computation B: ", t, n
     # we computed an address, so this must be reflected:
@@ -422,7 +464,7 @@ proc genStrLit(c: var GeneratedCode; s: string; info: PackedLineInfo; dest: var 
         c.data.genIntLit 0, info
   else:
     symId = "str." & $id
-  let d = Location(kind: InData, data: c.m.lits.strings.getOrIncl(symId))
+  let d = Location(typ: AddrTyp, kind: InData, data: c.m.lits.strings.getOrIncl(symId))
   into c, dest, d
 
 #[
