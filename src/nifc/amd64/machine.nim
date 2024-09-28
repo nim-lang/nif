@@ -49,8 +49,10 @@ const
   R13 = IntReg(13)
   R14 = IntReg(14)
   R15 = IntReg(15)
-
   LastIntReg = R15
+
+  Rsp2* = IntReg(16) # fake register that is used to address parameters on the stack which needs to be fixed
+
 
 proc regName*(r: IntReg): string =
   case r
@@ -164,7 +166,6 @@ type
     ImmediateFloat,
     InReg,
     InRegFp,
-    InStack,
     InFlag, # in a CPU flag
     JumpMode # not a value, but control flow
     InData # in some global data section
@@ -189,7 +190,6 @@ type
     of InReg, InRegOffset, InRegRegScaledOffset:
       reg1*, reg2*: IntReg
     of InRegFp: regf*: FloatReg
-    of InStack: slot*: int
     of InFlag: flag*: TagId
     of JumpMode: label*: int
     of InData, InTls, InTextSection: data*: StrId
@@ -232,6 +232,13 @@ proc resultWin64*(returnType: AsmSlot): Location =
     # the tricky part:
     result = Location(kind: InReg, reg1: Rax)
 
+proc paramInStack(a: RegAllocator; param: AsmSlot; flags: set[LocFlag]): Location {.inline.} =
+  result = Location(typ: param, flags: flags, kind: InRegOffset, reg1: Rsp2)
+  result.typ.offset = a.usedStackSpace
+
+proc paramOnStack(loc: Location): bool {.inline.} =
+  loc.kind == InRegOffset and loc.reg1 == Rsp2
+
 proc allocParamWin64*(a: var RegAllocator; param: AsmSlot): Location =
   if param.kind == AFloat:
     # see https://learn.microsoft.com/en-us/cpp/build/x64-calling-convention?view=msvc-170
@@ -243,7 +250,7 @@ proc allocParamWin64*(a: var RegAllocator; param: AsmSlot): Location =
           incl a.usedFloats, xmm
           result = Location(kind: InRegFp, regf: xmm)
           break floatRegSearch
-      result = Location(kind: InStack, slot: a.usedStackSpace)
+      result = paramInStack(a, param, {})
       inc a.usedStackSpace, WordSize
   else:
     let flags = if param.size notin [1, 2, 4, 8]: {Indirect} else: {}
@@ -254,7 +261,7 @@ proc allocParamWin64*(a: var RegAllocator; param: AsmSlot): Location =
           incl a.used, att
           result = Location(flags: flags, kind: InReg, reg1: att)
           break intRegSearch
-      result = Location(flags: flags, kind: InStack, slot: a.usedStackSpace)
+      result = paramInStack(a, param, flags)
       inc a.usedStackSpace, WordSize
 
 proc reverseStackParamsWin64*(res: var openArray[Location]) =
@@ -263,11 +270,11 @@ proc reverseStackParamsWin64*(res: var openArray[Location]) =
   var front = 0
   var back = res.len - 1
   while front < back:
-    if res[front].kind == InStack:
-      while front < back and res[back].kind != InStack: dec back
+    if res[front].paramOnStack:
+      while front < back and not res[back].paramOnStack: dec back
       if front >= back: break
-      assert res[back].kind == InStack
-      swap res[front].slot, res[back].slot
+      assert res[back].paramOnStack
+      swap res[front].typ.offset, res[back].typ.offset
       dec back
     inc front
 
@@ -282,7 +289,8 @@ proc allocParamsWin64*(a: var RegAllocator;
 
 proc allocStack(a: var RegAllocator; slot: AsmSlot): Location =
   a.usedStackSpace = align(a.usedStackSpace, slot.align)
-  result = Location(kind: InStack, slot: a.usedStackSpace)
+  result = Location(typ: slot, kind: InRegOffset, reg1: Rsp)
+  result.typ.offset = a.usedStackSpace
   inc a.usedStackSpace, slot.size
 
 proc selectReg(a: var RegAllocator; slot: AsmSlot; regs: openArray[IntReg]): Location =
@@ -319,8 +327,9 @@ proc allocVar*(a: var RegAllocator; slot: AsmSlot; props: VarProps): Location =
       let xmm = FloatReg(xmmIndex)
       if not a.usedFloats.contains(xmm):
         incl a.usedFloats, xmm
-        return Location(kind: InRegFp, regf: xmm)
-    result = Location(kind: InStack, slot: a.usedStackSpace)
+        return Location(typ: slot, kind: InRegFp, regf: xmm)
+    result = Location(typ: slot, kind: InRegOffset, reg1: Rsp)
+    result.typ.offset = a.usedStackSpace
     inc a.usedStackSpace, 8
   else:
     if slot.size <= WordSize:
@@ -365,16 +374,21 @@ proc freeScope*(a: var RegAllocator; loc: Location) =
   # useful when we know that a scope exit is about to happen.
   # We then free stack slots so that they can be reused.
   case loc.kind
-  of InReg, InRegOffset:
+  of InReg:
+    a.used.excl loc.reg1
+  of InRegOffset:
+    if loc.reg1 == Rsp:
+      a.maxStackSpace = max(a.maxStackSpace, a.usedStackSpace)
+      a.usedStackSpace = min(a.usedStackSpace, loc.typ.offset)
     a.used.excl loc.reg1
   of InRegRegScaledOffset:
+    if loc.reg1 == Rsp:
+      a.maxStackSpace = max(a.maxStackSpace, a.usedStackSpace)
+      a.usedStackSpace = min(a.usedStackSpace, loc.typ.offset)
     a.used.excl loc.reg1
     a.used.excl loc.reg2
   of InRegFp:
     a.usedFloats.excl loc.regf
-  of InStack:
-    a.maxStackSpace = max(a.maxStackSpace, a.usedStackSpace)
-    a.usedStackSpace = min(a.usedStackSpace, loc.slot)
   else:
     discard "nothing to do"
 
@@ -394,7 +408,7 @@ proc opcodeSuffix*(s: AsmSlot): string =
     else: "bug"
 
 proc inMemory*(a: Location): bool {.inline.} =
-  a.kind in {InStack, InData, InTextSection, InRegOffset, InRegRegScaledOffset}
+  a.kind in {InData, InTextSection, InRegOffset, InRegRegScaledOffset}
 proc isImmediate*(a: Location): bool {.inline.} = a.kind in {ImmediateInt, ImmediateUInt, ImmediateFloat}
 
 proc invalidCombination*(a, b: Location): bool =
@@ -409,8 +423,6 @@ proc sameLocation*(a, b: Location): bool =
   if a.kind == b.kind:
     case a.kind
     of Undef: result = true
-    of InStack:
-      result = a.slot == b.slot
     of ImmediateInt:
       result = a.ival == b.ival
     of ImmediateUInt:

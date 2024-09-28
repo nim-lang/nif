@@ -57,10 +57,6 @@ proc emitLoc*(c: var GeneratedCode; loc: Location) =
     c.addKeywUnchecked regName(loc.reg1)
   of InRegFp:
     c.addKeywUnchecked regName(loc.regf)
-  of InStack:
-    c.buildTree Mem2T:
-      c.addKeyw RspT
-      c.code.add toToken(IntLit, pool.integers.getOrIncl(loc.slot), NoLineInfo)
   of InFlag:
     assert false, "not implemented"
   of JumpMode:
@@ -251,7 +247,8 @@ proc genAddr(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
       into c, dest, d
     of VarC, ParamC:
       let d = c.locals[lit]
-      assert d.kind == InStack, "attempt to use addr() of a variable not in the stack"
+      assert d.kind == InRegOffset and d.reg1 in {Rsp, Rsp2},
+        "attempt to use addr() of a variable not in the stack"
       into c, dest, d
     of GvarC, ConstC:
       let d = c.globals[lit]
@@ -294,10 +291,6 @@ proc genAddr(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
       loc.kind = InRegOffset
     of InReg, InRegOffset:
       discard "nothing to do"
-    of InStack:
-      var typ = loc.typ
-      typ.offset += loc.slot
-      loc = Location(kind: InRegOffset, reg1: Rsp, typ: typ)
     of InData, InTls:
       loc = makeReg(c, loc, LeaT)
     else:
@@ -329,10 +322,6 @@ proc genAddr(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
       loc.typ.offset += ftyp.offset
     of InRegRegScaledOffset:
       loc.typ.offset += ftyp.offset
-    of InStack:
-      var typ = loc.typ
-      typ.offset += ftyp.offset
-      loc = Location(kind: InRegOffset, reg1: Rsp, typ: typ)
     of InData, InTls:
       loc = makeReg(c, loc, LeaT)
       loc.kind = InRegOffset
@@ -396,7 +385,8 @@ proc genLvalue(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
       into c, dest, d
     of VarC, ParamC:
       let d = c.locals[lit]
-      if d.kind in {InStack}:
+      if d.kind in {InRegOffset, InRegRegScaledOffset}:
+        assert d.reg1 in {Rsp, Rsp2}
         genLoad c, dest, d
       else:
         into c, dest, d
