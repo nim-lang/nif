@@ -304,11 +304,11 @@ proc selectReg(a: var RegAllocator; slot: AsmSlot; regs: openArray[IntReg]): Loc
 const
   allAttempts = [Rax, Rbx, Rcx, Rdx, Rsi, Rdi, Rbp, R8, R9, R10, R11, R12, R13, R14, R15]
 
-proc scratchReg*(a: var RegAllocator): Location =
+proc scratchReg*(a: var RegAllocator; typ: AsmSlot): Location =
   for reg in allAttempts:
     if not a.used.contains(reg):
       a.used.incl reg
-      return Location(flags: {Reg1Temp}, kind: InReg, reg1: reg)
+      return Location(typ: typ, flags: {Reg1Temp}, kind: InReg, reg1: reg)
   result = Location(kind: Undef)
 
 proc allocVar*(a: var RegAllocator; slot: AsmSlot; props: VarProps): Location =

@@ -97,7 +97,7 @@ proc gen(c: var GeneratedCode; t: Tree; n: NodePos): Location =
 
 proc makeReg(c: var GeneratedCode; x: Location; opc = MovT): Location =
   if x.kind != InReg:
-    result = scratchReg(c.rega)
+    result = scratchReg(c.rega, x.typ)
     if result.kind == Undef:
       c.buildTree MovT:
         c.buildTree Mem2T:
@@ -260,7 +260,7 @@ proc ensureTempReg(c: var GeneratedCode; loc: Location): Location =
   if loc.kind == InReg and Reg1Temp in loc.flags:
     result = loc
   else:
-    result = scratchReg(c.rega)
+    result = scratchReg(c.rega, loc.typ)
     if result.kind == Undef:
       c.buildTree MovT:
         c.buildTree Mem2T:
@@ -379,7 +379,7 @@ proc genAddr(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
 
 proc genLoad(c: var GeneratedCode; dest: var Location; address: Location) =
   if dest.kind == Undef:
-    dest = scratchReg(c.rega)
+    dest = scratchReg(c.rega, address.typ)
   # XXX Floating point? What if it doesn't even fit a register?
 
   let opc = if address.typ.kind == AFloat: MovapdT else: MovT
@@ -398,20 +398,19 @@ proc genAsgn(c: var GeneratedCode; t: Tree; n: NodePos) =
     if def.kind in {VarC, ParamC}:
       let d = c.locals[lit]
 
-      let y = gen(c, t, n)
+      let y = gen(c, t, b)
       genMov c, d, y
       freeTemp c, y
       return
   var d = Location(kind: Undef)
   genAddr c, t, a, d
 
-  let y = c.makeReg gen(c, t, n)
+  let y = c.makeReg gen(c, t, b)
 
   # XXX also handle case kind == AMem!
   let opc = if d.typ.kind == AFloat: MovapdT else: MovT
   c.buildTree opc:
-    c.buildTree Mem1T:
-      emitLoc c, d
+    emitLoc c, d
     emitLoc c, y
   freeTemp c, y
 
