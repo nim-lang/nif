@@ -201,7 +201,8 @@ proc genProlog*(c: var GeneratedCode) =
   discard
 
 proc genEpilog*(c: var GeneratedCode) =
-  discard
+  c.buildTree RetT:
+    discard
 
 proc getExitProcLabel(c: var GeneratedCode): Label =
   if c.exitProcLabel.int < 0:
@@ -285,22 +286,22 @@ proc genGlobalVar(c: var GeneratedCode; t: Tree; n: NodePos) =
 
   let opc =
     case d.typ.align
-    of 1: DbT
-    of 2: DwT
-    of 4: DdT
-    of 8: DqT
-    else: DqT # bigger alignments are not really supported for now
+    of 1: ByteT
+    of 2: WordT
+    of 4: LongT
+    of 8: QuadT
+    else: QuadT # bigger alignments are not really supported for now?
 
   if t[n].kind == ConstC:
     c.buildTreeI RodataT, t[n].info:
+      c.code.addSymDef c.m.lits.strings[name], t[v.name].info
       c.buildTree opc:
-        c.code.addSymDef c.m.lits.strings[name], t[v.name].info
         c.genConstData t, v.value
 
   else:
     c.buildTreeI DataT, t[n].info:
+      c.code.addSymDef c.m.lits.strings[name], t[v.name].info
       c.buildTree opc:
-        c.code.addSymDef c.m.lits.strings[name], t[v.name].info
         c.buildTree TimesT:
           c.genIntLit d.typ.size div min(d.typ.align, 8), t[n].info
           c.genIntLit 0, t[n].info

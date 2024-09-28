@@ -25,7 +25,8 @@ proc genCode(c: var Context): bool =
     var before1 = save(c)
   var kw2 = false
   if isTag(c, TextT):
-    emit(c, ".text ")
+    emit(c, ".section .text")
+    nl(c)
     var sym3 = declareSym(c)
     if not success(sym3):
       error(c, "SYMBOLDEF expected")
@@ -88,8 +89,8 @@ proc genDataValue(c: var Context): bool =
     handleDataValue(c, before1)
   return true
 
-proc genTimes(c: var Context): bool =
-  when declared(handleTimes):
+proc genDataKey(c: var Context): bool =
+  when declared(handleDataKey):
     var before1 = save(c)
   var or2 = false
   block or3:
@@ -110,36 +111,8 @@ proc genTimes(c: var Context): bool =
       or2 = true
       break or3
   if not or2: return false
-  when declared(handleTimes):
-    handleTimes(c, before1)
-  return true
-
-proc genTimes2(c: var Context): bool =
-  when declared(handleTimes2):
-    var before1 = save(c)
-  emit(c, ", ")
-  
-  if not genTimes(c): return false
-  when declared(handleTimes2):
-    handleTimes2(c, before1)
-  return true
-
-proc genDataKey(c: var Context): bool =
-  when declared(handleDataKey):
-    var before1 = save(c)
-  var sym2 = declareSym(c)
-  if not success(sym2): return false
-  emit(c, ":")
-  
   nl(c)
   
-  if not genTimes(c): return false
-  var zm3 = true
-  while not peekParRi(c):
-    if not genTimes2(c):
-      zm3 = false
-      break
-  if not zm3: return false
   when declared(handleDataKey):
     handleDataKey(c, before1)
   return true
@@ -147,49 +120,71 @@ proc genDataKey(c: var Context): bool =
 proc genDataDecl(c: var Context): bool =
   when declared(handleDataDecl):
     var before1 = save(c)
-  var or2 = false
-  block or3:
-    var kw4 = false
-    if isTag(c, DbT):
-      emitTag(c, "db")
-      if not genDataKey(c):
-        error(c, "DataKey expected")
-        break or3
-      kw4 = matchParRi(c)
-    if kw4:
-      or2 = true
-      break or3
-    var kw5 = false
-    if isTag(c, DwT):
-      emitTag(c, "dw")
-      if not genDataKey(c):
-        error(c, "DataKey expected")
-        break or3
-      kw5 = matchParRi(c)
-    if kw5:
-      or2 = true
-      break or3
-    var kw6 = false
-    if isTag(c, DdT):
-      emitTag(c, "dd")
-      if not genDataKey(c):
-        error(c, "DataKey expected")
-        break or3
-      kw6 = matchParRi(c)
-    if kw6:
-      or2 = true
-      break or3
-    var kw7 = false
-    if isTag(c, DqT):
-      emitTag(c, "dq")
-      if not genDataKey(c):
-        error(c, "DataKey expected")
-        break or3
-      kw7 = matchParRi(c)
-    if kw7:
-      or2 = true
-      break or3
-  if not or2: return false
+  var sym2 = declareSym(c)
+  if not success(sym2): return false
+  emit(c, ":")
+  
+  nl(c)
+  
+  var om3 = false
+  while not peekParRi(c):
+    var or4 = false
+    block or5:
+      var kw6 = false
+      if isTag(c, AsciiT):
+        emit(c, ".ascii ")
+        if not genDataKey(c):
+          error(c, "DataKey expected")
+          break or5
+        kw6 = matchParRi(c)
+      if kw6:
+        or4 = true
+        break or5
+      var kw7 = false
+      if isTag(c, ByteT):
+        emit(c, ".byte ")
+        if not genDataKey(c):
+          error(c, "DataKey expected")
+          break or5
+        kw7 = matchParRi(c)
+      if kw7:
+        or4 = true
+        break or5
+      var kw8 = false
+      if isTag(c, WordT):
+        emit(c, ".2byte ")
+        if not genDataKey(c):
+          error(c, "DataKey expected")
+          break or5
+        kw8 = matchParRi(c)
+      if kw8:
+        or4 = true
+        break or5
+      var kw9 = false
+      if isTag(c, LongT):
+        emit(c, ".4byte ")
+        if not genDataKey(c):
+          error(c, "DataKey expected")
+          break or5
+        kw9 = matchParRi(c)
+      if kw9:
+        or4 = true
+        break or5
+      var kw10 = false
+      if isTag(c, QuadT):
+        emit(c, ".8byte ")
+        if not genDataKey(c):
+          error(c, "DataKey expected")
+          break or5
+        kw10 = matchParRi(c)
+      if kw10:
+        or4 = true
+        break or5
+    if not or4:
+      break
+    else:
+      om3 = true
+  if not om3: return false
   nl(c)
   
   when declared(handleDataDecl):
@@ -201,7 +196,8 @@ proc genData(c: var Context): bool =
     var before1 = save(c)
   var kw2 = false
   if isTag(c, DataT):
-    emit(c, ".data ")
+    emit(c, ".section .bss")
+    nl(c)
     var zm3 = true
     while not peekParRi(c):
       if not genDataDecl(c):
@@ -223,7 +219,8 @@ proc genRodata(c: var Context): bool =
     var before1 = save(c)
   var kw2 = false
   if isTag(c, RodataT):
-    emit(c, ".rodata ")
+    emit(c, ".section .rodata")
+    nl(c)
     var zm3 = true
     while not peekParRi(c):
       if not genDataDecl(c):

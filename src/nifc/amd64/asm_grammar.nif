@@ -6,22 +6,21 @@
 
 (RULE :Directive (global SYMBOL (DO "nl")))
 
-(RULE :Code (text ".text " SYMBOLDEF ":" (DO "nl") (ONE_OR_MANY Instruction)) (DO "nl"))
+(RULE :Code (text ".section .text" (DO "nl")  SYMBOLDEF ":" (DO "nl") (ONE_OR_MANY Instruction)) (DO "nl"))
 (RULE :ExternDecl (extern SYMBOLDEF (DO "nl")))
 
 (RULE :DataValue (OR STRINGLITERAL INTLIT UINTLIT FLOATLIT))
-(RULE :Times (OR DataValue (times INTLIT DataValue)))
-(RULE :Times2 ", " Times)
-(RULE :DataKey SYMBOLDEF ":" (DO "nl") Times (ZERO_OR_MANY Times2))
-(RULE :DataDecl (OR
-  (db DataKey)
-  (dw DataKey)
-  (dd DataKey)
-  (dq DataKey)
-) (DO "nl"))
+(RULE :DataKey (OR DataValue (times INTLIT DataValue)) (DO "nl"))
+(RULE :DataDecl SYMBOLDEF ":" (DO "nl") (ONE_OR_MANY (OR
+  (ascii ".ascii " DataKey)
+  (byte ".byte " DataKey)
+  (word ".2byte " DataKey)
+  (long ".4byte " DataKey)
+  (quad ".8byte " DataKey)
+)) (DO "nl"))
 
-(RULE :Data (data ".data " (ZERO_OR_MANY DataDecl)) (DO "nl"))
-(RULE :Rodata (rodata ".rodata " (ZERO_OR_MANY DataDecl)) (DO "nl"))
+(RULE :Data (data ".section .bss" (DO "nl") (ZERO_OR_MANY DataDecl)) (DO "nl"))
+(RULE :Rodata (rodata ".section .rodata" (DO "nl") (ZERO_OR_MANY DataDecl)) (DO "nl"))
 
 (RULE :Section (OR Directive ExternDecl Code Data Rodata))
 

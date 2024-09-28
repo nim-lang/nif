@@ -270,6 +270,7 @@ proc genProcDecl(c: var GeneratedCode; t: Tree; n: NodePos) =
     genStmt c, t, prc.body
     if c.exitProcLabel.int >= 0:
       c.defineLabel(c.exitProcLabel, t[n].info)
+    c.genEpilog()
   c.closeScope() # close parameter scope
 
 proc genToplevel(c: var GeneratedCode; t: Tree; n: NodePos) =
