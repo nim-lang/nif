@@ -1357,31 +1357,41 @@ proc genInstruction(c: var Context): bool =
     if matchAndEmitTag(c, NopT, "nop"):
       or2 = true
       break or3
+    var kw76 = false
+    if isTag(c, SkipT):
+      emit(c, "")
+      if not matchAny(c):
+        error(c, "ANY expected")
+        break or3
+      kw76 = matchParRi(c)
+    if kw76:
+      or2 = true
+      break or3
     if matchAndEmitTag(c, RetT, "ret"):
       or2 = true
       break or3
     if matchAndEmitTag(c, SyscallT, "syscall"):
       or2 = true
       break or3
-    var kw76 = false
+    var kw77 = false
     if isTag(c, CommentT):
-      emit(c, "; ")
-      var or77 = false
-      block or78:
+      emit(c, "# ")
+      var or78 = false
+      block or79:
         if matchIdent(c):
-          or77 = true
-          break or78
+          or78 = true
+          break or79
         if lookupSym(c):
-          or77 = true
-          break or78
+          or78 = true
+          break or79
         if matchStringLit(c):
-          or77 = true
-          break or78
-      if not or77:
+          or78 = true
+          break or79
+      if not or78:
         error(c, "invalid Instruction")
         break or3
-      kw76 = matchParRi(c)
-    if kw76:
+      kw77 = matchParRi(c)
+    if kw77:
       or2 = true
       break or3
   if not or2: return false

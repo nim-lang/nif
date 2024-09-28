@@ -198,9 +198,32 @@ proc genSwitch(c: var GeneratedCode; t: Tree; caseStmt: NodePos) =
 ]#
 
 proc genProlog*(c: var GeneratedCode) =
-  discard
+  c.prologAt = c.code.len # will be patched later
+  c.buildTree SkipT:
+    #          ^ might be patched to be `sub`
+    c.addKeyw RspT
+    c.genIntLit 0, NoLineInfo
+
+proc fixupProlog(c: var GeneratedCode) =
+  let i = c.prologAt
+  assert i > 0
+  let s = getTotalStackSpace(c.rega)
+  if s > 0:
+    # patch the tokens
+    # SkipT becomes SubT:
+    c.code[i] = toToken(ParLe, SubT, NoLineInfo)
+    # i+1: (rsp
+    # i+2: )
+    # i+3: 0
+    let sid = pool.integers.getOrIncl(s)
+    c.code[i+3] = toToken(IntLit, sid, NoLineInfo)
 
 proc genEpilog*(c: var GeneratedCode) =
+  let s = getTotalStackSpace(c.rega)
+  if s > 0:
+    c.buildTree AddT:
+      c.addKeyw RspT
+      c.genIntLit s, NoLineInfo
   c.buildTree RetT:
     discard
 

@@ -125,9 +125,10 @@ const
   JaeT* = TagId(122)
   JnaeT* = TagId(123)
   NopT* = TagId(124)
-  RetT* = TagId(125)
-  SyscallT* = TagId(126)
-  CommentT* = TagId(127)
+  SkipT* = TagId(125)
+  RetT* = TagId(126)
+  SyscallT* = TagId(127)
+  CommentT* = TagId(128)
 
 proc registerTags*() =
   registerTag "global", GlobalT
@@ -252,6 +253,7 @@ proc registerTags*() =
   registerTag "jae", JaeT
   registerTag "jnae", JnaeT
   registerTag "nop", NopT
+  registerTag "skip", SkipT
   registerTag "ret", RetT
   registerTag "syscall", SyscallT
   registerTag "comment", CommentT

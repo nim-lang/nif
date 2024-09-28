@@ -31,7 +31,7 @@ type
     code: TokenBuf
     init: TokenBuf
     rega: RegAllocator
-    intmSize, inConst, labels, temps: int
+    intmSize, inConst, labels, prologAt: int
     loopExits: seq[Label]
     generatedTypes: IntSet
     requestedSyms: HashSet[string]
@@ -109,10 +109,6 @@ proc addSym(c: var GeneratedCode; s: string; info: PackedLineInfo) =
 proc getLabel(c: var GeneratedCode): Label =
   result = Label(c.labels)
   inc c.labels
-
-proc getTempVar(c: var GeneratedCode): TempVar =
-  result = TempVar(c.temps)
-  inc c.temps
 
 proc useLabel(c: var GeneratedCode; lab: Label; info: PackedLineInfo) =
   c.addSym "L." & $int(lab), info
@@ -231,7 +227,6 @@ include genasm_s
 
 proc genProcDecl(c: var GeneratedCode; t: Tree; n: NodePos) =
   c.labels = 0 # reset so that we produce nicer code
-  c.temps = 0
   c.exitProcLabel = Label(-1)
   let prc = asProcDecl(t, n)
   if t[prc.body].kind == Empty: return # ignore procs without body
@@ -240,6 +235,8 @@ proc genProcDecl(c: var GeneratedCode; t: Tree; n: NodePos) =
   c.rega = initRegAllocator()
   c.buildTreeI TextT, t[n].info:
     discard genSymDef(c, t, prc.name)
+
+    c.genProlog()
 
     if t[prc.returnType].kind != VoidC:
       let returnSlot = typeToSlot(c, prc.returnType)
@@ -271,6 +268,7 @@ proc genProcDecl(c: var GeneratedCode; t: Tree; n: NodePos) =
     if c.exitProcLabel.int >= 0:
       c.defineLabel(c.exitProcLabel, t[n].info)
     c.genEpilog()
+    c.fixupProlog()
   c.closeScope() # close parameter scope
 
 proc genToplevel(c: var GeneratedCode; t: Tree; n: NodePos) =

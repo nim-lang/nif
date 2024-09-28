@@ -437,3 +437,4 @@ proc sameLocation*(a, b: Location): bool =
 
 proc getTotalStackSpace*(a: RegAllocator): int {.inline.} =
   result = max(a.maxStackSpace, a.usedStackSpace)
+  result = align(result, StackAlign)

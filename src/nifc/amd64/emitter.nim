@@ -118,6 +118,28 @@ proc matchAndEmitTag(c: var Context; tag: TagId; asStr: string): bool =
   else:
     result = false
 
+proc matchAny(c: var Context): bool =
+  while true:
+    case c.current.kind
+    of UnknownToken, DotToken, Ident, Symbol, SymbolDef, StringLit, CharLit, IntLit, UIntLit, FloatLit:
+      inc c.current
+      result = true
+    of EofToken:
+      result = false
+      break
+    of ParRi:
+      result = true
+      break
+    of ParLe:
+      var nested = 0
+      while true:
+        let k = c.current.kind
+        inc c.current
+        if k == ParLe: inc nested
+        elif k == ParRi:
+          dec nested
+          if nested == 0: break
+
 proc nl(c: var Context) = c.dest.add "\n"
 
 proc lookupSym(c: var Context): bool =
