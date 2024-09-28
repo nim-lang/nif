@@ -204,6 +204,25 @@ proc genProlog*(c: var GeneratedCode) =
     c.addKeyw RspT
     c.genIntLit 0, NoLineInfo
 
+proc fixupStackOffset(c: var GeneratedCode; j, s: int) =
+  var k = j-1
+  var patchPos = j+2
+  # figure out which instruction we're in:
+  while k >= c.prologAt and c.code[k].kind != ParLe: dec k
+  while patchPos+1 < c.code.len:
+    if c.code[patchPos].kind == IntLit and c.code[patchPos+1].kind == ParRi:
+      break
+    inc patchPos
+  case c.code[k].tag
+  of Mem2T, Mem4T:
+    let newOffset = pool.integers[c.code[patchPos].intId] + s
+    let sid = pool.integers.getOrIncl(newOffset)
+    c.code[patchPos] = toToken(IntLit, sid, NoLineInfo)
+  of Mem3T:
+    assert false, "should have been a Mem4T instruction"
+  else:
+    assert false, "inspect this case"
+
 proc fixupProlog(c: var GeneratedCode) =
   let i = c.prologAt
   assert i > 0
@@ -223,32 +242,7 @@ proc fixupProlog(c: var GeneratedCode) =
     for j in i+4 ..< c.code.len:
       # patch all addresses that use `rsp2` as these are off by `s`:
       if c.code[j].kind == ParLe and c.code[j].tagId == Rsp2T:
-        var k = j-1
-        # figure out which instruction we're in:
-        while k >= c.prologAt and c.code[k].kind != ParLe: dec k
-        case c.code[k].tag
-        of Mem2T: discard
-        of Mem3T: discard "nothing to do"
-        of Mem4T: discard
-        else: assert false, "inspect this case"
-
-#[
-    c.buildTree Mem2T:
-      c.addKeywUnchecked regName(loc.reg1)
-      c.code.add toToken(IntLit, pool.integers.getOrIncl(loc.typ.offset), NoLineInfo)
-  of InRegRegScaledOffset:
-    if loc.typ.offset == 0:
-      c.buildTree Mem3T:
-        c.addKeywUnchecked regName(loc.reg1)
-        c.addKeywUnchecked regName(loc.reg2)
-        c.code.add toToken(IntLit, pool.integers.getOrIncl(loc.typ.size), NoLineInfo)
-    else:
-      c.buildTree Mem4T:
-        c.addKeywUnchecked regName(loc.reg1)
-        c.addKeywUnchecked regName(loc.reg2)
-        c.code.add toToken(IntLit, pool.integers.getOrIncl(loc.typ.size), NoLineInfo)
-        c.code.add toToken(IntLit, pool.integers.getOrIncl(loc.typ.offset), NoLineInfo)
-]#
+        fixupStackOffset(c, j, s)
 
 proc genEpilog*(c: var GeneratedCode) =
   let s = getTotalStackSpace(c.rega)

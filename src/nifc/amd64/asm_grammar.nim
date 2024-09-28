@@ -337,6 +337,13 @@ proc genReg(c: var Context): bool =
     if matchAndEmitTag(c, R15T, "r15"):
       or2 = true
       break or3
+    var kw4 = false
+    if isTag(c, Rsp2T):
+      emit(c, "rsp")
+      kw4 = matchParRi(c)
+    if kw4:
+      or2 = true
+      break or3
   if not or2: return false
   when declared(handleReg):
     handleReg(c, before1)
