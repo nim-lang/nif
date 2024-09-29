@@ -620,10 +620,35 @@ proc unArithOp(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location; op
 template typedUnOp(opc) =
   unArithOp c, t, n, dest, opc
 
-template immLit(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location;
-                typ: AsmSlot; parse: untyped) =
+proc immInt(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location;
+                typ: AsmSlot) =
   let lit = t[n].litId
-  let d = immediateLoc(parse(c.m.lits.strings[lit]), typ)
+  let src = immediateLoc(parseBiggestInt(c.m.lits.strings[lit]), typ)
+  if dest.kind in {InReg, Undef} or
+    (src.ival >= low(int32) and src.ival <= high(int32)):
+    into c, dest, src
+  else:
+    let d = makeReg(c, src)
+    into c, dest, d
+
+proc immUInt(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location;
+                typ: AsmSlot) =
+  let lit = t[n].litId
+  let u = parseBiggestUInt(c.m.lits.strings[lit])
+  let ival = cast[int64](u)
+  let src = immediateLoc(u, typ)
+  if dest.kind in {InReg, Undef} or
+    (ival >= low(int32) and ival <= high(int32)):
+    into c, dest, immediateLoc(ival, typ)
+  else:
+    let d = makeReg(c, src)
+    into c, dest, d
+
+proc immFloat(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location;
+                typ: AsmSlot) =
+  # XXX This is not how floating point literals work...
+  let lit = t[n].litId
+  let d = immediateLoc(parseFloat(c.m.lits.strings[lit]), typ)
   into c, dest, d
 
 proc genSuffix(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
@@ -644,7 +669,7 @@ proc genSuffix(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
         AsmSlot(kind: AInt, size: 1, align: 1)
       else:
         quit "unsupported suffix"
-    immLit c, t, value, dest, typ, parseBiggestInt
+    immInt c, t, value, dest, typ
   of UIntLit:
     let typ =
       case c.m.lits.strings[t[suffix].litId]
@@ -658,7 +683,7 @@ proc genSuffix(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
         AsmSlot(kind: AUInt, size: 1, align: 1)
       else:
         quit "unsupported suffix"
-    immLit c, t, value, dest, typ, parseBiggestUInt
+    immUInt c, t, value, dest, typ
   of FloatLit:
     let typ =
       case c.m.lits.strings[t[suffix].litId]
@@ -668,7 +693,7 @@ proc genSuffix(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
         AsmSlot(kind: AFloat, size: 4, align: 4)
       else:
         quit "unsupported suffix"
-    immLit c, t, value, dest, typ, parseFloat
+    immFloat c, t, value, dest, typ
   else:
     error c.m, "unsupported suffix ", t, n
 
@@ -677,13 +702,13 @@ proc genx(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
   case t[n].kind
   of IntLit:
     let typ = AsmSlot(kind: AInt, size: WordSize, align: WordSize)
-    immLit c, t, n, dest, typ, parseBiggestInt
+    immInt c, t, n, dest, typ
   of UIntLit:
     let typ = AsmSlot(kind: AUInt, size: WordSize, align: WordSize)
-    immLit c, t, n, dest, typ, parseBiggestUInt
+    immUInt c, t, n, dest, typ
   of FloatLit:
     let typ = AsmSlot(kind: AFloat, size: WordSize, align: WordSize)
-    immLit c, t, n, dest, typ, parseFloat
+    immFloat c, t, n, dest, typ
   of CharLit:
     let typ = AsmSlot(kind: AUInt, size: 1, align: 1)
     let ch = t[n].uoperand
