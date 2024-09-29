@@ -118,7 +118,7 @@ proc matchExpr(c: var Context; it: var Item): bool =
     if matchCharLit(c, it):
       or2 = true
       break or3
-    if matchStringlit(c, it):
+    if matchStringLit(c, it):
       or2 = true
       break or3
     if matchLvalue(c, it):
@@ -1350,7 +1350,7 @@ proc matchAttribute(c: var Context; it: var Item): bool =
     var before1 = save(c, it)
   var kw2 = false
   if isTag(c, it, AttrT):
-    if not matchStringlit(c, it):
+    if not matchStringLit(c, it):
       error(c, it, "STRINGLITERAL expected")
       return false
     kw2 = matchParRi(c, it)
@@ -1751,7 +1751,7 @@ proc matchInclude(c: var Context; it: var Item): bool =
     var before1 = save(c, it)
   var kw2 = false
   if isTag(c, it, InclT):
-    if not matchStringlit(c, it):
+    if not matchStringLit(c, it):
       error(c, it, "STRINGLITERAL expected")
       return false
     kw2 = matchParRi(c, it)

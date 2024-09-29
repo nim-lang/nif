@@ -168,19 +168,23 @@ proc genObjectBody(c: var GeneratedCode; n: NodePos;
   # padding at object end:
   obj.size = obj.size + (obj.size mod obj.align)
 
+proc inBytes(bits: int): int =
+  if bits < 0: 8 # wordsize
+  else: bits div 8
+
 proc fillTypeSlot(c: var GeneratedCode; t: TypeDesc; dest: var AsmSlot) =
   let k = kind(c.m.code, t)
   case k
   of VoidC:
     error c.m, "internal error: Cannot handle 'void' type: ", c.m.code, rawPos(t)
   of IntC:
-    let bytes = integralBits(c, t) div 8
+    let bytes = integralBits(c, t).inBytes
     dest = AsmSlot(kind: AInt, size: bytes, align: bytes)
   of UIntC, CharC:
-    let bytes = integralBits(c, t) div 8
+    let bytes = integralBits(c, t).inBytes
     dest = AsmSlot(kind: AUInt, size: bytes, align: bytes)
   of FloatC:
-    let bytes = integralBits(c, t) div 8
+    let bytes = integralBits(c, t).inBytes
     dest = AsmSlot(kind: AFloat, size: bytes, align: bytes)
   of BoolC:
     dest = AsmSlot(kind: ABool, size: 1, align: 1)
@@ -233,6 +237,10 @@ proc getAsmSlot(c: var GeneratedCode; n: NodePos): AsmSlot =
     result = AsmSlot()
     fillTypeSlot c, t, result
 
-proc getTypeSlot(c: var GeneratedCode; t: NodePos): AsmSlot =
+proc typeToSlot(c: var GeneratedCode; t: NodePos): AsmSlot =
   result = AsmSlot()
   fillTypeSlot c, typeFromPos(t), result
+
+proc typeToSlot(c: var GeneratedCode; t: TypeDesc): AsmSlot =
+  result = AsmSlot()
+  fillTypeSlot c, t, result

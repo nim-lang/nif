@@ -273,7 +273,7 @@ type
     params*, returnType*, pragmas*: NodePos
 
 proc asProcType*(types: TypeGraph; n: NodePos): ProcType =
-  assert types[n].kind == ProctypeC
+  assert types[n].kind in {ProctypeC, ProcC}
   let (_, a, b, c) = sons4(types, n)
   ProcType(params: a, returnType: b, pragmas: c)
 

@@ -13,6 +13,8 @@ type
 
   VarProp* = enum
     AddrTaken   # beware: the variable's address has been taken
+                # this must also be set for arrays as there is no way to
+                # access `a[i]` if `a` itself would be stored in a register
     IsDisjoint  # only `obj.f` is used, not `obj` itself
                 # We can then treat `obj.f` as an
                 # independent variable
