@@ -39,6 +39,7 @@ type
     types: Table[LitId, AsmSlot]
     locals: Table[LitId, Location]
     strings: Table[string, int]
+    floats: Table[LitId, int]
     scopes: seq[Scope]
     returnLoc: Location
     exitProcLabel: Label

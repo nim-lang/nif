@@ -468,6 +468,22 @@ proc genStrLit(c: var GeneratedCode; s: string; info: PackedLineInfo; dest: var 
   let d = Location(typ: AddrTyp, kind: InData, data: c.m.lits.strings.getOrIncl(symId))
   into c, dest, d
 
+proc genFloatLit(c: var GeneratedCode; litId: LitId; info: PackedLineInfo; dest: var Location) =
+  var id = c.floats.getOrDefault(litId, -1)
+  var symId: string
+  if id < 0:
+    id = c.floats.len + 1
+    c.floats[litId] = id
+    symId = "flt." & $id
+    c.data.buildTree RodataT, info:
+      c.data.addSymDef symId, info
+      c.data.buildTree QuadT, info:
+        c.genFloatLit(litId, info)
+  else:
+    symId = "flt." & $id
+  let d = Location(typ: AddrTyp, kind: InData, data: c.m.lits.strings.getOrIncl(symId))
+  into c, dest, d
+
 #[
 proc genConv(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
   let (typ, arg) = sons2(t, n)
@@ -646,16 +662,14 @@ proc immUInt(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location;
 
 proc immFloat(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location;
                 typ: AsmSlot) =
-  # XXX This is not how floating point literals work...
   let lit = t[n].litId
-  let d = immediateLoc(parseFloat(c.m.lits.strings[lit]), typ)
-  into c, dest, d
+  genFloatLit c, lit, t[n].info, dest
 
 proc genSuffix(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
   let (value, suffix) = sons2(t, n)
   case t[value].kind
   of StrLit:
-    genx c, t, n, dest
+    genx c, t, value, dest
   of IntLit:
     let typ =
       case c.m.lits.strings[t[suffix].litId]
@@ -696,6 +710,25 @@ proc genSuffix(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
     immFloat c, t, value, dest, typ
   else:
     error c.m, "unsupported suffix ", t, n
+
+proc genNot(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location; jk: CondJmpKind) =
+  let neg = if jk == Fjmp: Tjmp else: Fjmp
+  case t[n].kind
+  of NotC: genNot c, t, n.firstSon, dest, neg
+  of AndC: genCond c, t, n, dest, jk
+  of OrC: genCond c, t, n, dest, neg
+  of EqC: genCmp c, t, n, dest, (if jk == Tjmp: JeT else: JneT)
+  of LeC: genCmp c, t, n, dest, (if jk == Tjmp: JngT else: JgT)
+  of LtC: genCmp c, t, n, dest, (if jk == Tjmp: JngeT else: JgeT)
+  of ParC: genNot c, t, n.firstSon, dest, jk
+  else:
+    # (not x) == (x xor 1):
+    genx c, t, n, dest
+    c.buildTree XorT:
+      emitLoc c, dest
+      let typ = AsmSlot(kind: AUInt, size: 1, align: 1)
+      let one = immediateLoc(1'u64, typ)
+      emitLoc c, one
 
 proc genx(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
   let info = t[n].info
@@ -774,8 +807,7 @@ proc genx(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
   of EqC: genCmp c, t, n, dest, JneT
   of LeC: genCmp c, t, n, dest, JgT
   of LtC: genCmp c, t, n, dest, JgeT
-
-  #of NotC: unOp NotT
+  of NotC: genNot c, t, n.firstSon, dest, Tjmp
   #of CastC, ConvC:
   #  genConv c, t, n
   of SufC:
