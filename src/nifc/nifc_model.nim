@@ -222,7 +222,13 @@ proc parse*(r: var Reader): Module =
 
 proc load*(filename: string): Module =
   var r = nifreader.open(filename)
-  discard nifreader.processDirectives(r)
+  case nifreader.processDirectives(r)
+  of Success:
+    discard
+  of WrongHeader:
+    quit "nif files must start with Version directive"
+  of WrongMeta:
+    quit "the format of meta information is wrong!"
   result = parse(r)
   result.filename = filename
   r.close
