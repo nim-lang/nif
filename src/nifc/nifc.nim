@@ -24,7 +24,7 @@ const
 Usage:
   nifc [options] [command] [arguments]
 Command:
-  c|cpp|p file.nif [file2.nif]    convert NIF files to C|C++|PreASM
+  c|cpp|p|n file.nif [file2.nif]    convert NIF files to C|C++|PreASM|ASM
 
 Options:
   -r, --run                 run the makefile and the compiled program
