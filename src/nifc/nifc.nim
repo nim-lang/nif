@@ -104,6 +104,13 @@ proc handleCmdLine() =
         currentAction = atNative
         if not hasKey(actionTable, atNative):
           actionTable[atNative] = @[]
+      of "p":
+        if args.len == 0:
+          quit "command takes a filename"
+        else:
+          for inp in items args:
+            let outp = changeFileExt(inp, ".preasm")
+            generatePreAsm inp, outp, bits
       else:
         case currentAction
         of atC:
@@ -192,18 +199,7 @@ proc handleCmdLine() =
       if execCmd("./" & appName) != 0:
         quit "execution of an external program failed: " & appName
   else:
-    case action
-    of "":
-      writeHelp()
-    of "p":
-      if args.len == 0:
-        quit "command takes a filename"
-      else:
-        for inp in items args:
-          let outp = changeFileExt(inp, ".preasm")
-          generatePreAsm inp, outp, bits
-    else:
-      quit "Invalid action: " & action
+    writeHelp()
 
 when isMainModule:
   handleCmdLine()
