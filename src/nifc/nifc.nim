@@ -9,7 +9,7 @@
 
 ## NIFC driver program.
 
-import std / [parseopt, strutils, os, osproc]
+import std / [parseopt, strutils, os, osproc, tables]
 import codegen, makefile, noptions
 import preasm / genpreasm
 
@@ -57,24 +57,31 @@ proc genMakeCmd(config: ConfigRef, makefilePath: string): string =
     else:
       quit "unreachable"
 
-  result = case config.backend
-    of backendC:
-      "make " & "CC=" & cCompiler &
+  result = "make " & "CC=" & cCompiler &
+          " " & "CXX=" & cppCompiler &
           " " & "CFLAGS=" & "\"" & optimizeLevelFlag & "\"" &
-          " -f " & makefilePath
-    of backendCpp:
-      "make " & "CXX=" & cppCompiler &
           " " & "CXXFLAGS=" & "\"" & optimizeLevelFlag & "\"" &
           " -f " & makefilePath
-    else:
-      quit "unreachable"
+
+proc generateBackend(s: var State; action: Action; files: seq[string]; bits: int) =
+  assert action in {atC, atCpp}
+  if files.len == 0:
+    quit "command takes a filename"
+  s.config.backend = if action == atC: backendC else: backendCpp
+  let destExt = if action == atC: ".c" else: ".cpp"
+  for i in 0..<files.len:
+    let inp = files[i]
+    let outp = s.config.nifcacheDir / splitFile(inp).name & destExt
+    generateCode s, inp, outp, bits
 
 proc handleCmdLine() =
   var action = ""
   var args: seq[string] = @[]
   var bits = sizeof(int)*8
   var toRun = false
+  var currentAction = atNone
 
+  var actionTable = initActionTable()
 
   var s = State(config: ConfigRef())
   when defined(macos): # TODO: switches to default config for platforms
@@ -84,10 +91,29 @@ proc handleCmdLine() =
   for kind, key, val in getopt():
     case kind
     of cmdArgument:
-      if action.len == 0:
-        action = key.normalize
+      case key.normalize:
+      of "c":
+        currentAction = atC
+        if not hasKey(actionTable, atC):
+          actionTable[atC] = @[]
+      of "cpp":
+        currentAction = atCpp
+        if not hasKey(actionTable, atCpp):
+          actionTable[atCpp] = @[]
+      of "n":
+        currentAction = atNative
+        if not hasKey(actionTable, atNative):
+          actionTable[atNative] = @[]
       else:
-        args.add key
+        case currentAction
+        of atC:
+          actionTable[atC].add key
+        of atCpp:
+          actionTable[atCpp].add key
+        of atNative:
+          actionTable[atNative].add key
+        of atNone:
+          raiseAssert "unreachable"
     of cmdLongOption, cmdShortOption:
       case normalize(key)
       of "bits":
@@ -128,57 +154,56 @@ proc handleCmdLine() =
       else: writeHelp()
     of cmdEnd: assert false, "cannot happen"
 
-  case action
-  of "":
-    writeHelp()
-  of "c", "cpp":
-    if args.len == 0:
-      quit "command takes a filename"
-    else:
-      s.config.backend = if action == "c": backendC else: backendCpp
-      let destExt = if action == "c": ".c" else: ".cpp"
-      var moduleNames = newSeq[string](args.len)
-      let nifcacheDir = "nifcache"
-      createDir(nifcacheDir)
-      for i in 0..<args.len:
-        let inp = args[i]
-        moduleNames[i] = splitFile(inp).name
-        let outp = nifcacheDir / moduleNames[i] & destExt
-        generateCode s, inp, outp, bits
-      if s.selects.len > 0:
-        var h = open(nifcacheDir / "select_any.h", fmWrite)
-        for x in s.selects:
-          write h, "#include \"" & extractFileName(x) & "\"\n"
-        h.close()
-      let appName = moduleNames[^1]
-      let makefilePath = nifcacheDir / "Makefile." & appName
-      generateMakefile(s, makefilePath, moduleNames, appName, nifcacheDir, action, destExt)
-      if toRun:
-        let makeCmd = genMakeCmd(s.config, makefilePath)
-        let (output, exitCode) = execCmdEx(makeCmd)
-        if exitCode != 0:
-          quit "execution of an external program failed: " & output
-        if execCmd("./" & appName) != 0:
-          quit "execution of an external program failed: " & appName
-  of "p":
-    if args.len == 0:
-      quit "command takes a filename"
-    else:
-      for inp in items args:
-        let outp = changeFileExt(inp, ".preasm")
-        generatePreAsm inp, outp, bits
-  of "asm":
-    if args.len == 0:
-      quit "command takes a filename"
-    else:
-      when defined(enableAsm):
-        for inp in items args:
-          let outp = changeFileExt(inp, ".asm")
-          generateAsm inp, outp
-      else:
-        quit "wasn't built with native target support"
+  s.config.nifcacheDir = "nifcache"
+  createDir(s.config.nifcacheDir)
+  if actionTable.len != 0:
+    for action in actionTable.keys:
+      case action
+      of atC, atCpp:
+        generateBackend(s, action, actionTable[action], bits)
+      of atNative:
+        let args = actionTable[action]
+        if args.len == 0:
+          quit "command takes a filename"
+        else:
+          when defined(enableAsm):
+            for inp in items args:
+              let outp = changeFileExt(inp, ".S")
+              generateAsm inp, s.config.nifcacheDir / outp
+          else:
+            quit "wasn't built with native target support"
+      of atNone:
+        quit "targets are not specified"
+
+    if s.selects.len > 0:
+      var h = open(s.config.nifcacheDir / "select_any.h", fmWrite)
+      for x in s.selects:
+        write h, "#include \"" & extractFileName(x) & "\"\n"
+      h.close()
+    let appName = actionTable[currentAction][^1].splitFile.name
+    let makefilePath = s.config.nifcacheDir / "Makefile." & appName
+
+    generateMakefile(s, makefilePath, appName, actionTable)
+    if toRun:
+      let makeCmd = genMakeCmd(s.config, makefilePath)
+      let (output, exitCode) = execCmdEx(makeCmd)
+      if exitCode != 0:
+        quit "execution of an external program failed: " & output
+      if execCmd("./" & appName) != 0:
+        quit "execution of an external program failed: " & appName
   else:
-    quit "Invalid action: " & action
+    case action
+    of "":
+      writeHelp()
+    of "p":
+      if args.len == 0:
+        quit "command takes a filename"
+      else:
+        for inp in items args:
+          let outp = changeFileExt(inp, ".preasm")
+          generatePreAsm inp, outp, bits
+    else:
+      quit "Invalid action: " & action
 
 when isMainModule:
   handleCmdLine()

@@ -1,3 +1,5 @@
+import std/tables
+
 type
   Backend* = enum
     backendInvalid = "" # for parseEnum
@@ -13,12 +15,21 @@ type
   SystemCC* = enum
     ccNone, ccGcc, ccCLang
 
+  Action* = enum
+    atNone, atC, atCpp, atNative
+
   ConfigRef* {.acyclic.} = ref object ## every global configuration
     cCompiler*: SystemCC
     backend*: Backend
     options*: set[Option]
     optimizeLevel*: OptimizeLevel
+    nifcacheDir*: string
 
   State* = object
     selects*: seq[string] # names of modules with functions with selectany pragmas
     config*: ConfigRef
+
+  ActionTable* = OrderedTable[Action, seq[string]]
+
+proc initActionTable*(): ActionTable {.inline.} =
+  result = initOrderedTable[Action, seq[string]]()
