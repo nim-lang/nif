@@ -75,7 +75,6 @@ proc generateBackend(s: var State; action: Action; files: seq[string]; bits: int
     generateCode s, inp, outp, bits
 
 proc handleCmdLine() =
-  var action = ""
   var args: seq[string] = @[]
   var bits = sizeof(int)*8
   var toRun = false
