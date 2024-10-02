@@ -21,8 +21,8 @@ template singleElement(keyw: string) {.dirty.} =
 
 proc toNif*(t: PType; parent: PNode; c: var WContext) =
   case t.kind
-  of tyNone: c.b.addKeyw typeKindToTag(t.kind)
-  of tyBool: c.b.addKeyw typeKindToTag(t.kind)
+  of tyNone: c.b.addKeyw toNifTag(t.kind)
+  of tyBool: c.b.addKeyw toNifTag(t.kind)
   of tyChar: c.b.addKeyw "c 8"
   of tyEmpty: c.b.addEmpty
   of tyInt: c.b.addKeyw "i M"
@@ -41,28 +41,28 @@ proc toNif*(t: PType; parent: PNode; c: var WContext) =
   of tyAlias:
     # XXX Generic aliases are no aliases
     toNif t.skipModifier, parent, c
-  of tyNil: c.b.addKeyw typeKindToTag(t.kind)
-  of tyUntyped: c.b.addKeyw typeKindToTag(t.kind)
-  of tyTyped: c.b.addKeyw typeKindToTag(t.kind)
+  of tyNil: c.b.addKeyw toNifTag(t.kind)
+  of tyUntyped: c.b.addKeyw toNifTag(t.kind)
+  of tyTyped: c.b.addKeyw toNifTag(t.kind)
   of tyTypeDesc:
-    c.b.withTree typeKindToTag(t.kind):
+    c.b.withTree toNifTag(t.kind):
       if t.kidsLen == 0 or t.elementType.kind == tyNone:
         c.b.addEmpty
       else:
         toNif t.elementType, parent, c
   of tyGenericParam:
     # See the nim-sem spec:
-    c.b.withTree typeKindToTag(t.kind):
+    c.b.withTree toNifTag(t.kind):
       symToNif t.sym, c
       c.b.addIntLit t.sym.position
 
   of tyGenericInst:
-    c.b.withTree typeKindToTag(t.kind):
+    c.b.withTree toNifTag(t.kind):
       toNif t.genericHead, parent, c
       for _, a in t.genericInstParams:
         toNif a, parent, c
   of tyGenericInvocation:
-    c.b.withTree typeKindToTag(t.kind):
+    c.b.withTree toNifTag(t.kind):
       toNif t.genericHead, parent, c
       for _, a in t.genericInvocationParams:
         toNif a, parent, c
@@ -75,64 +75,64 @@ proc toNif*(t: PType; parent: PNode; c: var WContext) =
     if isNominalRef(t):
       symToNif t.sym, c
     else:
-      c.b.withTree typeKindToTag(t.kind):
+      c.b.withTree toNifTag(t.kind):
         toNif t.elementType, parent, c
   of tyRef:
     if isNominalRef(t):
       symToNif t.sym, c
     else:
-      c.b.withTree typeKindToTag(t.kind):
+      c.b.withTree toNifTag(t.kind):
         toNif t.elementType, parent, c
   of tyVar:
     c.b.withTree(if isOutParam(t): "out" else: "mut"):
       toNif t.elementType, parent, c
   of tyAnd:
-    c.b.withTree typeKindToTag(t.kind):
+    c.b.withTree toNifTag(t.kind):
       for _, son in t.ikids: toNif son, parent, c
   of tyOr:
-    c.b.withTree typeKindToTag(t.kind):
+    c.b.withTree toNifTag(t.kind):
       for _, son in t.ikids: toNif son, parent, c
   of tyNot:
-    c.b.withTree typeKindToTag(t.kind): toNif t.elementType, parent, c
+    c.b.withTree toNifTag(t.kind): toNif t.elementType, parent, c
 
   of tyFromExpr:
     if t.n == nil:
       c.b.addKeyw "err"
     else:
-      c.b.withTree typeKindToTag(t.kind):
+      c.b.withTree toNifTag(t.kind):
         toNif t.n, parent, c
 
   of tyArray:
-    c.b.withTree typeKindToTag(t.kind):
+    c.b.withTree toNifTag(t.kind):
       if t.hasElementType:
         toNif t.elementType, parent, c
         toNif t.indexType, parent, c
       else:
         c.b.addEmpty 2
   of tyUncheckedArray:
-    c.b.withTree typeKindToTag(t.kind):
+    c.b.withTree toNifTag(t.kind):
       if t.hasElementType:
         toNif t.elementType, parent, c
       else:
         c.b.addEmpty
 
   of tySequence:
-    singleElement typeKindToTag(t.kind)
+    singleElement toNifTag(t.kind)
 
   of tyOrdinal:
-    c.b.withTree typeKindToTag(t.kind):
+    c.b.withTree toNifTag(t.kind):
       if t.hasElementType:
         toNif t.skipModifier, parent, c
       else:
         c.b.addEmpty
 
-  of tySet: singleElement typeKindToTag(t.kind)
-  of tyOpenArray: singleElement typeKindToTag(t.kind)
-  of tyIterable: singleElement typeKindToTag(t.kind)
-  of tyLent: singleElement typeKindToTag(t.kind)
+  of tySet: singleElement toNifTag(t.kind)
+  of tyOpenArray: singleElement toNifTag(t.kind)
+  of tyIterable: singleElement toNifTag(t.kind)
+  of tyLent: singleElement toNifTag(t.kind)
 
   of tyTuple:
-    c.b.withTree typeKindToTag(t.kind):
+    c.b.withTree toNifTag(t.kind):
       if t.n != nil:
         for i in 0..<t.n.len:
           assert(t.n[i].kind == nkSym)
@@ -143,7 +143,7 @@ proc toNif*(t: PType; parent: PNode; c: var WContext) =
         for _, son in t.ikids: toNif son, parent, c
 
   of tyRange:
-    c.b.withTree typeKindToTag(t.kind):
+    c.b.withTree toNifTag(t.kind):
       toNif t.elementType, parent, c
       if t.n != nil and t.n.kind == nkRange and t.n.len == 2:
         toNif t.n[0], parent, c
@@ -180,10 +180,10 @@ proc toNif*(t: PType; parent: PNode; c: var WContext) =
         if t.callConv == ccNimCall and tfExplicitCallConv notin t.flags:
           discard "no calling convention to generate"
         else:
-          c.b.addKeyw ($t.callConv).toLowerAscii.substr(2)
+          c.b.addKeyw toNifTag(t.callConv)
 
   of tyVarargs:
-    c.b.withTree typeKindToTag(t.kind):
+    c.b.withTree toNifTag(t.kind):
       if t.hasElementType:
         toNif t.elementType, parent, c
       else:
@@ -193,18 +193,18 @@ proc toNif*(t: PType; parent: PNode; c: var WContext) =
       else:
         c.b.addEmpty
 
-  of tySink: singleElement typeKindToTag(t.kind)
-  of tyOwned: singleElement typeKindToTag(t.kind)
-  of tyVoid: c.b.addKeyw typeKindToTag(t.kind)
-  of tyPointer: c.b.addKeyw typeKindToTag(t.kind)
-  of tyString: c.b.addKeyw typeKindToTag(t.kind)
-  of tyCstring: c.b.addKeyw typeKindToTag(t.kind)
+  of tySink: singleElement toNifTag(t.kind)
+  of tyOwned: singleElement toNifTag(t.kind)
+  of tyVoid: c.b.addKeyw toNifTag(t.kind)
+  of tyPointer: c.b.addKeyw toNifTag(t.kind)
+  of tyString: c.b.addKeyw toNifTag(t.kind)
+  of tyCstring: c.b.addKeyw toNifTag(t.kind)
   of tyObject: symToNif t.sym, c
-  of tyForward: c.b.addKeyw typeKindToTag(t.kind)
-  of tyProxy: c.b.addKeyw typeKindToTag(t.kind)
+  of tyForward: c.b.addKeyw toNifTag(t.kind)
+  of tyError: c.b.addKeyw toNifTag(t.kind)
   of tyBuiltInTypeClass:
     # XXX See what to do with this.
-    c.b.withTree typeKindToTag(t.kind):
+    c.b.withTree toNifTag(t.kind):
       if t.kidsLen == 0 or t.genericHead.kind == tyNone:
         c.b.addEmpty
       else:
@@ -224,9 +224,9 @@ proc toNif*(t: PType; parent: PNode; c: var WContext) =
       c.b.addKeyw "err"
   of tyCompositeTypeClass: toNif t.last, parent, c
   of tyInferred: toNif t.skipModifier, parent, c
-  of tyAnything: c.b.addKeyw typeKindToTag(t.kind)
+  of tyAnything: c.b.addKeyw toNifTag(t.kind)
   of tyStatic:
-    c.b.withTree typeKindToTag(t.kind):
+    c.b.withTree toNifTag(t.kind):
       if t.hasElementType:
         toNif t.skipModifier, parent, c
       else:
