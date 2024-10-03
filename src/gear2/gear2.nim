@@ -3,14 +3,47 @@ when not defined(nimcore):
 
 import std / [os, times, parseopt]
 import "$nim" / compiler / [
-  llstream, ast, lexer, syntaxes, options, msgs,
-  condsyms,
-  idents,
-  nversion,
-  platform, nimconf, depends,
-  modules, pipelines,
-  modulegraphs, lineinfos, pathutils,
+  ast, options, msgs, condsyms, idents, platform,
+  modules, pipelines, packages, modulegraphs, lineinfos, pathutils,
   cmdlinehelper, commands]
+
+when defined(loadFromNif):
+  # XXX Enable once NIF generation works
+  proc importPipelineModule2(graph: ModuleGraph; s: PSym, fileIdx: FileIndex): PSym =
+    # this is called by the semantic checking phase
+    assert graph.config != nil
+    result = nil # to implement
+
+  proc connectPipelineCallbacks2(graph: ModuleGraph) =
+    graph.includeFileCallback = modules.includeModule
+    graph.importModuleCallback = importPipelineModule2
+
+  proc compilePipelineSystemModule2(graph: ModuleGraph) =
+    if graph.systemModule == nil:
+      connectPipelineCallbacks2(graph)
+      graph.config.m.systemFileIdx = fileInfoIdx(graph.config,
+          graph.config.libpath / RelativeFile"system.nim")
+      discard graph.compilePipelineModule(graph.config.m.systemFileIdx, {sfSystemModule})
+
+  proc compilePipelineProject*(graph: ModuleGraph; projectFileIdx = InvalidFileIdx) =
+    connectPipelineCallbacks2(graph)
+    let conf = graph.config
+    wantMainModule(conf)
+    configComplete(graph)
+
+    let systemFileIdx = fileInfoIdx(conf, conf.libpath / RelativeFile"system.nim")
+    let projectFile = if projectFileIdx == InvalidFileIdx: conf.projectMainIdx else: projectFileIdx
+    conf.projectMainIdx2 = projectFile
+
+    let packSym = getPackage(graph, projectFile)
+    graph.config.mainPackageId = packSym.getPackageId
+    graph.importStack.add projectFile
+
+    if projectFile == systemFileIdx:
+      discard graph.compilePipelineModule(projectFile, {sfMainModule, sfSystemModule})
+    else:
+      graph.compilePipelineSystemModule2()
+      discard graph.compilePipelineModule(projectFile, {sfMainModule})
 
 proc commandCheck(graph: ModuleGraph) =
   let conf = graph.config
