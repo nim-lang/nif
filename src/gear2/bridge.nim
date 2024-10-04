@@ -57,7 +57,7 @@ proc toNif*(t: PType; parent: PNode; c: var WContext)
 
 proc symToNif(n: PNode; parent: PNode; c: var WContext; isDef = false) =
   if n.typ != n.sym.typ:
-    c.b.withTree "htypediffers":
+    c.b.withTree "htype":
       toNif n.typ, parent, c
       symToNif n.sym, c, isDef
   else:
@@ -96,7 +96,7 @@ proc toNifPragmas(n, name, parent: PNode; c: var WContext) =
         b2.withTree "exportc":
           b2.addIdent name.sym.loc.snippet
       b2.writeFlags flags - {sfImportc, sfExportc}
-    else:
+    elif n != nil:
       for ch in n:
         toNif ch, n, c
   let s = b2.extract()
@@ -500,6 +500,11 @@ proc moduleToIr*(n: PNode; c: var WContext) =
   c.b = nifbuilder.open(100)
   c.b.addHeader "Nifler", "nim-sem"
   toNif(n, nil, c)
+
+proc toNif*(conf: ConfigRef; n: PNode; filename: string) =
+  var w = initTranslationContext(conf)
+  moduleToIr(n, w)
+  writeFile filename, w.b.extract()
 
 proc createConf(): ConfigRef =
   result = newConfigRef()

@@ -7,6 +7,8 @@ import "$nim" / compiler / [
   modules, pipelineutils, pipelines, packages, modulegraphs, lineinfos, pathutils,
   cmdlinehelper, commands, sem, renderer, syntaxes, parser]
 
+import bridge
+
 when defined(loadFromNif):
   # XXX Enable once NIF generation works
   proc importPipelineModule2(graph: ModuleGraph; s: PSym, fileIdx: FileIndex): PSym =
@@ -133,6 +135,7 @@ proc commandCheck(graph: ModuleGraph) =
   let module = compilePipelineProject2(graph)
   when defined(debug):
     echo renderTree(module.ast)
+  toNif(conf, module.ast, "system.nif")
 
 proc processCmdLine(pass: TCmdLinePass, cmd: string; config: ConfigRef) =
   var p = parseopt.initOptParser(cmd)

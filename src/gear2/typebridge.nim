@@ -20,17 +20,21 @@ template singleElement(keyw: string) {.dirty.} =
       c.b.addEmpty
 
 proc toNif*(t: PType; parent: PNode; c: var WContext) =
+  if t == nil:
+    c.b.addKeyw "missing"
+    return
+
   case t.kind
   of tyNone: c.b.addKeyw toNifTag(t.kind)
   of tyBool: c.b.addKeyw toNifTag(t.kind)
   of tyChar: c.b.addKeyw "c 8"
   of tyEmpty: c.b.addEmpty
-  of tyInt: c.b.addKeyw "i M"
+  of tyInt: c.b.addKeyw "i -1"
   of tyInt8: c.b.addKeyw "i 8"
   of tyInt16: c.b.addKeyw "i 16"
   of tyInt32: c.b.addKeyw "i 32"
   of tyInt64: c.b.addKeyw "i 64"
-  of tyUInt: c.b.addKeyw "u M"
+  of tyUInt: c.b.addKeyw "u -1"
   of tyUInt8: c.b.addKeyw "u 8"
   of tyUInt16: c.b.addKeyw "u 16"
   of tyUInt32: c.b.addKeyw "u 32"
@@ -39,8 +43,8 @@ proc toNif*(t: PType; parent: PNode; c: var WContext) =
   of tyFloat32: c.b.addKeyw "f 32"
   of tyFloat128: c.b.addKeyw "f 128"
   of tyAlias:
-    # XXX Generic aliases are no aliases
-    toNif t.skipModifier, parent, c
+    c.b.withTree toNifTag(t.kind):
+      toNif t.skipModifier, parent, c
   of tyNil: c.b.addKeyw toNifTag(t.kind)
   of tyUntyped: c.b.addKeyw toNifTag(t.kind)
   of tyTyped: c.b.addKeyw toNifTag(t.kind)
@@ -67,10 +71,15 @@ proc toNif*(t: PType; parent: PNode; c: var WContext) =
       for _, a in t.genericInvocationParams:
         toNif a, parent, c
   of tyGenericBody:
-    toNif t.last, parent, c
-    # Alternatively something with `genericBodyParams`...
+    #toNif t.last, parent, c
+    c.b.withTree toNifTag(t.kind):
+      for _, son in t.ikids: toNif son, parent, c
   of tyDistinct, tyEnum:
-    symToNif t.sym, c
+    if t.sym != nil:
+      symToNif t.sym, c
+    else:
+      c.b.withTree toNifTag(t.kind):
+        for _, son in t.ikids: toNif son, parent, c
   of tyPtr:
     if isNominalRef(t):
       symToNif t.sym, c
