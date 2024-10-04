@@ -94,7 +94,10 @@ proc mainCommand(graph: ModuleGraph) =
   let conf = graph.config
   conf.lastCmdTime = epochTime()
   conf.searchPaths.add(conf.libpath)
-  commandCheck graph
+  if conf.cmd == cmdM:
+    commandCheck graph
+  else:
+    rawMessage conf, errGenerated, "only the 'm' command is supported for now"
 
 proc handleCmdLine(cache: IdentCache; conf: ConfigRef) =
   let self = NimProg(
