@@ -1,8 +1,6 @@
 (.nif24)
 (index
-
 (public)
-
 (private 1,1,hello.nim
  (kv MyObject.c +36)
  (kv MyProc.e +49)

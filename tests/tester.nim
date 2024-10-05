@@ -124,7 +124,6 @@ const
   ExpectedNifBuilderResult = """(.nif24)
 (.vendor "tester")
 (.dialect "niftest")
-
 (stmts 4,5,mymodb.nim
  (call 1,3,mymod.nim foo.3.mymod +3423 +50.4))"""
 

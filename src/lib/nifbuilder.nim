@@ -213,8 +213,9 @@ proc addTree*(b: var Builder; kind: string) =
   ## `kind` is allowed to start with a dot. This emits a directive then.
   drainPending b
   if not b.compact:
-    b.put "\n"
-    for i in 1..b.nesting: b.put ' '
+    if b.nesting > 0:
+      b.put "\n"
+      for i in 1..b.nesting: b.put ' '
     b.put '('
   else:
     b.put "\n("
