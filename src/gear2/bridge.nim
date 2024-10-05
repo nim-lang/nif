@@ -56,7 +56,7 @@ proc toNif*(n, parent: PNode; c: var WContext)
 proc toNif*(t: PType; parent: PNode; c: var WContext)
 
 proc symToNif(n: PNode; parent: PNode; c: var WContext; isDef = false) =
-  if n.typ != n.sym.typ:
+  if not isDef and n.typ != n.sym.typ:
     c.b.withTree "htype":
       toNif n.typ, parent, c
       symToNif n.sym, c, isDef
@@ -83,6 +83,10 @@ proc writeFlags[E](b: var Builder; flags: set[E]) =
   genFlags(flags, flagsAsIdent)
   if flagsAsIdent.len > 0:
     b.addIdent flagsAsIdent
+
+proc writeNodeFlags(b: var Builder; flags: set[TNodeFlag]) {.inline.} =
+  # we know nodes can have been sem'checked:
+  writeFlags b, flags - {nfSem}
 
 proc toNifPragmas(n, name, parent: PNode; c: var WContext) =
   var b2 = nifbuilder.open(30)
@@ -128,7 +132,7 @@ proc toNif*(n, parent: PNode; c: var WContext) =
       magicCall n[0].sym.magic, n, c
     else:
       c.b.addTree(toNifTag(n.kind))
-      c.b.writeFlags n.flags
+      c.b.writeNodeFlags n.flags
       for i in 0..<n.len:
         toNif(n[i], n, c)
       c.b.endTree
@@ -245,7 +249,7 @@ proc toNif*(n, parent: PNode; c: var WContext) =
     c.section = "param"
     relLineInfo(n, parent, c)
     c.b.addTree(toNifTag(n.kind))
-    c.b.writeFlags n.flags
+    c.b.writeNodeFlags n.flags
     for i in 0..<n.len:
       toNif(n[i], n, c)
     c.b.endTree
@@ -253,7 +257,7 @@ proc toNif*(n, parent: PNode; c: var WContext) =
     c.section = "typevar"
     relLineInfo(n, parent, c)
     c.b.addTree(toNifTag(n.kind))
-    c.b.writeFlags n.flags
+    c.b.writeNodeFlags n.flags
     for i in 0..<n.len:
       toNif(n[i], n, c)
     c.b.endTree
@@ -312,7 +316,7 @@ proc toNif*(n, parent: PNode; c: var WContext) =
       c.b.endTree
   of nkOfBranch:
     relLineInfo(n, parent, c)
-    c.b.addTree("of")
+    c.b.addTree(toNifTag(n.kind))
     c.b.addTree("sconstr")
     for i in 0..<n.len-1:
       toNif(n[i], n, c)
@@ -324,10 +328,10 @@ proc toNif*(n, parent: PNode; c: var WContext) =
   of nkStmtListType, nkStmtListExpr:
     relLineInfo(n, parent, c)
     c.b.addTree(toNifTag(n.kind))
-    c.b.writeFlags n.flags
+    c.b.writeNodeFlags n.flags
 
     c.b.addEmpty # type information of StmtListExpr
-    c.b.addTree("stmts")
+    c.b.addTree(toNifTag(n.kind))
     for i in 0..<n.len-1:
       toNif(n[i], n, c)
     c.b.endTree
@@ -339,7 +343,7 @@ proc toNif*(n, parent: PNode; c: var WContext) =
 
   of nkProcTy:
     relLineInfo(n, parent, c)
-    c.b.addTree("proctype")
+    c.b.addTree(toNifTag(n.kind))
 
     c.b.addEmpty 4 # 0: name
     # 1: export marker
@@ -366,7 +370,7 @@ proc toNif*(n, parent: PNode; c: var WContext) =
     #   EnumType
     #   (Integer value, "string value")
     relLineInfo(n, parent, c)
-    c.b.addTree("enum")
+    c.b.addTree(toNifTag(n.kind))
     if n.len > 0:
       assert n[0].kind == nkEmpty
     for i in 1..<n.len:
@@ -412,7 +416,7 @@ proc toNif*(n, parent: PNode; c: var WContext) =
   of nkProcDef, nkFuncDef, nkConverterDef, nkMacroDef, nkTemplateDef, nkIteratorDef, nkMethodDef:
     relLineInfo(n, parent, c)
     c.b.addTree(toNifTag(n.kind))
-    c.b.writeFlags n.flags
+    c.b.writeNodeFlags n.flags
 
     var name: PNode
     var visibility: PNode = nil
@@ -436,7 +440,7 @@ proc toNif*(n, parent: PNode; c: var WContext) =
     relLineInfo(n, parent, c)
     assert n[n.len-2].kind == nkEmpty
     c.b.addTree(toNifTag(n.kind))
-    c.b.writeFlags n.flags
+    c.b.writeNodeFlags n.flags
     toNif(n[n.len-1], n, c)
     c.b.addTree("unpacktuple")
     for i in 0..<n.len-2:
@@ -453,7 +457,7 @@ proc toNif*(n, parent: PNode; c: var WContext) =
   of nkForStmt:
     relLineInfo(n, parent, c)
     c.b.addTree(toNifTag(n.kind))
-    c.b.writeFlags n.flags
+    c.b.writeNodeFlags n.flags
     toNif(n[n.len-2], n, c) # iterator
     if n[0].kind == nkVarTuple:
       let v = n[0]
@@ -481,14 +485,14 @@ proc toNif*(n, parent: PNode; c: var WContext) =
     c.section = "fld"
     relLineInfo(n, parent, c)
     c.b.addTree(toNifTag(n.kind))
-    c.b.writeFlags n.flags
+    c.b.writeNodeFlags n.flags
     for i in 0..<n.len:
       toNif(n[i], n, c)
     c.b.endTree
   else:
     relLineInfo(n, parent, c)
     c.b.addTree(toNifTag(n.kind))
-    c.b.writeFlags n.flags
+    c.b.writeNodeFlags n.flags
     for i in 0..<n.len:
       toNif(n[i], n, c)
     c.b.endTree
