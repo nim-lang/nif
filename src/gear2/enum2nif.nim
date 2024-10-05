@@ -46,10 +46,10 @@ proc toNifTag*(s: TNodeKind): string =
   of nkCurly: "curly"
   of nkCurlyExpr: "curlyx"
   of nkBracket: "bracket"
-  of nkBracketExpr: "bracketx"
+  of nkBracketExpr: "at"
   of nkPragmaExpr: "pragmax"
   of nkRange: "range"
-  of nkDotExpr: "dotx"
+  of nkDotExpr: "dot"
   of nkCheckedFieldExpr: "checkedfieldx"
   of nkDerefExpr: "deref"
   of nkIfExpr: "ifx"
@@ -119,7 +119,7 @@ proc toNifTag*(s: TNodeKind): string =
   of nkBlockStmt: "block"
   of nkStaticStmt: "static"
   of nkDiscardStmt: "discard"
-  of nkStmtList: "stmtlist"
+  of nkStmtList: "stmts"
   of nkImportStmt: "import"
   of nkImportExceptStmt: "importexcept"
   of nkExportStmt: "export"
@@ -216,10 +216,10 @@ proc parseNodeKind*(s: string): TNodeKind =
   of "curly": nkCurly
   of "curlyx": nkCurlyExpr
   of "bracket": nkBracket
-  of "bracketx": nkBracketExpr
+  of "at": nkBracketExpr
   of "pragmax": nkPragmaExpr
   of "range": nkRange
-  of "dotx": nkDotExpr
+  of "dot": nkDotExpr
   of "checkedfieldx": nkCheckedFieldExpr
   of "deref": nkDerefExpr
   of "ifx": nkIfExpr
@@ -289,7 +289,7 @@ proc parseNodeKind*(s: string): TNodeKind =
   of "block": nkBlockStmt
   of "static": nkStaticStmt
   of "discard": nkDiscardStmt
-  of "stmtlist": nkStmtList
+  of "stmts": nkStmtList
   of "import": nkImportStmt
   of "importexcept": nkImportExceptStmt
   of "export": nkExportStmt

@@ -60,7 +60,10 @@ const
     ("tyGenericInvocation", "ginvoke"),
     ("tyGenericBody", "gbody"),
     ("tyGenericInst", "ginst"),
-    ("tyGenericParam", "gparam")
+    ("tyGenericParam", "gparam"),
+    ("nkStmtList", "stmts"),
+    ("nkDotExpr", "dot"),
+    ("nkBracketExpr", "at")
   ]
   SuffixesToReplace = [
     ("Section", ""), ("Branch", ""), ("Stmt", ""), ("I", ""),

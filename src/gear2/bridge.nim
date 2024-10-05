@@ -141,7 +141,7 @@ proc toNif*(n, parent: PNode; c: var WContext) =
     c.b.addKeyw "nil"
   of nkStrLit:
     relLineInfo(n, parent, c)
-    c.b.addStrLit n.strVal, ""
+    c.b.addStrLit n.strVal
   of nkRStrLit:
     relLineInfo(n, parent, c)
     c.b.addStrLit n.strVal, "R"
