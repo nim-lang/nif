@@ -83,12 +83,12 @@ proc toNifTag*(s: TNodeKind): string =
   of nkFormalParams: "formalparams"
   of nkOfInherit: "ofinherit"
   of nkImportAs: "importas"
-  of nkProcDef: "procdef"
-  of nkMethodDef: "methoddef"
-  of nkConverterDef: "converterdef"
-  of nkMacroDef: "macrodef"
-  of nkTemplateDef: "templatedef"
-  of nkIteratorDef: "iteratordef"
+  of nkProcDef: "proc"
+  of nkMethodDef: "method"
+  of nkConverterDef: "converter"
+  of nkMacroDef: "macro"
+  of nkTemplateDef: "template"
+  of nkIteratorDef: "iterator"
   of nkOfBranch: "of"
   of nkElifBranch: "elif"
   of nkExceptBranch: "except"
@@ -106,8 +106,8 @@ proc toNifTag*(s: TNodeKind): string =
   of nkVarSection: "var"
   of nkLetSection: "let"
   of nkConstSection: "const"
-  of nkConstDef: "constdef"
-  of nkTypeDef: "typedef"
+  of nkConstDef: "const0"
+  of nkTypeDef: "type0"
   of nkYieldStmt: "yield"
   of nkDefer: "defer"
   of nkTryStmt: "try"
@@ -163,7 +163,7 @@ proc toNifTag*(s: TNodeKind): string =
   of nkGotoState: "gotostate"
   of nkState: "state"
   of nkBreakState: "breakstate"
-  of nkFuncDef: "funcdef"
+  of nkFuncDef: "func"
   of nkTupleConstr: "tupleconstr"
   of nkError: "err"
   of nkModuleRef: "moduleref"
@@ -253,12 +253,12 @@ proc parseNodeKind*(s: string): TNodeKind =
   of "formalparams": nkFormalParams
   of "ofinherit": nkOfInherit
   of "importas": nkImportAs
-  of "procdef": nkProcDef
-  of "methoddef": nkMethodDef
-  of "converterdef": nkConverterDef
-  of "macrodef": nkMacroDef
-  of "templatedef": nkTemplateDef
-  of "iteratordef": nkIteratorDef
+  of "proc": nkProcDef
+  of "method": nkMethodDef
+  of "converter": nkConverterDef
+  of "macro": nkMacroDef
+  of "template": nkTemplateDef
+  of "iterator": nkIteratorDef
   of "of": nkOfBranch
   of "elif": nkElifBranch
   of "except": nkExceptBranch
@@ -276,8 +276,8 @@ proc parseNodeKind*(s: string): TNodeKind =
   of "var": nkVarSection
   of "let": nkLetSection
   of "const": nkConstSection
-  of "constdef": nkConstDef
-  of "typedef": nkTypeDef
+  of "const0": nkConstDef
+  of "type0": nkTypeDef
   of "yield": nkYieldStmt
   of "defer": nkDefer
   of "try": nkTryStmt
@@ -333,7 +333,7 @@ proc parseNodeKind*(s: string): TNodeKind =
   of "gotostate": nkGotoState
   of "state": nkState
   of "breakstate": nkBreakState
-  of "funcdef": nkFuncDef
+  of "func": nkFuncDef
   of "tupleconstr": nkTupleConstr
   of "err": nkError
   of "moduleref": nkModuleRef

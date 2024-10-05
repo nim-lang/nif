@@ -64,7 +64,7 @@ const
   ]
   SuffixesToReplace = [
     ("Section", ""), ("Branch", ""), ("Stmt", ""), ("I", ""),
-    ("Expr", "x")
+    ("Expr", "x"), ("Def", "")
   ]
   PrefixesToReplace = [
     ("Length", "len"),
