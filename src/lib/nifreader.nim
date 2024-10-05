@@ -220,9 +220,10 @@ proc handleNumber(r: var Reader; result: var Token) =
         result.tk = FloatLit
         inc p
         inc result.s.len
-        if p < eof and ^p == '-':
-          inc p
-          inc result.s.len
+        if p < eof:
+          if ^p == '-' or ^p == '+':
+            inc p
+            inc result.s.len
         while p < eof and ^p in Digits:
           inc p
           inc result.s.len

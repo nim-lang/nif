@@ -15,7 +15,7 @@ import "$nim" / compiler / [
   ast, options, pathutils, renderer, lineinfos,
   parser, llstream, idents, msgs]
 
-import ".." / lib / [nifbuilder]
+import ".." / lib / [nifbuilder, nifindexes]
 import modnames, enum2nif
 
 type
@@ -498,10 +498,10 @@ proc toNif*(n, parent: PNode; c: var WContext) =
     c.b.endTree
 
 proc initTranslationContext*(conf: ConfigRef): WContext =
-  result = WContext(conf: conf)
+  result = WContext(conf: conf, b: nifbuilder.open(500, true))
 
 proc moduleToIr*(n: PNode; c: var WContext) =
-  c.b = nifbuilder.open(100)
+  #c.b = nifbuilder.open(100)
   c.b.addHeader "Nifler", "nim-sem"
   toNif(n, nil, c)
 
@@ -509,6 +509,7 @@ proc toNif*(conf: ConfigRef; n: PNode; filename: string) =
   var w = initTranslationContext(conf)
   moduleToIr(n, w)
   writeFile filename, w.b.extract()
+  nifindexes.createIndex filename
 
 proc createConf(): ConfigRef =
   result = newConfigRef()

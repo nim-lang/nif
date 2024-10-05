@@ -194,7 +194,7 @@ Grammar:
 
 ```
 Digit ::= [0-9]
-FloatingPointPart ::= ('.' Digit+ ('E' '-'? Digit+)? ) | 'E' '-'? Digit+
+FloatingPointPart ::= ('.' Digit+ ('E' ('+' | '-')? Digit+)? ) | 'E' ('+' | '-')? Digit+
 Number ::= ('+' | '-') Digit+ (FloatingPointPart | 'u')?
 ```
 
