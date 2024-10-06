@@ -88,7 +88,7 @@ proc addRaw*(b: var Builder; s: string) =
   put b, s
 
 proc addSep(b: var Builder) =
-  if b.buf.len > 0 and b.buf[b.buf.len-1] == '\n':
+  if b.buf.len > 0 and b.buf[b.buf.len-1] in {'\n', ' '}:
     discard "space not required"
   elif b.nesting != 0:
     b.putPending " "
@@ -213,8 +213,9 @@ proc addTree*(b: var Builder; kind: string) =
   ## `kind` is allowed to start with a dot. This emits a directive then.
   drainPending b
   if not b.compact:
-    b.put "\n"
-    for i in 1..b.nesting: b.put ' '
+    if b.nesting > 0:
+      b.put "\n"
+      for i in 1..b.nesting: b.put ' '
     b.put '('
   else:
     b.put "\n("

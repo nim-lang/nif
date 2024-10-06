@@ -15,10 +15,8 @@ import "$nim" / compiler / [
   ast, options, pathutils, renderer, lineinfos,
   parser, llstream, idents, msgs]
 
-import ".." / lib / [nifbuilder]
-import modnames
-
-include tags
+import ".." / lib / [nifbuilder, nifindexes]
+import modnames, enum2nif
 
 type
   WContext = object # writer context
@@ -58,8 +56,8 @@ proc toNif*(n, parent: PNode; c: var WContext)
 proc toNif*(t: PType; parent: PNode; c: var WContext)
 
 proc symToNif(n: PNode; parent: PNode; c: var WContext; isDef = false) =
-  if n.typ != n.sym.typ:
-    c.b.withTree "hconv":
+  if not isDef and n.typ != n.sym.typ:
+    c.b.withTree "htype":
       toNif n.typ, parent, c
       symToNif n.sym, c, isDef
   else:
@@ -75,10 +73,20 @@ proc toNifDecl(n, parent: PNode; c: var WContext) =
     toNif n, parent, c
 
 proc magicCall(m: TMagic; n: PNode; c: var WContext) =
-  c.b.addTree(magicToTag(m))
+  c.b.addTree(toNifTag(m))
   for i in 1..<n.len:
     toNif(n[i], n, c)
   c.b.endTree
+
+proc writeFlags[E](b: var Builder; flags: set[E]) =
+  var flagsAsIdent = ""
+  genFlags(flags, flagsAsIdent)
+  if flagsAsIdent.len > 0:
+    b.addIdent flagsAsIdent
+
+proc writeNodeFlags(b: var Builder; flags: set[TNodeFlag]) {.inline.} =
+  # we know nodes can have been sem'checked:
+  writeFlags b, flags - {nfSem}
 
 proc toNifPragmas(n, name, parent: PNode; c: var WContext) =
   var b2 = nifbuilder.open(30)
@@ -91,8 +99,8 @@ proc toNifPragmas(n, name, parent: PNode; c: var WContext) =
       elif sfExportc in flags:
         b2.withTree "exportc":
           b2.addIdent name.sym.loc.snippet
-      symFlagsToKeyw(flags - {sfImportc, sfExportc}, b2)
-    else:
+      b2.writeFlags flags - {sfImportc, sfExportc}
+    elif n != nil:
       for ch in n:
         toNif ch, n, c
   let s = b2.extract()
@@ -100,6 +108,16 @@ proc toNifPragmas(n, name, parent: PNode; c: var WContext) =
     c.b.addRaw s
   else:
     c.b.addEmpty
+
+proc addIntLit(b: var Builder; i: BiggestInt; suffix: string) =
+  b.withTree "suf":
+    b.addIntLit i
+    b.addStrLit suffix
+
+proc addFloatLit(b: var Builder; i: BiggestFloat; suffix: string) =
+  b.withTree "suf":
+    b.addFloatLit i
+    b.addStrLit suffix
 
 proc toNif*(n, parent: PNode; c: var WContext) =
   case n.kind
@@ -113,7 +131,8 @@ proc toNif*(n, parent: PNode; c: var WContext) =
     if n.len > 0 and n[0].kind == nkSym and n[0].sym.magic != mNone:
       magicCall n[0].sym.magic, n, c
     else:
-      c.b.addTree(nodeKindToTag(n.kind))
+      c.b.addTree(toNifTag(n.kind))
+      c.b.writeNodeFlags n.flags
       for i in 0..<n.len:
         toNif(n[i], n, c)
       c.b.endTree
@@ -122,7 +141,7 @@ proc toNif*(n, parent: PNode; c: var WContext) =
     c.b.addKeyw "nil"
   of nkStrLit:
     relLineInfo(n, parent, c)
-    c.b.addStrLit n.strVal, ""
+    c.b.addStrLit n.strVal
   of nkRStrLit:
     relLineInfo(n, parent, c)
     c.b.addStrLit n.strVal, "R"
@@ -229,14 +248,16 @@ proc toNif*(n, parent: PNode; c: var WContext) =
   of nkFormalParams:
     c.section = "param"
     relLineInfo(n, parent, c)
-    c.b.addTree("params")
+    c.b.addTree(toNifTag(n.kind))
+    c.b.writeNodeFlags n.flags
     for i in 0..<n.len:
       toNif(n[i], n, c)
     c.b.endTree
   of nkGenericParams:
     c.section = "typevar"
     relLineInfo(n, parent, c)
-    c.b.addTree("typevars")
+    c.b.addTree(toNifTag(n.kind))
+    c.b.writeNodeFlags n.flags
     for i in 0..<n.len:
       toNif(n[i], n, c)
     c.b.endTree
@@ -295,7 +316,7 @@ proc toNif*(n, parent: PNode; c: var WContext) =
       c.b.endTree
   of nkOfBranch:
     relLineInfo(n, parent, c)
-    c.b.addTree("of")
+    c.b.addTree(toNifTag(n.kind))
     c.b.addTree("sconstr")
     for i in 0..<n.len-1:
       toNif(n[i], n, c)
@@ -306,10 +327,11 @@ proc toNif*(n, parent: PNode; c: var WContext) =
 
   of nkStmtListType, nkStmtListExpr:
     relLineInfo(n, parent, c)
-    c.b.addTree(nodeKindToTag(n.kind))
+    c.b.addTree(toNifTag(n.kind))
+    c.b.writeNodeFlags n.flags
 
     c.b.addEmpty # type information of StmtListExpr
-    c.b.addTree("stmts")
+    c.b.addTree(toNifTag(n.kind))
     for i in 0..<n.len-1:
       toNif(n[i], n, c)
     c.b.endTree
@@ -321,7 +343,7 @@ proc toNif*(n, parent: PNode; c: var WContext) =
 
   of nkProcTy:
     relLineInfo(n, parent, c)
-    c.b.addTree("proctype")
+    c.b.addTree(toNifTag(n.kind))
 
     c.b.addEmpty 4 # 0: name
     # 1: export marker
@@ -348,7 +370,7 @@ proc toNif*(n, parent: PNode; c: var WContext) =
     #   EnumType
     #   (Integer value, "string value")
     relLineInfo(n, parent, c)
-    c.b.addTree("enum")
+    c.b.addTree(toNifTag(n.kind))
     if n.len > 0:
       assert n[0].kind == nkEmpty
     for i in 1..<n.len:
@@ -393,7 +415,8 @@ proc toNif*(n, parent: PNode; c: var WContext) =
 
   of nkProcDef, nkFuncDef, nkConverterDef, nkMacroDef, nkTemplateDef, nkIteratorDef, nkMethodDef:
     relLineInfo(n, parent, c)
-    c.b.addTree(nodeKindToTag(n.kind))
+    c.b.addTree(toNifTag(n.kind))
+    c.b.writeNodeFlags n.flags
 
     var name: PNode
     var visibility: PNode = nil
@@ -416,7 +439,8 @@ proc toNif*(n, parent: PNode; c: var WContext) =
   of nkVarTuple:
     relLineInfo(n, parent, c)
     assert n[n.len-2].kind == nkEmpty
-    c.b.addTree(nodeKindToTag(n.kind))
+    c.b.addTree(toNifTag(n.kind))
+    c.b.writeNodeFlags n.flags
     toNif(n[n.len-1], n, c)
     c.b.addTree("unpacktuple")
     for i in 0..<n.len-2:
@@ -432,7 +456,8 @@ proc toNif*(n, parent: PNode; c: var WContext) =
 
   of nkForStmt:
     relLineInfo(n, parent, c)
-    c.b.addTree(nodeKindToTag(n.kind))
+    c.b.addTree(toNifTag(n.kind))
+    c.b.writeNodeFlags n.flags
     toNif(n[n.len-2], n, c) # iterator
     if n[0].kind == nkVarTuple:
       let v = n[0]
@@ -459,24 +484,32 @@ proc toNif*(n, parent: PNode; c: var WContext) =
   of nkObjectTy:
     c.section = "fld"
     relLineInfo(n, parent, c)
-    c.b.addTree(nodeKindToTag(n.kind))
+    c.b.addTree(toNifTag(n.kind))
+    c.b.writeNodeFlags n.flags
     for i in 0..<n.len:
       toNif(n[i], n, c)
     c.b.endTree
   else:
     relLineInfo(n, parent, c)
-    c.b.addTree(nodeKindToTag(n.kind))
+    c.b.addTree(toNifTag(n.kind))
+    c.b.writeNodeFlags n.flags
     for i in 0..<n.len:
       toNif(n[i], n, c)
     c.b.endTree
 
 proc initTranslationContext*(conf: ConfigRef): WContext =
-  result = WContext(conf: conf)
+  result = WContext(conf: conf, b: nifbuilder.open(500, true))
 
 proc moduleToIr*(n: PNode; c: var WContext) =
-  c.b = nifbuilder.open(100)
+  #c.b = nifbuilder.open(100)
   c.b.addHeader "Nifler", "nim-sem"
   toNif(n, nil, c)
+
+proc toNif*(conf: ConfigRef; n: PNode; filename: string) =
+  var w = initTranslationContext(conf)
+  moduleToIr(n, w)
+  writeFile filename, w.b.extract()
+  nifindexes.createIndex filename
 
 proc createConf(): ConfigRef =
   result = newConfigRef()
