@@ -72,9 +72,14 @@ type
     len, cap, readers: int
 
 proc `=copy`(dest: var TokenBuf; src: TokenBuf) {.error.}
-proc `=destroy`(dest: TokenBuf) {.inline.} =
-  #assert dest.readers == 0, "TokenBuf still in use by some reader"
-  if dest.data != nil: dealloc(dest.data)
+when defined(nimAllowNonVarDestructor):
+  proc `=destroy`(dest: TokenBuf) {.inline.} =
+    #assert dest.readers == 0, "TokenBuf still in use by some reader"
+    if dest.data != nil: dealloc(dest.data)
+else:
+  proc `=destroy`(dest: var TokenBuf) {.inline.} =
+    #assert dest.readers == 0, "TokenBuf still in use by some reader"
+    if dest.data != nil: dealloc(dest.data)
 
 proc isMutable(b: TokenBuf): bool {.inline.} = b.cap >= 0
 
