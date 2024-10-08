@@ -168,7 +168,7 @@ proc firstSon*[E](tree: PackedTree[E]; n: NodePos): NodePos {.inline.} =
 
 template check[E](a: int; tree: PackedTree[E]; n: NodePos) =
   bind rawSpan # bug in csources_v2 nim
-  assert a < int(n) + tree[n].rawSpan
+  assert a < int(n) + rawSpan(tree[n])
 
 proc kind*[E](tree: PackedTree[E]; n: NodePos): E {.inline.} =
   tree.nodes[n.int].kind
