@@ -11,6 +11,12 @@ import bitabs, lineinfos, nifreader, nifstreams, nifcursors
 
 proc registerTag(tag: string): TagId = pool.tags.getOrIncl(tag)
 
+proc isImportant(s: string): bool =
+  var c = 0
+  for ch in s:
+    if ch == '.': inc c
+  result = c >= 2
+
 proc createIndex*(infile: string) =
   let PublicT = registerTag "public"
   let PrivateT = registerTag "private"
@@ -38,22 +44,23 @@ proc createIndex*(infile: string) =
     elif t.kind == SymbolDef:
       let info = t.info
       let sym = t.symId
-      let tb = next(s)
-      let isPublic = tb.kind == Ident and pool.strings[tb.litId] == "x"
-      var dest =
+      if pool.syms[sym].isImportant:
+        let tb = next(s)
+        let isPublic = tb.kind == Ident and pool.strings[tb.litId] == "x"
+        var dest =
+          if isPublic:
+            addr(public)
+          else:
+            addr(private)
+        let diff = if isPublic: target - previousPublicTarget
+                  else: target - previousPrivateTarget
+        dest[].buildTree KvT, info:
+          dest[].add toToken(Symbol, sym, NoLineInfo)
+          dest[].add toToken(IntLit, pool.integers.getOrIncl(diff), NoLineInfo)
         if isPublic:
-          addr(public)
+          previousPublicTarget = target
         else:
-          addr(private)
-      let diff = if isPublic: target - previousPublicTarget
-                 else: target - previousPrivateTarget
-      dest[].buildTree KvT, info:
-        dest[].add toToken(Symbol, sym, NoLineInfo)
-        dest[].add toToken(IntLit, pool.integers.getOrIncl(diff), NoLineInfo)
-      if isPublic:
-        previousPublicTarget = target
-      else:
-        previousPrivateTarget = target
+          previousPrivateTarget = target
 
   public.addParRi()
   private.addParRi()

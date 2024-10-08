@@ -162,7 +162,7 @@ proc decodeStr*(t: Token): string =
         inc p, 2
       else:
         result.add ^p
-      inc p
+        inc p
   else:
     result = newString(t.s.len)
     if t.s.len > 0:
@@ -529,3 +529,11 @@ proc fileSize*(r: var Reader): int {.inline.} =
 
 proc offset*(r: var Reader): int {.inline.} =
   result = r.p -! cast[pchar](r.f.mem)
+
+when isMainModule:
+  const test = r"(.nif24)(stmts :\5B\5D=)"
+  var r = openFromBuffer(test)
+  while true:
+    let tk = r.next()
+    if tk.tk == EofToken: break
+    echo decodeStr tk, " ", tk
