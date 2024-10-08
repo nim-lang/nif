@@ -6,7 +6,7 @@
 
 ## A type navigator can recompute the type of an expression.
 
-import std / [strutils, tables]
+import std / [strutils, tables, assertions]
 import bitabs, packedtrees
 
 import nifc_model

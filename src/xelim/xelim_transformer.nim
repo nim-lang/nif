@@ -3,6 +3,7 @@
 ## `let x = if cond: 3 else: 4` into
 ## `let tmp; if cond: tmp = 3 else: temp = 4; let x = tmp`
 
+import std / [assertions, syncio]
 import ".." / lib / [packedtrees, lineinfos, bitabs]
 import xelim_model, xelim_typenav
 

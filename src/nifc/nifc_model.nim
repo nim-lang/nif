@@ -6,7 +6,7 @@
 
 ## Parse NIF into a packed tree representation.
 
-import std / [hashes, tables]
+import std / [hashes, tables, assertions]
 import "../lib" / [bitabs, lineinfos, stringviews, packedtrees, nifreader, keymatcher,
   nifbuilder]
 import noptions

@@ -6,6 +6,8 @@
 
 ## Support code for generating NIF code.
 
+import std / [assertions, syncio, formatfloat]
+
 type
   Mode = enum
     UsesMem, UsesFile

@@ -6,7 +6,7 @@
 
 ## Create an index file for a NIF file.
 
-import std / [os, tables]
+import std / [os, tables, assertions, syncio]
 import bitabs, lineinfos, nifreader, nifstreams, nifcursors
 
 proc registerTag(tag: string): TagId = pool.tags.getOrIncl(tag)

@@ -6,6 +6,7 @@
 
 ## Cursors into token streams. Suprisingly effective even for more complex algorithms.
 
+import std / assertions
 import nifstreams, lineinfos
 
 type

@@ -9,6 +9,7 @@
 
 ## Emits real ASM code from the NIF based format.
 
+import std / [assertions, syncio, formatfloat]
 import nifreader, nifstreams, nifcursors, bitabs, lineinfos
 from strutils import escape
 

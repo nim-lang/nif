@@ -9,7 +9,7 @@
 
 ## xelim driver program.
 
-import std / [parseopt, strutils, os]
+import std / [parseopt, strutils, os, assertions]
 import xelim_transformer
 
 const
