@@ -9,7 +9,7 @@
 
 ## NIFC driver program.
 
-import std / [parseopt, strutils, os, osproc, tables]
+import std / [parseopt, strutils, os, osproc, tables, assertions, syncio]
 import codegen, makefile, noptions
 import preasm / genpreasm
 

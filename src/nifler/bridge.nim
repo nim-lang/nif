@@ -9,6 +9,8 @@
 when defined(nifBench):
   import std / monotimes
 
+import std / [assertions, syncio]
+
 import compiler / [
   ast, options, pathutils, renderer, lineinfos,
   parser, llstream, idents, msgs]

@@ -13,7 +13,7 @@
 # Every string of length > position for which s[position] <= char is in one
 # set else it is in the other set.
 
-import std / [macros]
+import std / [macros, assertions]
 
 import stringviews
 

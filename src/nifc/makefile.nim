@@ -1,4 +1,4 @@
-import std/[os, strformat, tables]
+import std/[os, strformat, tables, syncio]
 import noptions
 
 proc generateMakefileForFiles(s: State, files: seq[string],

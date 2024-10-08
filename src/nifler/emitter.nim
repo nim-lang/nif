@@ -6,6 +6,8 @@
 
 ## Module that helps to emit NIF code, somewhat nicely formatted.
 
+import std / formatfloat
+
 type
   Emitter* = object # state we need in order to do some formatting
     minified*: bool # produce minified code

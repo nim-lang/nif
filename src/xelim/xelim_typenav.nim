@@ -6,7 +6,7 @@
 
 ## A type navigator can recompute the type of an expression.
 
-import std / tables
+import std / [tables, assertions]
 import "../lib" / [bitabs, packedtrees]
 
 import xelim_model

@@ -9,7 +9,7 @@
 when defined(nifBench):
   import std / monotimes
 
-import std / [strutils]
+import std / [strutils, assertions, syncio]
 
 import compiler / [
   ast, options, pathutils, renderer, lineinfos,

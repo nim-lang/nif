@@ -7,6 +7,7 @@
 #    distribution, for details about the copyright.
 #
 
+import std / assertions
 import ".." / nifc_model
 import ".." / native / slots
 

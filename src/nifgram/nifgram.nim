@@ -8,7 +8,7 @@
 ## that is also in NIF notation.
 ## See nifc/nifc_grammar.nif for a real world example.
 
-import std / [strutils, tables, sets]
+import std / [strutils, tables, sets, assertions, syncio]
 import "../lib" / [stringviews, nifreader]
 
 type
