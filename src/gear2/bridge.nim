@@ -78,15 +78,16 @@ proc magicCall(m: TMagic; n: PNode; c: var WContext) =
     toNif(n[i], n, c)
   c.b.endTree
 
-proc writeFlags[E](b: var Builder; flags: set[E]) =
+proc writeFlags[E](b: var Builder; flags: set[E]; tag: string) =
   var flagsAsIdent = ""
   genFlags(flags, flagsAsIdent)
   if flagsAsIdent.len > 0:
-    b.addIdent flagsAsIdent
+    b.withTree tag:
+      b.addIdent flagsAsIdent
 
 proc writeNodeFlags(b: var Builder; flags: set[TNodeFlag]) {.inline.} =
   # we know nodes can have been sem'checked:
-  writeFlags b, flags - {nfSem}
+  writeFlags b, flags - {nfSem}, "nf"
 
 proc toNifPragmas(n, name, parent: PNode; c: var WContext) =
   var b2 = nifbuilder.open(30)
@@ -99,7 +100,7 @@ proc toNifPragmas(n, name, parent: PNode; c: var WContext) =
       elif sfExportc in flags:
         b2.withTree "exportc":
           b2.addIdent name.sym.loc.snippet
-      b2.writeFlags flags - {sfImportc, sfExportc}
+      b2.writeFlags flags - {sfImportc, sfExportc}, "sf"
     elif n != nil:
       for ch in n:
         toNif ch, n, c
@@ -118,6 +119,21 @@ proc addFloatLit(b: var Builder; i: BiggestFloat; suffix: string) =
   b.withTree "suf":
     b.addFloatLit i
     b.addStrLit suffix
+
+type
+  ProcDecl = object
+    name, ex, pattern, generics, params, pragmas, exc, body: PNode
+
+proc asProcDecl(n: PNode): ProcDecl =
+  result = ProcDecl(
+    name: n[0], pattern: n[1], generics: n[2], params: n[3],
+    pragmas: n[4], exc: n[5], body: n[6])
+
+proc procToNif*(s: PSym; parent: PNode; c: var WContext) =
+  # name and export marker have already been produced here.
+  for i in 1..bodyPos:
+    assert s.ast[i] != nil
+    toNif s.ast[i], parent, c
 
 proc toNif*(n, parent: PNode; c: var WContext) =
   case n.kind
@@ -295,7 +311,10 @@ proc toNif*(n, parent: PNode; c: var WContext) =
 
       toNifPragmas(pragma, name, n[i], c)
 
-      toNif(n[last-1], n[i], c) # type
+      if name.kind == nkSym:
+        toNif(name.sym.typ, n[i], c)
+      else:
+        toNif(n[last-1], n[i], c) # type
       toNif(n[last], n[i], c) # value
       c.b.endTree
   of nkDo:
@@ -427,13 +446,18 @@ proc toNif*(n, parent: PNode; c: var WContext) =
       name = n[0]
 
     toNifDecl(name, n, c)
-    if visibility != nil:
+    if name.kind == nkSym and sfExported in name.sym.flags:
+      c.b.addRaw "x"
+    elif visibility != nil:
       c.b.addRaw "x"
     else:
       c.b.addEmpty
 
-    for i in 1..<n.len:
-      toNif(n[i], n, c)
+    if name.kind == nkSym and name.sym.ast != nil:
+      procToNif name.sym, parent, c
+    else:
+      for i in 1..<n.len:
+        toNif(n[i], n, c)
     c.b.endTree
 
   of nkVarTuple:

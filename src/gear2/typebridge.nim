@@ -58,7 +58,7 @@ proc toNif*(t: PType; parent: PNode; c: var WContext) =
     # See the nim-sem spec:
     c.b.withTree toNifTag(t.kind):
       symToNif t.sym, c
-      c.b.addIntLit t.sym.position
+      #c.b.addIntLit t.sym.position
 
   of tyGenericInst:
     c.b.withTree toNifTag(t.kind):
