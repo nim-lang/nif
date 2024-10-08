@@ -9,7 +9,7 @@
 when defined(nifBench):
   import std / monotimes
 
-import std / [strutils, assertions, syncio]
+import std / [strutils, assertions, syncio, tables]
 
 import compiler / [
   ast, options, pathutils, renderer, lineinfos,
@@ -23,6 +23,7 @@ type
     conf: ConfigRef
     section: string
     b: Builder
+    toSuffix: Table[string, string]
 
 proc absLineInfo(i: TLineInfo; c: var WContext) =
   c.b.addLineInfo int32(i.col), int32(i.line), toFullPath(c.conf, i.fileIndex)
@@ -46,7 +47,14 @@ proc symToNif(s: PSym; c: var WContext; isDef = false) =
   var m = s.name.s & '.' & $s.disamb
   if s.skipGenericOwner().kind == skModule:
     m.add '.'
-    m.add moduleSuffix(toFullPath(c.conf, s.info.fileIndex))
+    let fp = toFullPath(c.conf, s.info.fileIndex)
+    var suf = c.toSuffix.getOrDefault(fp)
+    if suf.len == 0:
+      suf = moduleSuffix(fp)
+      m.add suf
+      c.toSuffix[fp] = ensureMove suf
+    else:
+      m.add suf
   if isDef:
     c.b.addSymbolDef m
   else:
@@ -77,13 +85,6 @@ proc magicCall(m: TMagic; n: PNode; c: var WContext) =
   for i in 1..<n.len:
     toNif(n[i], n, c)
   c.b.endTree
-
-proc writeFlags[E](b: var Builder; flags: set[E]; tag: string) =
-  var flagsAsIdent = ""
-  genFlags(flags, flagsAsIdent)
-  if flagsAsIdent.len > 0:
-    b.withTree tag:
-      b.addIdent flagsAsIdent
 
 proc writeNodeFlags(b: var Builder; flags: set[TNodeFlag]) {.inline.} =
   # we know nodes can have been sem'checked:
@@ -526,7 +527,7 @@ proc initTranslationContext*(conf: ConfigRef): WContext =
 
 proc moduleToIr*(n: PNode; c: var WContext) =
   #c.b = nifbuilder.open(100)
-  c.b.addHeader "Nifler", "nim-sem"
+  c.b.addHeader "gear2", "nim-sem"
   toNif(n, nil, c)
 
 proc toNif*(conf: ConfigRef; n: PNode; filename: string) =
