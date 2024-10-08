@@ -2,7 +2,7 @@ when not defined(nimcore):
   {.error: "nimcore MUST be defined for Nim's core tooling".}
 
 import std / [os, times, parseopt]
-import "$nim" / compiler / [
+import compiler / [
   llstream, ast, options, msgs, condsyms, idents, platform, reorder,
   modules, pipelineutils, pipelines, packages, modulegraphs, lineinfos, pathutils,
   cmdlinehelper, commands, sem, renderer, syntaxes, parser]
