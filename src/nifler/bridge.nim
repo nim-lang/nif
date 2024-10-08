@@ -9,7 +9,7 @@
 when defined(nifBench):
   import std / monotimes
 
-import "$nim" / compiler / [
+import compiler / [
   ast, options, pathutils, renderer, lineinfos,
   parser, llstream, idents, msgs]
 
