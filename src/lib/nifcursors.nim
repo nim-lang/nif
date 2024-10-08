@@ -72,7 +72,7 @@ type
     len, cap, readers: int
 
 proc `=copy`(dest: var TokenBuf; src: TokenBuf) {.error.}
-when defined(nimAllowNonVarDestructor):
+when defined(nimAllowNonVarDestructor) and defined(gcDestructors):
   proc `=destroy`(dest: TokenBuf) {.inline.} =
     #assert dest.readers == 0, "TokenBuf still in use by some reader"
     if dest.data != nil: dealloc(dest.data)
