@@ -268,3 +268,239 @@ proc toNif*(t: PType; parent: PNode; c: var WContext) =
         toNif t.n, parent, c
       else:
         c.b.addEmpty
+
+proc expect(c: var Cursor; k: TokenKind) =
+  if c.kind == k:
+    inc c
+  else:
+     quit "[Nif parser] expected: " & $k
+
+proc isType*(c: Cursor): bool =
+  let k = parseTypeKind(pool.tags[c.tag])
+  result = k != tyNone
+
+proc extractBasename(s: string; isGlobal: var bool): string =
+  # From "abc.12.Mod132a3bc" extract "abc".
+  # From "abc.12" extract "abc".
+  # From "a.b.c.23" extract "a.b.c".
+  var i = s.len - 2
+  while i > 0:
+    if s[i] == '.':
+      if s[i+1] in {'0'..'9'}:
+        return substr(s, 0, i-1)
+      isGlobal = true # we skipped one dot so it's a global name
+    dec i
+  return ""
+
+proc extractModule(s: string): string =
+  # From "abc.12.Mod132a3bc" extract "Mod132a3bc".
+  # From "abc.12" extract "".
+  var i = s.len - 2
+  while i > 0:
+    if s[i] == '.':
+      if s[i+1] in {'0'..'9'}:
+        return ""
+      else:
+        return substr(s, i+1)
+    dec i
+  return ""
+
+proc loadSym*(s: SymId; r: var RContext): PSym =
+  # XXX implement me
+  result = nil
+
+proc loadType*(s: SymId; r: var RContext): PType =
+  result = loadSym(s, r).typ
+
+proc readSym(c: Cursor; r: var RContext; info: TLineInfo): PSym =
+  let s = c.symId
+  result = r.syms.getOrDefault(s).sym
+  if result == nil:
+    var isGlobal = false
+    let name = getIdent(r.identCache, extractBasename(pool.syms[s], isGlobal))
+    result = newSym(r.symKind, name, r.idgen, r.owner, info)
+    r.syms[s] = LoadedSym(state: Loaded, sym: result)
+
+proc getMagic(r: var RContext; m: TMagic; info: TLineInfo): PSym =
+  result = r.magics.getOrDefault(m).sym
+  if result == nil:
+    let name = getIdent(r.identCache, $m & "_forged")
+    result = newSym(skProc, name, r.idgen, r.owner, info)
+    r.magics[m] = LoadedSym(state: Loaded, sym: result)
+
+proc repair(n: PNode; r: var RContext; tag: string): PNode =
+  case tag
+  of "htype":
+    result = n
+    let typ = result[0].typ
+    result = result[1]
+    result.typ = typ
+  of "suf":
+    result = n[0]
+    case n[1].strVal
+    of "i64":
+      transitionIntKind result, nkInt64Lit
+    of "i32":
+      transitionIntKind result, nkInt32Lit
+    of "i16":
+      transitionIntKind result, nkInt16Lit
+    of "i8":
+      transitionIntKind result, nkInt8Lit
+    of "u64":
+      transitionIntKind result, nkUInt64Lit
+    of "u32":
+      transitionIntKind result, nkUInt32Lit
+    of "u16":
+      transitionIntKind result, nkUInt16Lit
+    of "u8":
+      transitionIntKind result, nkUInt8Lit
+    of "f64":
+      result.kind = nkFloat64Lit
+    of "f32":
+      result.kind = nkFloat32Lit
+  else:
+    let m = parseMagic(tag)
+    if m != mNone:
+      result = newNodeI(nkCall, n.info)
+      result.add newSymNode(getMagic(r, m, n.info), n.info)
+      for son in n: result.add son
+    else:
+      result = n
+
+proc readNode(c: var Cursor; r: var RContext): PNode =
+  let info = translateLineInfo(r, c.info)
+  case c.kind
+  of ParLe:
+    let tag = pool.tags[c.tag]
+    let k = parseNodeKind(tag)
+    result = newNodeI(k, info)
+    inc c
+    if c.kind == ParLe and pool.tags[c.tag] == "nf":
+      inc c
+      if c.kind == Ident:
+        result.flags = parseNodeFlags(pool.strings[c.litId])
+      expect c, ParRi
+    while c.kind != ParRi:
+      result.addAllowNil readNode(c, r)
+    expect c, ParRi
+    result = repair(result, r, tag)
+  of EofToken, ParRi:
+    result = nil
+  of UnknownToken:
+    result = nil
+    inc c
+  of SymbolDef, Symbol:
+    result = newSymNode(readSym(c, r, info), info)
+    inc c
+  of DotToken:
+    result = newNodeI(nkEmpty, info)
+    inc c
+  of Ident:
+    result = newIdentNode(getIdent(r.identCache, pool.strings[c.litId]), info)
+    inc c
+  of StringLit:
+    result = newStrNode(pool.strings[c.litId], info)
+    inc c
+  of CharLit:
+    result = newIntNode(nkCharLit, int64 c.uoperand)
+    result.info = info
+    inc c
+  of IntLit:
+    result = newIntNode(nkIntLit, pool.integers[c.intId])
+    result.info = info
+    inc c
+  of UIntLit:
+    result = newIntNode(nkUIntLit, cast[BiggestInt](pool.uintegers[c.uintId]))
+    result.info = info
+    inc c
+  of FloatLit:
+    result = newFloatNode(nkFloatLit, pool.floats[c.floatId])
+    result.info = info
+    inc c
+
+proc readTypeKind(c: var Cursor; tag: string): TTypeKind =
+  var k = parseTypeKind(tag)
+  inc c
+  if k == tyNone:
+    case tag
+    of "i":
+      inc c
+      if c.kind == IntLit:
+        case pool.integers[c.intId]
+        of -1: k = tyInt
+        of 1: k = tyInt8
+        of 2: k = tyInt16
+        of 4: k = tyInt32
+        of 8: k = tyInt64
+        else: assert false
+      else:
+        expect c, IntLit
+    of "u":
+      inc c
+      if c.kind == IntLit:
+        case pool.integers[c.intId]
+        of -1: k = tyUInt
+        of 1: k = tyUInt8
+        of 2: k = tyUInt16
+        of 4: k = tyUInt32
+        of 8: k = tyUInt64
+        else: assert false
+      else:
+        expect c, IntLit
+    of "f":
+      inc c
+      if c.kind == IntLit:
+        case pool.integers[c.intId]
+        of -1: k = tyFloat
+        of 4: k = tyFloat32
+        of 8: k = tyFloat64
+        else: assert false
+      else:
+        expect c, IntLit
+
+proc readType*(c: var Cursor; r: var RContext): PType
+
+proc readTypeImpl(c: var Cursor; r: var RContext; kind: TTypeKind; res: PType) =
+  case kind
+  of tyFromExpr:
+    res.n = readNode(c, r)
+  of tyStatic:
+    res.addAllowNil readType(c, r)
+    res.n = readNode(c, r)
+  else:
+    while c.kind != ParRi:
+      res.addAllowNil readType(c, r)
+    expect c, ParRi
+
+proc readType*(c: var Cursor; r: var RContext): PType =
+  case c.kind
+  of Symbol:
+    let s = c.symId
+    result = r.types.getOrDefault(s).typ
+    if result == nil:
+      let symA = r.syms.getOrDefault(s).sym
+      if symA != nil:
+        assert symA.kind == skType
+        result = symA.typ
+      else:
+        result = loadType(s, r)
+        r.types[s] = LoadedType(state: Loaded, typ: result)
+
+  of ParLe:
+    let tag = pool.tags[c.tag]
+    if tag == "missing":
+      result = nil
+    else:
+      let k = readTypeKind(c, tag)
+      result = newType(k, r.idgen, r.owner)
+      if c.kind == ParLe and pool.tags[c.tag] == "tf":
+        inc c
+        if c.kind == Ident:
+          result.flags = parseTypeFlags pool.strings[c.litId]
+        else:
+          expect c, Ident
+        expect c, ParRi
+      readTypeImpl c, r, k, result
+  of UnknownToken, DotToken, Ident, SymbolDef, StringLit,
+     CharLit, IntLit, UIntLit, FloatLit, ParRi, EofToken:
+    expect c, ParLe

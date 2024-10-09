@@ -13,9 +13,9 @@ import std / [strutils, assertions, syncio, tables]
 
 import compiler / [
   ast, options, pathutils, renderer, lineinfos,
-  parser, llstream, idents, msgs]
+  parser, llstream, idents, msgs, modulegraphs]
 
-import ".." / lib / [nifbuilder, nifindexes]
+import ".." / lib / [nifbuilder, nifindexes, nifstreams, nifcursors, bitabs, lineinfos]
 import modnames, enum2nif
 
 type
@@ -24,6 +24,45 @@ type
     section: string
     b: Builder
     toSuffix: Table[string, string]
+
+  LoadState = enum
+    Created, Loaded, Completed
+  LoadedSym = object
+    state: LoadState
+    sym: PSym
+  LoadedType = object
+    state: LoadState
+    typ: PType
+  RContext* = object
+    owner: PSym
+    idgen: IdGenerator
+    conf: ConfigRef
+    graph: ModuleGraph
+    identCache: IdentCache
+    symKind: TSymKind
+    lastLit: FileId
+    lastFile: FileIndex
+    syms: Table[SymId, LoadedSym]
+    types: Table[SymId, LoadedType]
+    magics: Table[TMagic, LoadedSym]
+
+proc createRContext*(g: ModuleGraph; identCache: IdentCache; module: PSym): RContext =
+  result = RContext(owner: module, idgen: idGeneratorFromModule(module), conf: g.config, graph: g)
+
+proc toFileIndexCached(c: var RContext; f: FileId): FileIndex =
+  if f == FileId(0):
+    result = InvalidFileIdx
+  elif c.lastLit == f:
+    result = c.lastFile
+  else:
+    result = msgs.fileInfoIdx(c.conf, AbsoluteFile pool.files[f])
+    c.lastLit = f
+    c.lastFile = result
+
+proc translateLineInfo(c: var RContext; x: PackedLineInfo): TLineInfo =
+  let (fileId, line, col) = unpack(pool.man, x)
+  result = TLineInfo(line: line.uint16, col: col.int16,
+            fileIndex: toFileIndexCached(c, fileId))
 
 proc absLineInfo(i: TLineInfo; c: var WContext) =
   c.b.addLineInfo int32(i.col), int32(i.line), toFullPath(c.conf, i.fileIndex)
@@ -138,7 +177,10 @@ proc procToNif*(s: PSym; parent: PNode; c: var WContext) =
 
 proc toNif*(n, parent: PNode; c: var WContext) =
   case n.kind
-  of nkNone, nkEmpty:
+  of nkNone:
+    relLineInfo(n, parent, c)
+    c.b.addKeyw toNifTag(n.kind)
+  of nkEmpty:
     c.b.addEmpty 1
   of nkSym:
     relLineInfo(n, parent, c)
