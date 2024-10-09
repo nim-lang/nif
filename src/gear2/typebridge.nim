@@ -305,9 +305,37 @@ proc extractModule(s: string): string =
     dec i
   return ""
 
+proc readNode(c: var Cursor; r: var RContext): PNode
+
+proc loadSym*(m: var RModule; nifName: string; r: var RContext): PSym =
+  var entry = m.index.public.getOrDefault(nifName)
+  if entry.offset == 0:
+    entry = m.index.private.getOrDefault(nifName)
+  assert entry.offset != 0, "cannot lookup: " & nifName
+  m.s.r.jumpTo entry.offset
+
+  var buf: seq[PackedToken] = @[]
+  discard nifstreams.parse(m.s.r, buf, entry.info)
+  var c = fromBuffer(buf)
+  let n = readNode(c, r)
+  assert n != nil and n.len > 0
+  assert n[0].kind == nkSym
+  result = n[0].sym
+
+proc loadSym*(nifName: string; r: var RContext): PSym =
+  let modname = extractModule(nifName)
+  if modname.len == 0:
+    result = loadSym(r.modules[r.thisModule], nifName, r)
+  else:
+    r.open modname
+    result = loadSym(r.modules[modname], nifName, r)
+
+proc loadLocalSym*(nifName: string; r: var RContext): PSym =
+  result = loadSym(r.modules[r.thisModule], nifName, r)
+
 proc loadSym*(s: SymId; r: var RContext): PSym =
-  # XXX implement me
-  result = nil
+  let nifName = pool.syms[s]
+  result = loadSym(nifName, r)
 
 proc loadType*(s: SymId; r: var RContext): PType =
   result = loadSym(s, r).typ
@@ -320,6 +348,13 @@ proc readSym(c: Cursor; r: var RContext; info: TLineInfo): PSym =
     let name = getIdent(r.identCache, extractBasename(pool.syms[s], isGlobal))
     result = newSym(r.symKind, name, r.idgen, r.owner, info)
     r.syms[s] = LoadedSym(state: Loaded, sym: result)
+
+proc readSymDef(c: Cursor; r: var RContext; info: TLineInfo): PSym =
+  let s = c.symId
+  var isGlobal = false
+  let name = getIdent(r.identCache, extractBasename(pool.syms[s], isGlobal))
+  result = newSym(r.symKind, name, r.idgen, r.owner, info)
+  r.syms[s] = LoadedSym(state: Loaded, sym: result)
 
 proc getMagic(r: var RContext; m: TMagic; info: TLineInfo): PSym =
   result = r.magics.getOrDefault(m).sym
@@ -383,13 +418,17 @@ proc readNode(c: var Cursor; r: var RContext): PNode =
     while c.kind != ParRi:
       result.addAllowNil readNode(c, r)
     expect c, ParRi
-    result = repair(result, r, tag)
+    if k == nkNone:
+      result = repair(result, r, tag)
   of EofToken, ParRi:
     result = nil
   of UnknownToken:
     result = nil
     inc c
-  of SymbolDef, Symbol:
+  of SymbolDef:
+    result = newSymNode(readSymDef(c, r, info), info)
+    inc c
+  of Symbol:
     result = newSymNode(readSym(c, r, info), info)
     inc c
   of DotToken:

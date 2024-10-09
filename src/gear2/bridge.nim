@@ -15,7 +15,7 @@ import compiler / [
   ast, options, pathutils, renderer, lineinfos,
   parser, llstream, idents, msgs, modulegraphs]
 
-import ".." / lib / [nifbuilder, nifindexes, nifstreams, nifcursors, bitabs, lineinfos]
+import ".." / lib / [nifbuilder, nifindexes, nifstreams, nifcursors, bitabs, lineinfos, nifreader]
 import modnames, enum2nif
 
 type
@@ -33,6 +33,10 @@ type
   LoadedType = object
     state: LoadState
     typ: PType
+
+  RModule* = object
+    index: NifIndex
+    s: Stream
   RContext* = object
     owner: PSym
     idgen: IdGenerator
@@ -45,9 +49,24 @@ type
     syms: Table[SymId, LoadedSym]
     types: Table[SymId, LoadedType]
     magics: Table[TMagic, LoadedSym]
+    thisModule: string
+    modules: Table[string, RModule]
 
 proc createRContext*(g: ModuleGraph; identCache: IdentCache; module: PSym): RContext =
   result = RContext(owner: module, idgen: idGeneratorFromModule(module), conf: g.config, graph: g)
+
+proc closeAll*(r: var RContext) =
+  for _, m in mpairs r.modules:
+    close m.s
+
+proc open*(r: var RContext; modname: string) =
+  if r.modules.hasKey(modname): return
+  if r.thisModule.len == 0: r.thisModule = modname
+  let filename = modname & ".nif"
+  r.modules[modname] = RModule(
+    index: readIndex(modname & ".idx.nif"),
+    s: nifstreams.open(filename)
+  )
 
 proc toFileIndexCached(c: var RContext; f: FileId): FileIndex =
   if f == FileId(0):
