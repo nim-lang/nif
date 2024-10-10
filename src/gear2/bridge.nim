@@ -9,13 +9,13 @@
 when defined(nifBench):
   import std / monotimes
 
-import std / [strutils, assertions, syncio]
+import std / [strutils, assertions, syncio, tables]
 
 import compiler / [
   ast, options, pathutils, renderer, lineinfos,
-  parser, llstream, idents, msgs]
+  parser, llstream, idents, msgs, modulegraphs]
 
-import ".." / lib / [nifbuilder, nifindexes]
+import ".." / lib / [nifbuilder, nifindexes, nifstreams, nifcursors, bitabs, lineinfos, nifreader]
 import modnames, enum2nif
 
 type
@@ -23,6 +23,65 @@ type
     conf: ConfigRef
     section: string
     b: Builder
+    toSuffix: Table[string, string]
+
+  LoadState = enum
+    Created, Loaded, Completed
+  LoadedSym = object
+    state: LoadState
+    sym: PSym
+  LoadedType = object
+    state: LoadState
+    typ: PType
+
+  RModule* = object
+    index: NifIndex
+    s: Stream
+  RContext* = object
+    owner: PSym
+    idgen: IdGenerator
+    conf: ConfigRef
+    graph: ModuleGraph
+    identCache: IdentCache
+    symKind: TSymKind
+    lastLit: FileId
+    lastFile: FileIndex
+    syms: Table[SymId, LoadedSym]
+    types: Table[SymId, LoadedType]
+    magics: Table[TMagic, LoadedSym]
+    thisModule: string
+    modules: Table[string, RModule]
+
+proc createRContext*(g: ModuleGraph; identCache: IdentCache; module: PSym): RContext =
+  result = RContext(owner: module, idgen: idGeneratorFromModule(module), conf: g.config, graph: g)
+
+proc closeAll*(r: var RContext) =
+  for _, m in mpairs r.modules:
+    close m.s
+
+proc open*(r: var RContext; modname: string) =
+  if r.modules.hasKey(modname): return
+  if r.thisModule.len == 0: r.thisModule = modname
+  let filename = modname & ".nif"
+  r.modules[modname] = RModule(
+    index: readIndex(modname & ".idx.nif"),
+    s: nifstreams.open(filename)
+  )
+
+proc toFileIndexCached(c: var RContext; f: FileId): FileIndex =
+  if f == FileId(0):
+    result = InvalidFileIdx
+  elif c.lastLit == f:
+    result = c.lastFile
+  else:
+    result = msgs.fileInfoIdx(c.conf, AbsoluteFile pool.files[f])
+    c.lastLit = f
+    c.lastFile = result
+
+proc translateLineInfo(c: var RContext; x: PackedLineInfo): TLineInfo =
+  let (fileId, line, col) = unpack(pool.man, x)
+  result = TLineInfo(line: line.uint16, col: col.int16,
+            fileIndex: toFileIndexCached(c, fileId))
 
 proc absLineInfo(i: TLineInfo; c: var WContext) =
   c.b.addLineInfo int32(i.col), int32(i.line), toFullPath(c.conf, i.fileIndex)
@@ -46,7 +105,14 @@ proc symToNif(s: PSym; c: var WContext; isDef = false) =
   var m = s.name.s & '.' & $s.disamb
   if s.skipGenericOwner().kind == skModule:
     m.add '.'
-    m.add moduleSuffix(toFullPath(c.conf, s.info.fileIndex))
+    let fp = toFullPath(c.conf, s.info.fileIndex)
+    var suf = c.toSuffix.getOrDefault(fp)
+    if suf.len == 0:
+      suf = moduleSuffix(fp)
+      m.add suf
+      c.toSuffix[fp] = ensureMove suf
+    else:
+      m.add suf
   if isDef:
     c.b.addSymbolDef m
   else:
@@ -77,13 +143,6 @@ proc magicCall(m: TMagic; n: PNode; c: var WContext) =
   for i in 1..<n.len:
     toNif(n[i], n, c)
   c.b.endTree
-
-proc writeFlags[E](b: var Builder; flags: set[E]; tag: string) =
-  var flagsAsIdent = ""
-  genFlags(flags, flagsAsIdent)
-  if flagsAsIdent.len > 0:
-    b.withTree tag:
-      b.addIdent flagsAsIdent
 
 proc writeNodeFlags(b: var Builder; flags: set[TNodeFlag]) {.inline.} =
   # we know nodes can have been sem'checked:
@@ -137,7 +196,10 @@ proc procToNif*(s: PSym; parent: PNode; c: var WContext) =
 
 proc toNif*(n, parent: PNode; c: var WContext) =
   case n.kind
-  of nkNone, nkEmpty:
+  of nkNone:
+    relLineInfo(n, parent, c)
+    c.b.addKeyw toNifTag(n.kind)
+  of nkEmpty:
     c.b.addEmpty 1
   of nkSym:
     relLineInfo(n, parent, c)
@@ -526,7 +588,7 @@ proc initTranslationContext*(conf: ConfigRef): WContext =
 
 proc moduleToIr*(n: PNode; c: var WContext) =
   #c.b = nifbuilder.open(100)
-  c.b.addHeader "Nifler", "nim-sem"
+  c.b.addHeader "gear2", "nim-sem"
   toNif(n, nil, c)
 
 proc toNif*(conf: ConfigRef; n: PNode; filename: string) =

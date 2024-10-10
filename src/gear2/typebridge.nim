@@ -8,16 +8,40 @@
 
 ## Implements the mapping from Nim type graph to NIF ("gear2").
 
+proc writeFlags[E](b: var Builder; flags: set[E]; tag: string) =
+  var flagsAsIdent = ""
+  genFlags(flags, flagsAsIdent)
+  if flagsAsIdent.len > 0:
+    b.withTree tag:
+      b.addIdent flagsAsIdent
+
+proc writeTypeFlags(c: var WContext; t: PType) =
+  writeFlags c.b, t.flags, "tf"
+
 proc isNominalRef(t: PType): bool {.inline.} =
   let e = t.elementType
   t.sym != nil and e.kind == tyObject and (e.sym == nil or sfAnon in e.sym.flags)
 
 template singleElement(keyw: string) {.dirty.} =
   c.b.withTree keyw:
+    writeTypeFlags(c, t)
     if t.hasElementType:
       toNif t.elementType, parent, c
     else:
       c.b.addEmpty
+
+proc atom(t: PType; c: var WContext; tag: string) =
+  c.b.withTree tag:
+    writeTypeFlags(c, t)
+
+proc atom(t: PType; c: var WContext) =
+  c.b.withTree toNifTag(t.kind):
+    writeTypeFlags(c, t)
+
+template typeHead(c: var WContext; t: PType; body: untyped) =
+  c.b.withTree toNifTag(t.kind):
+    writeTypeFlags(c, t)
+    body
 
 proc toNif*(t: PType; parent: PNode; c: var WContext) =
   if t == nil:
@@ -25,101 +49,101 @@ proc toNif*(t: PType; parent: PNode; c: var WContext) =
     return
 
   case t.kind
-  of tyNone: c.b.addKeyw toNifTag(t.kind)
-  of tyBool: c.b.addKeyw toNifTag(t.kind)
-  of tyChar: c.b.addKeyw "c 8"
+  of tyNone: atom t, c
+  of tyBool: atom t, c
+  of tyChar: atom t, c, "c 8"
   of tyEmpty: c.b.addEmpty
-  of tyInt: c.b.addKeyw "i -1"
-  of tyInt8: c.b.addKeyw "i 8"
-  of tyInt16: c.b.addKeyw "i 16"
-  of tyInt32: c.b.addKeyw "i 32"
-  of tyInt64: c.b.addKeyw "i 64"
-  of tyUInt: c.b.addKeyw "u -1"
-  of tyUInt8: c.b.addKeyw "u 8"
-  of tyUInt16: c.b.addKeyw "u 16"
-  of tyUInt32: c.b.addKeyw "u 32"
-  of tyUInt64: c.b.addKeyw "u 64"
-  of tyFloat, tyFloat64: c.b.addKeyw "f 64"
-  of tyFloat32: c.b.addKeyw "f 32"
-  of tyFloat128: c.b.addKeyw "f 128"
+  of tyInt: atom t, c, "i -1"
+  of tyInt8: atom t, c, "i 8"
+  of tyInt16: atom t, c, "i 16"
+  of tyInt32: atom t, c, "i 32"
+  of tyInt64: atom t, c, "i 64"
+  of tyUInt: atom t, c, "u -1"
+  of tyUInt8: atom t, c, "u 8"
+  of tyUInt16: atom t, c, "u 16"
+  of tyUInt32: atom t, c, "u 32"
+  of tyUInt64: atom t, c, "u 64"
+  of tyFloat, tyFloat64: atom t, c, "f 64"
+  of tyFloat32: atom t, c, "f 32"
+  of tyFloat128: atom t, c, "f 128"
   of tyAlias:
-    c.b.withTree toNifTag(t.kind):
+    c.typeHead t:
       toNif t.skipModifier, parent, c
-  of tyNil: c.b.addKeyw toNifTag(t.kind)
-  of tyUntyped: c.b.addKeyw toNifTag(t.kind)
-  of tyTyped: c.b.addKeyw toNifTag(t.kind)
+  of tyNil: atom t, c
+  of tyUntyped: atom t, c
+  of tyTyped: atom t, c
   of tyTypeDesc:
-    c.b.withTree toNifTag(t.kind):
+    c.typeHead t:
       if t.kidsLen == 0 or t.elementType.kind == tyNone:
         c.b.addEmpty
       else:
         toNif t.elementType, parent, c
   of tyGenericParam:
     # See the nim-sem spec:
-    c.b.withTree toNifTag(t.kind):
+    c.typeHead t:
       symToNif t.sym, c
       #c.b.addIntLit t.sym.position
 
   of tyGenericInst:
-    c.b.withTree toNifTag(t.kind):
+    c.typeHead t:
       toNif t.genericHead, parent, c
       for _, a in t.genericInstParams:
         toNif a, parent, c
   of tyGenericInvocation:
-    c.b.withTree toNifTag(t.kind):
+    c.typeHead t:
       toNif t.genericHead, parent, c
       for _, a in t.genericInvocationParams:
         toNif a, parent, c
   of tyGenericBody:
     #toNif t.last, parent, c
-    c.b.withTree toNifTag(t.kind):
+    c.typeHead t:
       for _, son in t.ikids: toNif son, parent, c
   of tyDistinct, tyEnum:
     if t.sym != nil:
       symToNif t.sym, c
     else:
-      c.b.withTree toNifTag(t.kind):
+      c.typeHead t:
         for _, son in t.ikids: toNif son, parent, c
   of tyPtr:
     if isNominalRef(t):
       symToNif t.sym, c
     else:
-      c.b.withTree toNifTag(t.kind):
+      c.typeHead t:
         toNif t.elementType, parent, c
   of tyRef:
     if isNominalRef(t):
       symToNif t.sym, c
     else:
-      c.b.withTree toNifTag(t.kind):
+      c.typeHead t:
         toNif t.elementType, parent, c
   of tyVar:
     c.b.withTree(if isOutParam(t): "out" else: "mut"):
       toNif t.elementType, parent, c
   of tyAnd:
-    c.b.withTree toNifTag(t.kind):
+    c.typeHead t:
       for _, son in t.ikids: toNif son, parent, c
   of tyOr:
-    c.b.withTree toNifTag(t.kind):
+    c.typeHead t:
       for _, son in t.ikids: toNif son, parent, c
   of tyNot:
-    c.b.withTree toNifTag(t.kind): toNif t.elementType, parent, c
+    c.typeHead t: toNif t.elementType, parent, c
 
   of tyFromExpr:
     if t.n == nil:
-      c.b.addKeyw "err"
+      atom t, c, "err"
     else:
-      c.b.withTree toNifTag(t.kind):
+      c.typeHead t:
         toNif t.n, parent, c
 
   of tyArray:
-    c.b.withTree toNifTag(t.kind):
+    c.typeHead t:
       if t.hasElementType:
         toNif t.elementType, parent, c
         toNif t.indexType, parent, c
       else:
         c.b.addEmpty 2
   of tyUncheckedArray:
-    c.b.withTree toNifTag(t.kind):
+    c.typeHead t:
       if t.hasElementType:
         toNif t.elementType, parent, c
       else:
@@ -129,7 +153,7 @@ proc toNif*(t: PType; parent: PNode; c: var WContext) =
     singleElement toNifTag(t.kind)
 
   of tyOrdinal:
-    c.b.withTree toNifTag(t.kind):
+    c.typeHead t:
       if t.hasElementType:
         toNif t.skipModifier, parent, c
       else:
@@ -141,7 +165,7 @@ proc toNif*(t: PType; parent: PNode; c: var WContext) =
   of tyLent: singleElement toNifTag(t.kind)
 
   of tyTuple:
-    c.b.withTree toNifTag(t.kind):
+    c.typeHead t:
       if t.n != nil:
         for i in 0..<t.n.len:
           assert(t.n[i].kind == nkSym)
@@ -152,7 +176,7 @@ proc toNif*(t: PType; parent: PNode; c: var WContext) =
         for _, son in t.ikids: toNif son, parent, c
 
   of tyRange:
-    c.b.withTree toNifTag(t.kind):
+    c.typeHead t:
       toNif t.elementType, parent, c
       if t.n != nil and t.n.kind == nkRange and t.n.len == 2:
         toNif t.n[0], parent, c
@@ -192,7 +216,7 @@ proc toNif*(t: PType; parent: PNode; c: var WContext) =
           c.b.addKeyw toNifTag(t.callConv)
 
   of tyVarargs:
-    c.b.withTree toNifTag(t.kind):
+    c.typeHead t:
       if t.hasElementType:
         toNif t.elementType, parent, c
       else:
@@ -204,16 +228,16 @@ proc toNif*(t: PType; parent: PNode; c: var WContext) =
 
   of tySink: singleElement toNifTag(t.kind)
   of tyOwned: singleElement toNifTag(t.kind)
-  of tyVoid: c.b.addKeyw toNifTag(t.kind)
-  of tyPointer: c.b.addKeyw toNifTag(t.kind)
-  of tyString: c.b.addKeyw toNifTag(t.kind)
-  of tyCstring: c.b.addKeyw toNifTag(t.kind)
+  of tyVoid: atom t, c
+  of tyPointer: atom t, c
+  of tyString: atom t, c
+  of tyCstring: atom t, c
   of tyObject: symToNif t.sym, c
-  of tyForward: c.b.addKeyw toNifTag(t.kind)
-  of tyError: c.b.addKeyw toNifTag(t.kind)
+  of tyForward: atom t, c
+  of tyError: atom t, c
   of tyBuiltInTypeClass:
     # XXX See what to do with this.
-    c.b.withTree toNifTag(t.kind):
+    c.typeHead t:
       if t.kidsLen == 0 or t.genericHead.kind == tyNone:
         c.b.addEmpty
       else:
@@ -224,18 +248,18 @@ proc toNif*(t: PType; parent: PNode; c: var WContext) =
     if t.sym != nil:
       symToNif t.sym, c
     else:
-      c.b.addKeyw "err"
+      atom t, c, "err"
   of tyUserTypeClassInst:
     # "instantiated" old style concept. Whatever that even means.
     if t.sym != nil:
       symToNif t.sym, c
     else:
-      c.b.addKeyw "err"
+      atom t, c, "err"
   of tyCompositeTypeClass: toNif t.last, parent, c
   of tyInferred: toNif t.skipModifier, parent, c
-  of tyAnything: c.b.addKeyw toNifTag(t.kind)
+  of tyAnything: atom t, c
   of tyStatic:
-    c.b.withTree toNifTag(t.kind):
+    c.typeHead t:
       if t.hasElementType:
         toNif t.skipModifier, parent, c
       else:
@@ -244,3 +268,279 @@ proc toNif*(t: PType; parent: PNode; c: var WContext) =
         toNif t.n, parent, c
       else:
         c.b.addEmpty
+
+proc expect(c: var Cursor; k: TokenKind) =
+  if c.kind == k:
+    inc c
+  else:
+     quit "[Nif parser] expected: " & $k
+
+proc isType*(c: Cursor): bool =
+  let k = parseTypeKind(pool.tags[c.tag])
+  result = k != tyNone
+
+proc extractBasename(s: string; isGlobal: var bool): string =
+  # From "abc.12.Mod132a3bc" extract "abc".
+  # From "abc.12" extract "abc".
+  # From "a.b.c.23" extract "a.b.c".
+  var i = s.len - 2
+  while i > 0:
+    if s[i] == '.':
+      if s[i+1] in {'0'..'9'}:
+        return substr(s, 0, i-1)
+      isGlobal = true # we skipped one dot so it's a global name
+    dec i
+  return ""
+
+proc extractModule(s: string): string =
+  # From "abc.12.Mod132a3bc" extract "Mod132a3bc".
+  # From "abc.12" extract "".
+  var i = s.len - 2
+  while i > 0:
+    if s[i] == '.':
+      if s[i+1] in {'0'..'9'}:
+        return ""
+      else:
+        return substr(s, i+1)
+    dec i
+  return ""
+
+proc readNode(c: var Cursor; r: var RContext): PNode
+
+proc loadSym*(m: var RModule; nifName: string; r: var RContext): PSym =
+  var entry = m.index.public.getOrDefault(nifName)
+  if entry.offset == 0:
+    entry = m.index.private.getOrDefault(nifName)
+  assert entry.offset != 0, "cannot lookup: " & nifName
+  m.s.r.jumpTo entry.offset
+
+  var buf: seq[PackedToken] = @[]
+  discard nifstreams.parse(m.s.r, buf, entry.info)
+  var c = fromBuffer(buf)
+  let n = readNode(c, r)
+  assert n != nil and n.len > 0
+  assert n[0].kind == nkSym
+  result = n[0].sym
+
+proc loadSym*(nifName: string; r: var RContext): PSym =
+  let modname = extractModule(nifName)
+  if modname.len == 0:
+    result = loadSym(r.modules[r.thisModule], nifName, r)
+  else:
+    r.open modname
+    result = loadSym(r.modules[modname], nifName, r)
+
+proc loadLocalSym*(nifName: string; r: var RContext): PSym =
+  result = loadSym(r.modules[r.thisModule], nifName, r)
+
+proc loadSym*(s: SymId; r: var RContext): PSym =
+  let nifName = pool.syms[s]
+  result = loadSym(nifName, r)
+
+proc loadType*(s: SymId; r: var RContext): PType =
+  result = loadSym(s, r).typ
+
+proc readSym(c: Cursor; r: var RContext; info: TLineInfo): PSym =
+  let s = c.symId
+  result = r.syms.getOrDefault(s).sym
+  if result == nil:
+    var isGlobal = false
+    let name = getIdent(r.identCache, extractBasename(pool.syms[s], isGlobal))
+    result = newSym(r.symKind, name, r.idgen, r.owner, info)
+    r.syms[s] = LoadedSym(state: Loaded, sym: result)
+
+proc readSymDef(c: Cursor; r: var RContext; info: TLineInfo): PSym =
+  let s = c.symId
+  var isGlobal = false
+  let name = getIdent(r.identCache, extractBasename(pool.syms[s], isGlobal))
+  result = newSym(r.symKind, name, r.idgen, r.owner, info)
+  # always overwrite the entry here so that local syms are modelled properly.
+  r.syms[s] = LoadedSym(state: Loaded, sym: result)
+
+proc getMagic(r: var RContext; m: TMagic; info: TLineInfo): PSym =
+  result = r.magics.getOrDefault(m).sym
+  if result == nil:
+    let name = getIdent(r.identCache, $m & "_forged")
+    result = newSym(skProc, name, r.idgen, r.owner, info)
+    r.magics[m] = LoadedSym(state: Loaded, sym: result)
+
+proc repair(n: PNode; r: var RContext; tag: string): PNode =
+  case tag
+  of "htype":
+    result = n
+    let typ = result[0].typ
+    result = result[1]
+    result.typ = typ
+  of "suf":
+    result = n[0]
+    case n[1].strVal
+    of "i64":
+      transitionIntKind result, nkInt64Lit
+    of "i32":
+      transitionIntKind result, nkInt32Lit
+    of "i16":
+      transitionIntKind result, nkInt16Lit
+    of "i8":
+      transitionIntKind result, nkInt8Lit
+    of "u64":
+      transitionIntKind result, nkUInt64Lit
+    of "u32":
+      transitionIntKind result, nkUInt32Lit
+    of "u16":
+      transitionIntKind result, nkUInt16Lit
+    of "u8":
+      transitionIntKind result, nkUInt8Lit
+    of "f64":
+      result.kind = nkFloat64Lit
+    of "f32":
+      result.kind = nkFloat32Lit
+  else:
+    let m = parseMagic(tag)
+    if m != mNone:
+      result = newNodeI(nkCall, n.info)
+      result.add newSymNode(getMagic(r, m, n.info), n.info)
+      for son in n: result.add son
+    else:
+      result = n
+
+proc readNode(c: var Cursor; r: var RContext): PNode =
+  let info = translateLineInfo(r, c.info)
+  case c.kind
+  of ParLe:
+    let tag = pool.tags[c.tag]
+    let k = parseNodeKind(tag)
+    result = newNodeI(k, info)
+    inc c
+    if c.kind == ParLe and pool.tags[c.tag] == "nf":
+      inc c
+      if c.kind == Ident:
+        result.flags = parseNodeFlags(pool.strings[c.litId])
+      expect c, ParRi
+    while c.kind != ParRi:
+      result.addAllowNil readNode(c, r)
+    expect c, ParRi
+    if k == nkNone:
+      result = repair(result, r, tag)
+  of EofToken, ParRi:
+    result = nil
+  of UnknownToken:
+    result = nil
+    inc c
+  of SymbolDef:
+    result = newSymNode(readSymDef(c, r, info), info)
+    inc c
+  of Symbol:
+    result = newSymNode(readSym(c, r, info), info)
+    inc c
+  of DotToken:
+    result = newNodeI(nkEmpty, info)
+    inc c
+  of Ident:
+    result = newIdentNode(getIdent(r.identCache, pool.strings[c.litId]), info)
+    inc c
+  of StringLit:
+    result = newStrNode(pool.strings[c.litId], info)
+    inc c
+  of CharLit:
+    result = newIntNode(nkCharLit, int64 c.uoperand)
+    result.info = info
+    inc c
+  of IntLit:
+    result = newIntNode(nkIntLit, pool.integers[c.intId])
+    result.info = info
+    inc c
+  of UIntLit:
+    result = newIntNode(nkUIntLit, cast[BiggestInt](pool.uintegers[c.uintId]))
+    result.info = info
+    inc c
+  of FloatLit:
+    result = newFloatNode(nkFloatLit, pool.floats[c.floatId])
+    result.info = info
+    inc c
+
+proc readTypeKind(c: var Cursor; tag: string): TTypeKind =
+  var k = parseTypeKind(tag)
+  inc c
+  if k == tyNone:
+    case tag
+    of "i":
+      inc c
+      if c.kind == IntLit:
+        case pool.integers[c.intId]
+        of -1: k = tyInt
+        of 1: k = tyInt8
+        of 2: k = tyInt16
+        of 4: k = tyInt32
+        of 8: k = tyInt64
+        else: assert false
+      else:
+        expect c, IntLit
+    of "u":
+      inc c
+      if c.kind == IntLit:
+        case pool.integers[c.intId]
+        of -1: k = tyUInt
+        of 1: k = tyUInt8
+        of 2: k = tyUInt16
+        of 4: k = tyUInt32
+        of 8: k = tyUInt64
+        else: assert false
+      else:
+        expect c, IntLit
+    of "f":
+      inc c
+      if c.kind == IntLit:
+        case pool.integers[c.intId]
+        of -1: k = tyFloat
+        of 4: k = tyFloat32
+        of 8: k = tyFloat64
+        else: assert false
+      else:
+        expect c, IntLit
+
+proc readType*(c: var Cursor; r: var RContext): PType
+
+proc readTypeImpl(c: var Cursor; r: var RContext; kind: TTypeKind; res: PType) =
+  case kind
+  of tyFromExpr:
+    res.n = readNode(c, r)
+  of tyStatic:
+    res.addAllowNil readType(c, r)
+    res.n = readNode(c, r)
+  else:
+    while c.kind != ParRi:
+      res.addAllowNil readType(c, r)
+    expect c, ParRi
+
+proc readType*(c: var Cursor; r: var RContext): PType =
+  case c.kind
+  of Symbol:
+    let s = c.symId
+    result = r.types.getOrDefault(s).typ
+    if result == nil:
+      let symA = r.syms.getOrDefault(s).sym
+      if symA != nil:
+        assert symA.kind == skType
+        result = symA.typ
+      else:
+        result = loadType(s, r)
+        r.types[s] = LoadedType(state: Loaded, typ: result)
+
+  of ParLe:
+    let tag = pool.tags[c.tag]
+    if tag == "missing":
+      result = nil
+    else:
+      let k = readTypeKind(c, tag)
+      result = newType(k, r.idgen, r.owner)
+      if c.kind == ParLe and pool.tags[c.tag] == "tf":
+        inc c
+        if c.kind == Ident:
+          result.flags = parseTypeFlags pool.strings[c.litId]
+        else:
+          expect c, Ident
+        expect c, ParRi
+      readTypeImpl c, r, k, result
+  of UnknownToken, DotToken, Ident, SymbolDef, StringLit,
+     CharLit, IntLit, UIntLit, FloatLit, ParRi, EofToken:
+    expect c, ParLe

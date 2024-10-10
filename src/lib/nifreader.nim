@@ -530,6 +530,9 @@ proc fileSize*(r: var Reader): int {.inline.} =
 proc offset*(r: var Reader): int {.inline.} =
   result = r.p -! cast[pchar](r.f.mem)
 
+proc jumpTo*(r: var Reader; offset: int) {.inline.} =
+  r.p = cast[pchar](r.f.mem) +! offset
+
 when isMainModule:
   const test = r"(.nif24)(stmts :\5B\5D=)"
   var r = openFromBuffer(test)

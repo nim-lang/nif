@@ -7,7 +7,7 @@ import compiler / [
   modules, pipelineutils, pipelines, packages, modulegraphs, lineinfos, pathutils,
   cmdlinehelper, commands, sem, renderer, syntaxes, parser]
 
-import bridge
+import bridge, modnames
 
 when defined(loadFromNif):
   # XXX Enable once NIF generation works
@@ -51,10 +51,9 @@ proc processPipelineModule(graph: ModuleGraph; module: PSym; idgen: IdGenerator;
       processImplicitImports graph, graph.config.implicitIncludes, nkIncludeStmt, module, ctx, bModule, idgen
 
   checkFirstLineIndentation(p)
-  block processCode:
-    if graph.stopCompile(): break processCode
-    var n = parseTopLevelStmt(p)
-    if n.kind == nkEmpty: break processCode
+  var n = parseTopLevelStmt(p)
+  var moduleStmts = newNodeI(nkStmtList, n.info)
+  if n.kind != nkEmpty:
     # read everything, no streaming possible
     var sl = newNodeI(nkStmtList, n.info)
     sl.add n
@@ -67,10 +66,13 @@ proc processPipelineModule(graph: ModuleGraph; module: PSym; idgen: IdGenerator;
       sl = reorder(graph, sl, module)
     let semNode = semWithPContext(ctx, sl)
     #echo renderTree(semNode)
-    appendToModule(module, semNode)
+    moduleStmts.add semNode
 
   closeParser(p)
   let finalNode = closePContext(graph, ctx, nil)
+  #appendToModule(module, finalNode)
+  moduleStmts.add finalNode
+  appendToModule(module, moduleStmts)
   result = true
 
 proc compilePipelineModule(graph: ModuleGraph; fileIdx: FileIndex; flags: TSymFlags; fromModule: PSym = nil): PSym =
@@ -119,7 +121,7 @@ proc compilePipelineProject2(graph: ModuleGraph; projectFileIdx = InvalidFileIdx
   if projectFile == systemFileIdx:
     result = graph.compilePipelineModule(projectFile, {sfMainModule, sfSystemModule})
   else:
-    graph.compilePipelineSystemModule2()
+    #graph.compilePipelineSystemModule2()
     result = graph.compilePipelineModule(projectFile, {sfMainModule})
 
 proc commandCheck(graph: ModuleGraph) =
@@ -135,7 +137,10 @@ proc commandCheck(graph: ModuleGraph) =
   let module = compilePipelineProject2(graph)
   when defined(debug):
     echo renderTree(module.ast)
-  toNif(conf, module.ast, "system.nif")
+
+  createDir "nifcache"
+  let dest = moduleSuffix(toFullPath(conf, module.fileIdx))
+  toNif(conf, module.ast, "nifcache" / dest.addFileExt".nif")
 
 proc processCmdLine(pass: TCmdLinePass, cmd: string; config: ConfigRef) =
   var p = parseopt.initOptParser(cmd)
