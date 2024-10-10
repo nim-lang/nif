@@ -354,6 +354,7 @@ proc readSymDef(c: Cursor; r: var RContext; info: TLineInfo): PSym =
   var isGlobal = false
   let name = getIdent(r.identCache, extractBasename(pool.syms[s], isGlobal))
   result = newSym(r.symKind, name, r.idgen, r.owner, info)
+  # always overwrite the entry here so that local syms are modelled properly.
   r.syms[s] = LoadedSym(state: Loaded, sym: result)
 
 proc getMagic(r: var RContext; m: TMagic; info: TLineInfo): PSym =
