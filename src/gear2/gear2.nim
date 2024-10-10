@@ -7,7 +7,7 @@ import compiler / [
   modules, pipelineutils, pipelines, packages, modulegraphs, lineinfos, pathutils,
   cmdlinehelper, commands, sem, renderer, syntaxes, parser]
 
-import bridge
+import bridge, modnames
 
 when defined(loadFromNif):
   # XXX Enable once NIF generation works
@@ -121,7 +121,7 @@ proc compilePipelineProject2(graph: ModuleGraph; projectFileIdx = InvalidFileIdx
   if projectFile == systemFileIdx:
     result = graph.compilePipelineModule(projectFile, {sfMainModule, sfSystemModule})
   else:
-    graph.compilePipelineSystemModule2()
+    #graph.compilePipelineSystemModule2()
     result = graph.compilePipelineModule(projectFile, {sfMainModule})
 
 proc commandCheck(graph: ModuleGraph) =
@@ -137,7 +137,10 @@ proc commandCheck(graph: ModuleGraph) =
   let module = compilePipelineProject2(graph)
   when defined(debug):
     echo renderTree(module.ast)
-  toNif(conf, module.ast, "system.nif")
+
+  createDir "nifcache"
+  let dest = moduleSuffix(toFullPath(conf, module.fileIdx))
+  toNif(conf, module.ast, "nifcache" / dest.addFileExt".nif")
 
 proc processCmdLine(pass: TCmdLinePass, cmd: string; config: ConfigRef) =
   var p = parseopt.initOptParser(cmd)
