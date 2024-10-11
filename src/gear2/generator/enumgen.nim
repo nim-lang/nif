@@ -79,6 +79,7 @@ const
     "tf", # "type flag"
     "sf", # "sym flag"
     "htype", # annotated with a hidden type
+    "missing"
   ]
 
 proc genEnum[E](f: var File; enumName: string; known: var OrderedTable[string, bool]; prefixLen = 2) =
