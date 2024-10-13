@@ -14,6 +14,7 @@ proc compilePipelineModule(graph: ModuleGraph; fileIdx: FileIndex; flags: TSymFl
 proc importPipelineModule2(graph: ModuleGraph; s: PSym, fileIdx: FileIndex): PSym =
   # this is called by the semantic checking phase
   assert graph.config != nil
+  assert s != nil
   #echo "active for ", toFullPath(graph.config, fileIdx), " ", graph.withinSystem
   result = compilePipelineModule(graph, fileIdx, {}, s)
   graph.addDep(s, fileIdx)
@@ -24,8 +25,9 @@ proc importPipelineModule2(graph: ModuleGraph; s: PSym, fileIdx: FileIndex): PSy
     if graph.config.belongsToProjectPackage(s) or isDefined(graph.config, "booting"): graph.config.mainPackageNotes
     else: graph.config.foreignPackageNotes
 
-  let dest = moduleSuffix(toFullPath(graph.config, result.fileIdx))
-  toNif(graph.config, result.ast, "nifcache" / dest.addFileExt".nif")
+  if sfMainModule in s.flags or graph.withinSystem:
+    let dest = moduleSuffix(toFullPath(graph.config, result.fileIdx))
+    toNif(graph.config, result.ast, "nifcache" / dest.addFileExt".nif")
 
 proc connectPipelineCallbacks2(graph: ModuleGraph) =
   graph.includeFileCallback = modules.includeModule
@@ -105,7 +107,6 @@ proc compilePipelineModule(graph: ModuleGraph; fileIdx: FileIndex; flags: TSymFl
     processModuleAux("import")
     if sfSystemModule in flags:
       graph.systemModule = result
-    result.flags.incl flags
     #  partialInitModule(result, graph, fileIdx, filename)
 
 proc compilePipelineSystemModule2(graph: ModuleGraph) =
@@ -134,7 +135,14 @@ proc compilePipelineProject2(graph: ModuleGraph; projectFileIdx = InvalidFileIdx
     result = graph.compilePipelineModule(projectFile, {sfMainModule, sfSystemModule})
     graph.withinSystem = false
   else:
+    graph.withinSystem = true
     #graph.compilePipelineSystemModule2()
+    var sys = newModule(graph, systemFileIdx)
+    sys.flags.incl sfSystemModule
+    registerModule(graph, sys)
+    graph.systemModule = sys
+    #graph.compilePipelineModule(systemFileIdx, {sfMainModule, sfSystemModule})
+    graph.withinSystem = false
     result = graph.compilePipelineModule(projectFile, {sfMainModule})
 
 proc commandCheck(graph: ModuleGraph) =
