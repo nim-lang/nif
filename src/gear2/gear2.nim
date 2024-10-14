@@ -1,24 +1,37 @@
 when not defined(nimcore):
   {.error: "nimcore MUST be defined for Nim's core tooling".}
 
-import std / [os, times, parseopt, syncio]
+import std / [os, times, parseopt, syncio, assertions]
 import compiler / [
   llstream, ast, options, msgs, condsyms, idents, platform, reorder,
   modules, pipelineutils, pipelines, packages, modulegraphs, lineinfos, pathutils,
   cmdlinehelper, commands, sem, renderer, syntaxes, parser]
 
-import bridge
+import bridge, modnames
 
-when defined(loadFromNif):
-  # XXX Enable once NIF generation works
-  proc importPipelineModule2(graph: ModuleGraph; s: PSym, fileIdx: FileIndex): PSym =
-    # this is called by the semantic checking phase
-    assert graph.config != nil
-    result = nil # to implement
+proc compilePipelineModule(graph: ModuleGraph; fileIdx: FileIndex; flags: TSymFlags; fromModule: PSym = nil): PSym
 
-  proc connectPipelineCallbacks2(graph: ModuleGraph) =
-    graph.includeFileCallback = modules.includeModule
-    graph.importModuleCallback = importPipelineModule2
+proc importPipelineModule2(graph: ModuleGraph; s: PSym, fileIdx: FileIndex): PSym =
+  # this is called by the semantic checking phase
+  assert graph.config != nil
+  assert s != nil
+  #echo "active for ", toFullPath(graph.config, fileIdx), " ", graph.withinSystem
+  result = compilePipelineModule(graph, fileIdx, {}, s)
+  graph.addDep(s, fileIdx)
+  #if sfSystemModule in result.flags:
+  #  localError(result.info, errAttemptToRedefine, result.name.s)
+  # restore the notes for outer module:
+  graph.config.notes =
+    if graph.config.belongsToProjectPackage(s) or isDefined(graph.config, "booting"): graph.config.mainPackageNotes
+    else: graph.config.foreignPackageNotes
+
+  if sfMainModule in s.flags or graph.withinSystem:
+    let dest = moduleSuffix(toFullPath(graph.config, result.fileIdx))
+    toNif(graph.config, result.ast, "nifcache" / dest.addFileExt".nif")
+
+proc connectPipelineCallbacks2(graph: ModuleGraph) =
+  graph.includeFileCallback = modules.includeModule
+  graph.importModuleCallback = importPipelineModule2
 
 proc processPipelineModule(graph: ModuleGraph; module: PSym; idgen: IdGenerator;
                            stream: PLLStream): bool =
@@ -51,10 +64,9 @@ proc processPipelineModule(graph: ModuleGraph; module: PSym; idgen: IdGenerator;
       processImplicitImports graph, graph.config.implicitIncludes, nkIncludeStmt, module, ctx, bModule, idgen
 
   checkFirstLineIndentation(p)
-  block processCode:
-    if graph.stopCompile(): break processCode
-    var n = parseTopLevelStmt(p)
-    if n.kind == nkEmpty: break processCode
+  var n = parseTopLevelStmt(p)
+  var moduleStmts = newNodeI(nkStmtList, n.info)
+  if n.kind != nkEmpty:
     # read everything, no streaming possible
     var sl = newNodeI(nkStmtList, n.info)
     sl.add n
@@ -67,10 +79,13 @@ proc processPipelineModule(graph: ModuleGraph; module: PSym; idgen: IdGenerator;
       sl = reorder(graph, sl, module)
     let semNode = semWithPContext(ctx, sl)
     #echo renderTree(semNode)
-    appendToModule(module, semNode)
+    moduleStmts.add semNode
 
   closeParser(p)
   let finalNode = closePContext(graph, ctx, nil)
+  #appendToModule(module, finalNode)
+  moduleStmts.add finalNode
+  appendToModule(module, moduleStmts)
   result = true
 
 proc compilePipelineModule(graph: ModuleGraph; fileIdx: FileIndex; flags: TSymFlags; fromModule: PSym = nil): PSym =
@@ -92,18 +107,17 @@ proc compilePipelineModule(graph: ModuleGraph; fileIdx: FileIndex; flags: TSymFl
     processModuleAux("import")
     if sfSystemModule in flags:
       graph.systemModule = result
-    result.flags.incl flags
     #  partialInitModule(result, graph, fileIdx, filename)
 
 proc compilePipelineSystemModule2(graph: ModuleGraph) =
   if graph.systemModule == nil:
-    connectPipelineCallbacks(graph)
+    connectPipelineCallbacks2(graph)
     graph.config.m.systemFileIdx = fileInfoIdx(graph.config,
         graph.config.libpath / RelativeFile"system.nim")
     discard graph.compilePipelineModule(graph.config.m.systemFileIdx, {sfSystemModule})
 
 proc compilePipelineProject2(graph: ModuleGraph; projectFileIdx = InvalidFileIdx): PSym =
-  connectPipelineCallbacks(graph)
+  connectPipelineCallbacks2(graph)
   let conf = graph.config
   wantMainModule(conf)
   configComplete(graph)
@@ -117,9 +131,18 @@ proc compilePipelineProject2(graph: ModuleGraph; projectFileIdx = InvalidFileIdx
   graph.importStack.add projectFile
 
   if projectFile == systemFileIdx:
+    graph.withinSystem = true
     result = graph.compilePipelineModule(projectFile, {sfMainModule, sfSystemModule})
+    graph.withinSystem = false
   else:
-    graph.compilePipelineSystemModule2()
+    graph.withinSystem = true
+    #graph.compilePipelineSystemModule2()
+    var sys = newModule(graph, systemFileIdx)
+    sys.flags.incl sfSystemModule
+    registerModule(graph, sys)
+    graph.systemModule = sys
+    #graph.compilePipelineModule(systemFileIdx, {sfMainModule, sfSystemModule})
+    graph.withinSystem = false
     result = graph.compilePipelineModule(projectFile, {sfMainModule})
 
 proc commandCheck(graph: ModuleGraph) =
@@ -132,10 +155,12 @@ proc commandCheck(graph: ModuleGraph) =
   elif conf.backend == backendJs:
     setTarget(conf.target, osJS, cpuJS)
   setPipeLinePass(graph, SemPass)
+  createDir "nifcache"
   let module = compilePipelineProject2(graph)
   when defined(debug):
     echo renderTree(module.ast)
-  toNif(conf, module.ast, "system.nif")
+  #let dest = moduleSuffix(toFullPath(conf, module.fileIdx))
+  #toNif(conf, module.ast, "nifcache" / dest.addFileExt".nif")
 
 proc processCmdLine(pass: TCmdLinePass, cmd: string; config: ConfigRef) =
   var p = parseopt.initOptParser(cmd)
