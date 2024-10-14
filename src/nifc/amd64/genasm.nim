@@ -10,7 +10,7 @@
 # We produce PreASM code as a list of NIF tokens.
 
 import std / [assertions, syncio, tables, sets, intsets, strutils]
-from std / os import changeFileExt, splitFile, extractFileName
+from std / os import changeFileExt, splitFile, extractFilename
 
 import .. / .. / lib / [bitabs, packedtrees, lineinfos, nifstreams, nifcursors]
 import ".." / [nifc_model, typenav]
