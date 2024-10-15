@@ -105,22 +105,28 @@ proc addIdent*(b: var Builder; s: string) =
     else:
       b.put c
 
-proc addSymbol*(b: var Builder; s: string) =
-  addSep b
-  for c in s:
-    if c.needsEscape:
+proc addSymbolImpl(b: var Builder; s: string) {.inline.} =
+  if s.len > 0:
+    let c = s[0]
+    if c in {'.', '0'..'9'} or c.needsEscape:
       b.escape c
     else:
       b.put c
+    for i in 1..<s.len:
+      let c = s[i]
+      if c.needsEscape:
+        b.escape c
+      else:
+        b.put c
+
+proc addSymbol*(b: var Builder; s: string) =
+  addSep b
+  addSymbolImpl b, s
 
 proc addSymbolDef*(b: var Builder; s: string) =
   addSep b
   b.put ':'
-  for c in s:
-    if c.needsEscape:
-      b.escape c
-    else:
-      b.put c
+  addSymbolImpl b, s
 
 proc addStrLit*(b: var Builder; s: string) =
   addSep b
