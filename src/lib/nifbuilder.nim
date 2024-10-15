@@ -108,7 +108,7 @@ proc addIdent*(b: var Builder; s: string) =
 proc addSymbolImpl(b: var Builder; s: string) {.inline.} =
   if s.len > 0:
     let c = s[0]
-    if c in {'.', '0'..'9'} or c.needsEscape:
+    if c in {'.', '0'..'9', '+', '-', '~'} or c.needsEscape:
       b.escape c
     else:
       b.put c
