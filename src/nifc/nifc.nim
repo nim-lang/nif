@@ -184,7 +184,7 @@ proc handleCmdLine() =
     if s.selects.len > 0:
       var h = open(s.config.nifcacheDir / "select_any.h", fmWrite)
       for x in s.selects:
-        write h, "#include \"" & extractFileName(x) & "\"\n"
+        write h, "#include \"" & extractFilename(x) & "\"\n"
       h.close()
     let appName = actionTable[currentAction][^1].splitFile.name
     let makefilePath = s.config.nifcacheDir / "Makefile." & appName

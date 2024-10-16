@@ -10,7 +10,7 @@
 # We produce C code as a list of tokens.
 
 import std / [assertions, syncio, tables, sets, intsets, formatfloat, strutils, packedsets]
-from std / os import changeFileExt, splitFile, extractFileName
+from std / os import changeFileExt, splitFile, extractFilename
 
 import .. / lib / [bitabs, packedtrees, lineinfos]
 import mangler, nifc_model, cprelude, noptions
