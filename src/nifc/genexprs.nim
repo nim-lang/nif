@@ -159,6 +159,12 @@ proc genx(c: var GeneratedCode; t: Tree; n: NodePos) =
     c.add makeCString(c.m.lits.strings[t[n].litId])
   of NilC:
     c.add NullPtr
+  of InfC:
+    c.add "INF"
+  of NegInfC:
+    c.add "-INF"
+  of NanC:
+    c.add "NAN"
   of AconstrC:
     c.objConstrType(t, n.firstSon)
     c.add CurlyLe
