@@ -33,3 +33,21 @@ type
 
 proc initActionTable*(): ActionTable {.inline.} =
   result = initOrderedTable[Action, seq[string]]()
+
+template getoptimizeLevelFlag*(config: ConfigRef): string =
+  case config.optimizeLevel
+  of Speed:
+    "-O3"
+  of Size:
+    "-Os"
+  of None:
+    ""
+
+template getCompilerConfig*(config: ConfigRef): (string, string) =
+  case config.cCompiler
+  of ccGcc:
+    ("gcc", "g++")
+  of ccCLang:
+    ("clang", "clang++")
+  else:
+    quit "unreachable"
