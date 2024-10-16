@@ -6,7 +6,7 @@
 
 ## Support code for generating NIF code.
 
-import std / [assertions, syncio, formatfloat]
+import std / [assertions, syncio, formatfloat, math]
 
 type
   Mode = enum
@@ -99,11 +99,18 @@ proc addSep(b: var Builder) =
 
 proc addIdent*(b: var Builder; s: string) =
   addSep b
-  for c in s:
-    if c < ' ' or (c in ControlChars+{'.'}):
+  if s.len > 0:
+    let c = s[0]
+    if c < ' ' or c in {'.', '0'..'9', '+', '-', '~'} or c.needsEscape:
       b.escape c
     else:
       b.put c
+    for i in 1..<s.len:
+      let c = s[i]
+      if c < ' ' or (c in ControlChars+{'.'}):
+        b.escape c
+      else:
+        b.put c
 
 proc addSymbolImpl(b: var Builder; s: string) {.inline.} =
   if s.len > 0:
@@ -168,11 +175,16 @@ proc addFloatLit*(b: var Builder; f: BiggestFloat) =
   addSep b
   let myLen = b.buf.len
   drainPending b
-  if f >= 0.0:
-    b.buf.add '+'
-  b.buf.addFloat f
-  for i in myLen ..< b.buf.len:
-    if b.buf[i] == 'e': b.buf[i] = 'E'
+  case classify(f)
+  of fcInf: b.buf.add "(inf)"
+  of fcNan: b.buf.add "(nan)"
+  of fcNegInf: b.buf.add "(neginf)"
+  of fcNormal, fcSubnormal, fcZero, fcNegZero:
+    if f >= 0.0:
+      b.buf.add '+'
+    b.buf.addFloat f
+    for i in myLen ..< b.buf.len:
+      if b.buf[i] == 'e': b.buf[i] = 'E'
   if b.mode == UsesFile:
     b.f.write b.buf
     b.buf.setLen 0
