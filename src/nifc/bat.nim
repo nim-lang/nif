@@ -2,8 +2,7 @@ import std/[os, strformat, tables, syncio]
 import noptions
 
 proc generateMakefileForFiles(s: State, files: seq[string],
-        action: Action, destExt: string, links: var string
-    ): string =
+        action: Action, links: var string): string =
   result = ""
   let cc = case action
       of atC:
@@ -15,6 +14,7 @@ proc generateMakefileForFiles(s: State, files: seq[string],
       else:
         quit "unreachable"
   let nifcacheDir = s.config.nifcacheDir
+  let destExt = ExtAction[action]
   for i in 0..<files.len:
     let moduleNames = splitFile(files[i]).name
     links.add " " & nifcacheDir / moduleNames & ".o"
@@ -42,15 +42,7 @@ SET "c_flags={optimizeLevelFlag}"
   var links = ""
 
   for action in actionTable.keys:
-    case action
-    of atC:
-      makefileContent.add generateMakefileForFiles(s, actionTable[action], action, ".c", links)
-    of atCpp:
-      makefileContent.add generateMakefileForFiles(s, actionTable[action], action, ".cpp", links)
-    of atNative:
-      makefileContent.add generateMakefileForFiles(s, actionTable[action], action, ".S", links)
-    else:
-      quit "unreachable"
+    makefileContent.add generateMakefileForFiles(s, actionTable[action], action, links)
 
   makefileContent.add "\n%c_linker% -o " & app & links & "\n"
 

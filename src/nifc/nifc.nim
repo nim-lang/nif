@@ -48,14 +48,7 @@ proc genMakeCmd(config: ConfigRef, makefilePath: string): string =
   when defined(windows):
     result = expandFilename(makefilePath)
   else:
-    let optimizeLevelFlag = getoptimizeLevelFlag(config)
-    let (cCompiler, cppCompiler) = getCompilerConfig(config)
-
-    result = "make " & "CC=" & cCompiler &
-            " " & "CXX=" & cppCompiler &
-            " " & "CFLAGS=" & "\"" & optimizeLevelFlag & "\"" &
-            " " & "CXXFLAGS=" & "\"" & optimizeLevelFlag & "\"" &
-            " -f " & makefilePath
+    result = "make -f " & makefilePath
 
 proc generateBackend(s: var State; action: Action; files: seq[string]; bits: int) =
   assert action in {atC, atCpp}
@@ -182,7 +175,7 @@ proc handleCmdLine() =
       h.close()
     let appName = actionTable[currentAction][^1].splitFile.name
 
-    when defined(windows): # TODO: refactor `generateMakefile` later: set options explicitly
+    when defined(windows):
       let makefilePath = s.config.nifcacheDir / "Makefile." & appName & ".bat"
       generateBatMakefile(s, makefilePath, appName, actionTable)
     else:
