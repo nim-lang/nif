@@ -482,7 +482,6 @@ proc toNif*(n, parent: PNode; c: var WContext) =
       relLineInfo(it, n, c)
 
       c.b.addTree("efld")
-      relLineInfo(it, n, c)
       toNifDecl name, it, c
       c.b.addEmpty # export marker
       toNifPragmas(pragma, name, it, c)
