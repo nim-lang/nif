@@ -134,6 +134,12 @@
   )
   )
 
+  (proc :foo.floatspecial . . . (stmts
+    (var :x.m . (f +32) (inf))
+    (var :x2.m . (f +64) (neginf))
+    (var :x3.m . (f +64) (nan))
+  ))
+
   (proc :main.c . (i +32) . (stmts
     1,1,hello.nim(var :x1.m . (i +32) +12)
     1,2,hello.nim(var :z2.m . (ptr (c +8)) (cast (ptr (c +8)) (suf "hello" "r")))
@@ -145,6 +151,7 @@
     (call foo.while)
     (call foo.neg)
     (call foo.cs2)
+    (call foo.floatspecial)
 
     (var :x.c . (i +8) (suf +12 "i8"))
     (var :x.m . (i +16) (suf -12 "i16"))

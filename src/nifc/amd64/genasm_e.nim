@@ -812,5 +812,8 @@ proc genx(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
   #  genConv c, t, n
   of SufC:
     genSuffix(c, t, n, dest)
+  of InfC, NegInfC, NanC:
+    # TODO:
+    discard
   else:
     genLvalue c, t, n, dest

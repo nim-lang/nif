@@ -115,6 +115,10 @@ type
     NodeclC = "nodecl"
     InclC = "incl"
     SufC = "suf"
+    InfC = "inf"
+    NegInfC = "neginf"
+    NanC = "nan"
+
 
 const
   CallingConventions* = {CdeclC..MemberC}

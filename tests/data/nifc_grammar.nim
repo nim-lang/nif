@@ -151,6 +151,15 @@ proc matchExpr(c: var Context; it: var Item): bool =
     if isTag(c, it, TrueT):
       or2 = true
       break or3
+    if isTag(c, it, InfT):
+      or2 = true
+      break or3
+    if isTag(c, it, NeginfT):
+      or2 = true
+      break or3
+    if isTag(c, it, NanT):
+      or2 = true
+      break or3
     var kw6 = false
     if isTag(c, it, AndT):
       if not matchExpr(c, it):

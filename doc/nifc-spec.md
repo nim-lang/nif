@@ -91,6 +91,7 @@ Expr ::= Number | CharLiteral | StringLiteral |
          (par Expr) | # wraps the expression in parentheses
          (addr Lvalue) | # "address of" operation
          (nil) | (false) | (true) |
+         (inf) | (neginf) | (nan) |
          (and Expr Expr) | # "&&"
          (or Expr Expr) | # "||"
          (not Expr) | # "!"
