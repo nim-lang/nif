@@ -133,5 +133,27 @@ typedef NU8 NU;
 #define NIM_TRUE true
 #define NIM_FALSE false
 
+// NAN definition copied from math.h included in the Windows SDK version 10.0.14393.0
+#ifndef NAN
+#  ifndef _HUGE_ENUF
+#    define _HUGE_ENUF  1e+300  // _HUGE_ENUF*_HUGE_ENUF must overflow
+#  endif
+#  define NAN_INFINITY ((float)(_HUGE_ENUF * _HUGE_ENUF))
+#  define NAN ((float)(NAN_INFINITY * 0.0F))
+#endif
+
+#ifndef INF
+#  ifdef INFINITY
+#    define INF INFINITY
+#  elif defined(HUGE_VAL)
+#    define INF  HUGE_VAL
+#  elif defined(_MSC_VER)
+#    include <float.h>
+#    define INF (DBL_MAX+DBL_MAX)
+#  else
+#    define INF (1.0 / 0.0)
+#  endif
+#endif
+
 """
 

@@ -98,7 +98,7 @@ proc getType*(m: var Module; t: Tree; n: NodePos): TypeDesc =
     result = TypeDesc(p: v.typ)
   of IntLit, SizeofC: result = createIntegralType(m.lits, IntC, "-1")
   of UIntLit: result = createIntegralType(m.lits, UIntC, "-1")
-  of FloatLit: result = createIntegralType(m.lits, FloatC, "64")
+  of FloatLit, InfC, NegInfC, NanC: result = createIntegralType(m.lits, FloatC, "64")
   of CharLit: result = createIntegralType(m.lits, CharC, "8")
   of StrLit: result = makePtrType(m, createIntegralType(m.lits, CharC, "8"))
   of TrueC, FalseC, AndC, OrC, NotC, EqC, NeqC, LeC, LtC:

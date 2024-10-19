@@ -14,6 +14,7 @@
          (par Expr)
          (addr Lvalue)
          (nil) (false) (true)
+         (inf) (neginf) (nan)
          (and Expr Expr)
          (or Expr Expr)
          (not Expr)
