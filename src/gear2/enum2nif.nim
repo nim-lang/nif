@@ -729,6 +729,7 @@ proc toNifTag*(s: TMagic): string =
   of mMulSet: "mulset"
   of mPlusSet: "plusset"
   of mMinusSet: "minusset"
+  of mXorSet: "xorset"
   of mConStrStr: "constrstr"
   of mSlice: "slice"
   of mDotDot: "dotdot"
@@ -1009,6 +1010,7 @@ proc parseMagic*(s: string): TMagic =
   of "mulset": mMulSet
   of "plusset": mPlusSet
   of "minusset": mMinusSet
+  of "xorset": mXorSet
   of "constrstr": mConStrStr
   of "slice": mSlice
   of "dotdot": mDotDot
