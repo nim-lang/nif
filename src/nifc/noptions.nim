@@ -51,3 +51,5 @@ template getCompilerConfig*(config: ConfigRef): (string, string) =
     ("clang", "clang++")
   else:
     quit "unreachable"
+
+const ExtAction*: array[Action, string] = ["", ".c", ".cpp", ".S"]

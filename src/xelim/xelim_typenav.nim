@@ -35,7 +35,7 @@ proc extractSuffix(s: string): string =
   if i != s.len-1 and i > 0 and s[i] in {'A'..'Z', 'a'..'z'}:
     result = substr(s, i+1)
   else:
-    result = "M"
+    result = "-1"
 
 proc integralType(m: var Module; t: Tree; n: NodePos; integral: string): TypeDesc =
   let bits = extractSuffix(m.lits.strings[t[n].litId])

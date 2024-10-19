@@ -282,9 +282,9 @@ programming languages.
 | `nil`     | A nil/null pointer. Note: This is not an atom so that it does not conflict with an identifier named `nil` and so that it can get a type annotation. |
 | `false`   | The boolean value `false`. Note: This is not an atom so that it does not conflict with an identifier named `false`. |
 | `true`    | The boolean value `true`. Note: This is not an atom so that it does not conflict with an identifier named `true`. |
-| `inf`     | The floating point number representing "positive infinity". Note: This is not an atom so that it does not conflict with an identifier named `inf` and so that it can get a type annotation. |
-| `neginf`   | The floating point number representing "negative infinity". Note: This is not an atom so that it does not conflict with an identifier named `neginf`. |
-| `nan`    | The floating point number representing "not a Number". Note: This is not an atom so that it does not conflict with an identifier named `nan`. |
+| `nan`     | The floating point value `nan`. Note: This is not an atom so that it does not conflict with an identifier named `nan`. |
+| `inf`    | The floating point value `infinity`. Note: This is not an atom so that it does not conflict with an identifier named `inf`. |
+| `neginf`    | The floating point value `-infinity`. Note: This is not an atom so that it does not conflict with an identifier named `neginf`. |
 | `stmts`   | A list of statements. |
 | `expr`    | A list of statements but ending in an expression. |
 | `imp`     | An import of a declaration from a different module. |

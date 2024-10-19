@@ -43,7 +43,7 @@
     (else
      (break)))))
  (var :tmp.3.01 . .
-  (i M) .)
+  (i -1) .)
  (try
   (call echo "abc")
   (asgn tmp.3.01 +3)

@@ -6,7 +6,7 @@
 
 ## High performance ("zero copies") NIF file reader.
 
-import std / [memfiles, tables, parseutils, assertions]
+import std / [memfiles, tables, parseutils, assertions, syncio]
 import stringviews
 
 const
@@ -404,6 +404,11 @@ proc next*(r: var Reader): Token =
           if repl[0] != UnknownToken:
             result.tk = repl[0]
             result.s = repl[1]
+  #if result.tk == UnknownToken:
+  #  for i in 0 .. 100:
+  #    stdout.write r.p[i]
+  #  writeStackTrace()
+  #  quit "huh? "
 
 type
   RestorePoint* = object
