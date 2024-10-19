@@ -190,8 +190,10 @@ proc toString(b: var Builder; tree: Tree; n: NodePos; lits: Literals) =
     b.addEmpty()
   of Ident:
     b.addIdent(lits.strings[tree[n].litId])
-  of Sym, IntLit, UIntLit, FloatLit:
+  of Sym:
     b.addSymbol(lits.strings[tree[n].litId])
+  of IntLit, UIntLit, FloatLit:
+    b.addNumber lits.strings[tree[n].litId]
   of Symdef:
     b.addSymbolDef(lits.strings[tree[n].litId])
   of CharLit:

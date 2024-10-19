@@ -108,8 +108,9 @@ proc readSection(s: var Stream; tab: var Table[string, NifIndexEntry]) =
         t = next(s) # skip offset
         if t.kind == ParRi:
           t = next(s)
+          dec nested
         else:
-          assert false, "invalid (kv) construct: IntLit expected"
+          assert false, "invalid (kv) construct: ')' expected"
       else:
         assert false, "expected (kv) construct"
     elif t.kind == ParRi:
@@ -118,7 +119,8 @@ proc readSection(s: var Stream; tab: var Table[string, NifIndexEntry]) =
         break
       t = next(s)
     else:
-      t = next(s)
+      assert false, "expected (kv) construct"
+      #t = next(s)
 
 proc readIndex*(indexName: string): NifIndex =
   var s = nifstreams.open(indexName)
@@ -130,16 +132,20 @@ proc readIndex*(indexName: string): NifIndex =
   let IndexT = registerTag "index"
 
   result = default(NifIndex)
-  while true:
-    let t = next(s)
-    if t.kind == EofToken: break
-    if t.kind == ParLe:
-      if t.tagId == PublicT:
-        readSection s, result.public
-      elif t.tagId == PrivateT:
-        readSection s, result.private
-      elif t.tagId == IndexT:
-        discard
+  var t = next(s)
+  if t.tag == IndexT:
+    t = next(s)
+    if t.tag == PublicT:
+      readSection s, result.public
+    else:
+      assert false, "'public' expected"
+    t = next(s)
+    if t.tag == PrivateT:
+      readSection s, result.private
+    else:
+      assert false, "'private' expected"
+  else:
+    assert false, "expected 'index' tag"
 
 when isMainModule:
   createIndex paramStr(1)

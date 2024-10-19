@@ -11,6 +11,10 @@ import bridge, modnames
 
 proc compilePipelineModule(graph: ModuleGraph; fileIdx: FileIndex; flags: TSymFlags; fromModule: PSym = nil): PSym
 
+proc toNifFile(conf: ConfigRef; fileIdx: FileIndex): string =
+  let dest = moduleSuffix(toFullPath(conf, fileIdx))
+  result = "nifcache" / dest
+
 proc importPipelineModule2(graph: ModuleGraph; s: PSym, fileIdx: FileIndex): PSym =
   # this is called by the semantic checking phase
   assert graph.config != nil
@@ -26,8 +30,9 @@ proc importPipelineModule2(graph: ModuleGraph; s: PSym, fileIdx: FileIndex): PSy
     else: graph.config.foreignPackageNotes
 
   if sfMainModule in s.flags or graph.withinSystem:
-    let dest = moduleSuffix(toFullPath(graph.config, result.fileIdx))
-    toNif(graph.config, result.ast, "nifcache" / dest.addFileExt".nif")
+    let dest = toNifFile(graph.config, result.fileIdx).addFileExt".nif"
+    toNif(graph.config, result.ast, dest)
+    #echo "Producing ", dest, " for ", result.name.s
 
 proc connectPipelineCallbacks2(graph: ModuleGraph) =
   graph.includeFileCallback = modules.includeModule
@@ -88,9 +93,14 @@ proc processPipelineModule(graph: ModuleGraph; module: PSym; idgen: IdGenerator;
   appendToModule(module, moduleStmts)
   result = true
 
+var
+  nifDb: RContext
+
 proc compilePipelineModule(graph: ModuleGraph; fileIdx: FileIndex; flags: TSymFlags; fromModule: PSym = nil): PSym =
   var flags = flags
-  if fileIdx == graph.config.projectMainIdx2: flags.incl sfMainModule
+  if fileIdx == graph.config.projectMainIdx2:
+    flags.incl sfMainModule
+
   result = graph.getModule(fileIdx)
 
   template processModuleAux(moduleStatus) =
@@ -103,11 +113,19 @@ proc compilePipelineModule(graph: ModuleGraph; fileIdx: FileIndex; flags: TSymFl
   if result == nil:
     result = newModule(graph, fileIdx)
     result.flags.incl flags
+    if sfMainModule in flags and not graph.withinSystem:
+      nifDb = createRContext(graph, graph.cache, result)
+      bridge.open nifDb, toNifFile(graph.config, graph.config.m.systemFileIdx)
     registerModule(graph, result)
     processModuleAux("import")
     if sfSystemModule in flags:
       graph.systemModule = result
     #  partialInitModule(result, graph, fileIdx, filename)
+
+    if sfMainModule in result.flags or graph.withinSystem:
+      let dest = toNifFile(graph.config, result.fileIdx).addFileExt".nif"
+      toNif(graph.config, result.ast, dest)
+      #echo "Producing ", dest, " for ", result.name.s
 
 proc compilePipelineSystemModule2(graph: ModuleGraph) =
   if graph.systemModule == nil:
@@ -123,6 +141,8 @@ proc compilePipelineProject2(graph: ModuleGraph; projectFileIdx = InvalidFileIdx
   configComplete(graph)
 
   let systemFileIdx = fileInfoIdx(conf, conf.libpath / RelativeFile"system.nim")
+  graph.config.m.systemFileIdx = systemFileIdx
+
   let projectFile = if projectFileIdx == InvalidFileIdx: conf.projectMainIdx else: projectFileIdx
   conf.projectMainIdx2 = projectFile
 
