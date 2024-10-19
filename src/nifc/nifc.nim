@@ -10,8 +10,13 @@
 ## NIFC driver program.
 
 import std / [parseopt, strutils, os, osproc, tables, assertions, syncio]
-import codegen, makefile, noptions
+import codegen, noptions
 import preasm / genpreasm
+
+when defined(windows):
+  import bat
+else:
+  import makefile
 
 when defined(enableAsm):
   import amd64 / genasm
@@ -40,28 +45,10 @@ proc writeHelp() = quit(Usage, QuitSuccess)
 proc writeVersion() = quit(Version & "\n", QuitSuccess)
 
 proc genMakeCmd(config: ConfigRef, makefilePath: string): string =
-  let optimizeLevelFlag = case config.optimizeLevel
-    of Speed:
-      "-O3"
-    of Size:
-      "-Os"
-    of None:
-      ""
-
-  let (cCompiler, cppCompiler) =
-    case config.cCompiler
-    of ccGcc:
-      ("gcc", "g++")
-    of ccCLang:
-      ("clang", "clang++")
-    else:
-      quit "unreachable"
-
-  result = "make " & "CC=" & cCompiler &
-          " " & "CXX=" & cppCompiler &
-          " " & "CFLAGS=" & "\"" & optimizeLevelFlag & "\"" &
-          " " & "CXXFLAGS=" & "\"" & optimizeLevelFlag & "\"" &
-          " -f " & makefilePath
+  when defined(windows):
+    result = expandFilename(makefilePath)
+  else:
+    result = "make -f " & makefilePath
 
 proc generateBackend(s: var State; action: Action; files: seq[string]; bits: int) =
   assert action in {atC, atCpp}
@@ -187,9 +174,13 @@ proc handleCmdLine() =
         write h, "#include \"" & extractFilename(x) & "\"\n"
       h.close()
     let appName = actionTable[currentAction][^1].splitFile.name
-    let makefilePath = s.config.nifcacheDir / "Makefile." & appName
 
-    generateMakefile(s, makefilePath, appName, actionTable)
+    when defined(windows):
+      let makefilePath = s.config.nifcacheDir / "Makefile." & appName & ".bat"
+      generateBatMakefile(s, makefilePath, appName, actionTable)
+    else:
+      let makefilePath = s.config.nifcacheDir / "Makefile." & appName
+      generateMakefile(s, makefilePath, appName, actionTable)
     if toRun:
       let makeCmd = genMakeCmd(s.config, makefilePath)
       let (output, exitCode) = execCmdEx(makeCmd)
