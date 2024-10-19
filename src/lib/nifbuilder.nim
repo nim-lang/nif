@@ -95,6 +95,12 @@ proc addSep(b: var Builder) =
   elif b.nesting != 0:
     b.putPending " "
 
+proc addNumber*(b: var Builder; s: string) =
+  addSep b
+  if s.len > 0 and s[0] notin {'+', '-'}:
+    b.put "+"
+  put b, s
+
 #  ------------ Atoms ------------------------
 
 proc addIdent*(b: var Builder; s: string) =
