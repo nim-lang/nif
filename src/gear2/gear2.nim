@@ -161,6 +161,7 @@ proc compilePipelineProject2(graph: ModuleGraph; projectFileIdx = InvalidFileIdx
     sys.flags.incl sfSystemModule
     registerModule(graph, sys)
     graph.systemModule = sys
+    bridge.openSystem nifDb, toNifFile(conf, systemFileIdx)
     #graph.compilePipelineModule(systemFileIdx, {sfMainModule, sfSystemModule})
     graph.withinSystem = false
     result = graph.compilePipelineModule(projectFile, {sfMainModule})
