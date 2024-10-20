@@ -68,6 +68,10 @@ proc open*(r: var RContext; modname: string) =
     s: nifstreams.open(filename)
   )
 
+proc openSystem*(r: var RContext; modname: string) =
+  open r, modname
+  #r.modules[modname].index
+
 proc toFileIndexCached(c: var RContext; f: FileId): FileIndex =
   if f == FileId(0):
     result = InvalidFileIdx
@@ -103,9 +107,10 @@ proc relLineInfo(n, parent: PNode; c: var WContext;
 
 proc symToNif(s: PSym; c: var WContext; isDef = false) =
   var m = s.name.s & '.' & $s.disamb
-  if s.skipGenericOwner().kind == skModule:
+  let ow = s.skipGenericOwner()
+  if ow.kind == skModule:
     m.add '.'
-    let fp = toFullPath(c.conf, s.info.fileIndex)
+    let fp = toFullPath(c.conf, FileIndex ow.position)
     var suf = c.toSuffix.getOrDefault(fp)
     if suf.len == 0:
       suf = moduleSuffix(fp)
