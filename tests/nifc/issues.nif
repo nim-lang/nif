@@ -140,6 +140,13 @@
     (var :x3.m . (f +64) (nan))
   ))
 
+  (proc :foo.intminmax . . . (stmts
+    (call printf.c "hello %d\0A" (suf -2147483648 "i32"))
+    (call printf.c "hello %lld\0A" (suf -9223372036854775808 "i64"))
+    (call printf.c "hello %lld\0A" (suf -9223372036854775806 "i64"))
+    (call printf.c "hello %llu\0A" (suf +18446744073709551615u "u64"))
+  ))
+
   (proc :main.c . (i +32) . (stmts
     1,1,hello.nim(var :x1.m . (i +32) +12)
     1,2,hello.nim(var :z2.m . (ptr (c +8)) (cast (ptr (c +8)) (suf "hello" "r")))
@@ -152,6 +159,7 @@
     (call foo.neg)
     (call foo.cs2)
     (call foo.floatspecial)
+    (call foo.intminmax)
 
     (var :x.c . (i +8) (suf +12 "i8"))
     (var :x.m . (i +16) (suf -12 "i16"))

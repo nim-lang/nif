@@ -155,5 +155,11 @@ typedef NU8 NU;
 #  endif
 #endif
 
+#if defined(__GNUC__) || defined(_MSC_VER)
+#  define IL64(x) x##LL
+#else /* works only without LL */
+#  define IL64(x) ((NI64)x)
+#endif
+
 """
 
