@@ -11,6 +11,9 @@ import bridge, modnames
 
 proc compilePipelineModule(graph: ModuleGraph; fileIdx: FileIndex; flags: TSymFlags; fromModule: PSym = nil): PSym
 
+proc moduleSuffix(conf: ConfigRef; fileIdx: FileIndex): string =
+  moduleSuffix(toFullPath(conf, fileIdx))
+
 proc toNifFile(conf: ConfigRef; fileIdx: FileIndex): string =
   let dest = moduleSuffix(toFullPath(conf, fileIdx))
   result = "nifcache" / dest
@@ -115,7 +118,7 @@ proc compilePipelineModule(graph: ModuleGraph; fileIdx: FileIndex; flags: TSymFl
     result.flags.incl flags
     if sfMainModule in flags and not graph.withinSystem:
       nifDb = createRContext(graph, graph.cache, result)
-      bridge.open nifDb, toNifFile(graph.config, graph.config.m.systemFileIdx)
+      bridge.openNifModule nifDb, moduleSuffix(graph.config, graph.config.m.systemFileIdx)
     registerModule(graph, result)
     processModuleAux("import")
     if sfSystemModule in flags:
@@ -161,7 +164,7 @@ proc compilePipelineProject2(graph: ModuleGraph; projectFileIdx = InvalidFileIdx
     sys.flags.incl sfSystemModule
     registerModule(graph, sys)
     graph.systemModule = sys
-    bridge.openSystem nifDb, toNifFile(conf, systemFileIdx)
+    bridge.openSystem nifDb, toNifFile(conf, systemFileIdx), moduleSuffix(toFullPath(conf, systemFileIdx))
     #graph.compilePipelineModule(systemFileIdx, {sfMainModule, sfSystemModule})
     graph.withinSystem = false
     result = graph.compilePipelineModule(projectFile, {sfMainModule})

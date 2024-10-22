@@ -327,7 +327,7 @@ proc loadSym*(nifName: string; r: var RContext): PSym =
   if modname.len == 0:
     result = loadSym(r.modules[r.thisModule], nifName, r)
   else:
-    r.open modname
+    r.openNifModule modname
     result = loadSym(r.modules[modname], nifName, r)
 
 proc loadLocalSym*(nifName: string; r: var RContext): PSym =
@@ -338,6 +338,9 @@ proc loadSym*(s: SymId; r: var RContext): PSym =
   result = loadSym(nifName, r)
 
 proc loadType*(s: SymId; r: var RContext): PType =
+  result = loadSym(s, r).typ
+
+proc loadType*(s: string; r: var RContext): PType =
   result = loadSym(s, r).typ
 
 proc readSym(c: Cursor; r: var RContext; info: TLineInfo): PSym =
@@ -352,6 +355,7 @@ proc readSym(c: Cursor; r: var RContext; info: TLineInfo): PSym =
 proc readSymDef(c: Cursor; r: var RContext; info: TLineInfo): PSym =
   let s = c.symId
   var isGlobal = false
+  assert r.identCache != nil
   let name = getIdent(r.identCache, extractBasename(pool.syms[s], isGlobal))
   result = newSym(r.symKind, name, r.idgen, r.owner, info)
   # always overwrite the entry here so that local syms are modelled properly.

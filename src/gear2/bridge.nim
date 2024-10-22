@@ -53,24 +53,21 @@ type
     modules: Table[string, RModule]
 
 proc createRContext*(g: ModuleGraph; identCache: IdentCache; module: PSym): RContext =
-  result = RContext(owner: module, idgen: idGeneratorFromModule(module), conf: g.config, graph: g)
+  result = RContext(owner: module, idgen: idGeneratorFromModule(module), conf: g.config, graph: g,
+    identCache: identCache)
 
 proc closeAll*(r: var RContext) =
   for _, m in mpairs r.modules:
     close m.s
 
-proc open*(r: var RContext; modname: string) =
+proc openNifModule*(r: var RContext; modname: string) =
   if r.modules.hasKey(modname): return
   if r.thisModule.len == 0: r.thisModule = modname
-  let filename = modname & ".nif"
+  let filename = "nifcache/" & modname & ".nif"
   r.modules[modname] = RModule(
-    index: readIndex(modname & ".idx.nif"),
+    index: readIndex("nifcache/" & modname & ".idx.nif"),
     s: nifstreams.open(filename)
   )
-
-proc openSystem*(r: var RContext; modname: string) =
-  open r, modname
-  #r.modules[modname].index
 
 proc toFileIndexCached(c: var RContext; f: FileId): FileIndex =
   if f == FileId(0):
@@ -605,6 +602,11 @@ proc createConf(): ConfigRef =
   result = newConfigRef()
   #result.notes.excl hintLineTooLong
   result.errorMax = 1000
+
+proc openSystem*(r: var RContext; modname, suffix: string) =
+  openNifModule r, suffix
+  #let strIdx = r.modules[modname].index.getOrDefault()
+  r.graph.sysTypes[tyString] = loadType("string.0." & suffix, r)
 
 template bench(task, body) =
   when defined(nifBench):
