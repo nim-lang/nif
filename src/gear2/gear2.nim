@@ -117,7 +117,6 @@ proc compilePipelineModule(graph: ModuleGraph; fileIdx: FileIndex; flags: TSymFl
     result = newModule(graph, fileIdx)
     result.flags.incl flags
     if sfMainModule in flags and not graph.withinSystem:
-      nifDb = createRContext(graph, graph.cache, result)
       bridge.openNifModule nifDb, moduleSuffix(graph.config, graph.config.m.systemFileIdx)
     registerModule(graph, result)
     processModuleAux("import")
@@ -164,6 +163,7 @@ proc compilePipelineProject2(graph: ModuleGraph; projectFileIdx = InvalidFileIdx
     sys.flags.incl sfSystemModule
     registerModule(graph, sys)
     graph.systemModule = sys
+    nifDb = createRContext(graph, graph.cache, sys)
     bridge.openSystem nifDb, toNifFile(conf, systemFileIdx), moduleSuffix(toFullPath(conf, systemFileIdx))
     #graph.compilePipelineModule(systemFileIdx, {sfMainModule, sfSystemModule})
     graph.withinSystem = false

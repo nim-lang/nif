@@ -341,7 +341,9 @@ proc loadType*(s: SymId; r: var RContext): PType =
   result = loadSym(s, r).typ
 
 proc loadType*(s: string; r: var RContext): PType =
-  result = loadSym(s, r).typ
+  let s = loadSym(s, r)
+  result = s.typ
+  assert result != nil
 
 proc readSym(c: Cursor; r: var RContext; info: TLineInfo): PSym =
   let s = c.symId
@@ -407,6 +409,8 @@ proc repair(n: PNode; r: var RContext; tag: string): PNode =
     else:
       result = n
 
+proc readType*(c: var Cursor; r: var RContext): PType
+
 proc readNode(c: var Cursor; r: var RContext): PNode =
   let info = translateLineInfo(r, c.info)
   case c.kind
@@ -420,8 +424,20 @@ proc readNode(c: var Cursor; r: var RContext): PNode =
       if c.kind == Ident:
         result.flags = parseNodeFlags(pool.strings[c.litId])
       expect c, ParRi
-    while c.kind != ParRi:
-      result.addAllowNil readNode(c, r)
+    case k
+    of nkTypeSection:
+      var childCounter = 0
+      while c.kind != ParRi:
+        if k == nkTypeSection and childCounter == 4:
+          let t = readType(c, r)
+          result[0].sym.typ = t
+          result.add newNode(nkEmpty)
+        else:
+          result.addAllowNil readNode(c, r)
+        inc childCounter
+    else:
+      while c.kind != ParRi:
+        result.addAllowNil readNode(c, r)
     expect c, ParRi
     if k == nkNone:
       result = repair(result, r, tag)
@@ -501,8 +517,6 @@ proc readTypeKind(c: var Cursor; tag: string): TTypeKind =
         else: assert false
       else:
         expect c, IntLit
-
-proc readType*(c: var Cursor; r: var RContext): PType
 
 proc readTypeImpl(c: var Cursor; r: var RContext; kind: TTypeKind; res: PType) =
   case kind
