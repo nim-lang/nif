@@ -304,8 +304,14 @@ proc toNif*(n, parent: PNode; c: var WContext) =
 
     toNifPragmas(pragma, name, n, c)
 
-    for i in 1..<n.len:
+    for i in 1..<n.len-1:
       toNif(n[i], n, c)
+    let last = n[n.len-1]
+    if last.kind == nkEmpty and name.kind == nkSym and name.sym.typ != nil:
+      toNif name.sym.typ, n, c
+    else:
+      toNif(last, n, c)
+
     c.b.endTree
 
   of nkTypeSection:

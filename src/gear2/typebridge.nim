@@ -273,7 +273,8 @@ proc expect(c: var Cursor; k: TokenKind) =
   if c.kind == k:
     inc c
   else:
-     quit "[Nif parser] expected: " & $k
+    #writeStackTrace()
+    quit "[Nif parser] expected: " & $k
 
 proc isType*(c: Cursor): bool =
   let k = parseTypeKind(pool.tags[c.tag])
@@ -428,7 +429,7 @@ proc readNode(c: var Cursor; r: var RContext): PNode =
     of nkTypeSection:
       var childCounter = 0
       while c.kind != ParRi:
-        if k == nkTypeSection and childCounter == 4:
+        if childCounter == 4:
           let t = readType(c, r)
           result[0].sym.typ = t
           result.add newNode(nkEmpty)
@@ -555,6 +556,7 @@ proc readType*(c: var Cursor; r: var RContext): PType =
         inc c
         if c.kind == Ident:
           result.flags = parseTypeFlags pool.strings[c.litId]
+          inc c
         else:
           expect c, Ident
         expect c, ParRi
