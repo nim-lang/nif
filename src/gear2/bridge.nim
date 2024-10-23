@@ -614,6 +614,8 @@ proc openSystem*(r: var RContext; modname, suffix: string) =
   #let strIdx = r.modules[modname].index.getOrDefault()
   r.graph.sysTypes[tyString] = loadType("string.0." & suffix, r)
 
+  assert r.graph.sysTypes[tyString].kind == tyString
+
 template bench(task, body) =
   when defined(nifBench):
     let t0 = getMonoTime()

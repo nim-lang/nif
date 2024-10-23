@@ -480,19 +480,19 @@ proc readNode(c: var Cursor; r: var RContext): PNode =
     inc c
 
 proc readTypeKind(c: var Cursor; tag: string): TTypeKind =
-  var k = parseTypeKind(tag)
+  result = parseTypeKind(tag)
   inc c
-  if k == tyNone:
+  if result == tyNone:
     case tag
     of "i":
       inc c
       if c.kind == IntLit:
         case pool.integers[c.intId]
-        of -1: k = tyInt
-        of 1: k = tyInt8
-        of 2: k = tyInt16
-        of 4: k = tyInt32
-        of 8: k = tyInt64
+        of -1: result = tyInt
+        of 1: result = tyInt8
+        of 2: result = tyInt16
+        of 4: result = tyInt32
+        of 8: result = tyInt64
         else: assert false
       else:
         expect c, IntLit
@@ -500,11 +500,11 @@ proc readTypeKind(c: var Cursor; tag: string): TTypeKind =
       inc c
       if c.kind == IntLit:
         case pool.integers[c.intId]
-        of -1: k = tyUInt
-        of 1: k = tyUInt8
-        of 2: k = tyUInt16
-        of 4: k = tyUInt32
-        of 8: k = tyUInt64
+        of -1: result = tyUInt
+        of 1: result = tyUInt8
+        of 2: result = tyUInt16
+        of 4: result = tyUInt32
+        of 8: result = tyUInt64
         else: assert false
       else:
         expect c, IntLit
@@ -512,9 +512,9 @@ proc readTypeKind(c: var Cursor; tag: string): TTypeKind =
       inc c
       if c.kind == IntLit:
         case pool.integers[c.intId]
-        of -1: k = tyFloat
-        of 4: k = tyFloat32
-        of 8: k = tyFloat64
+        of -1: result = tyFloat
+        of 4: result = tyFloat32
+        of 8: result = tyFloat64
         else: assert false
       else:
         expect c, IntLit
