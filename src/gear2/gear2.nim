@@ -164,7 +164,9 @@ proc compilePipelineProject2(graph: ModuleGraph; projectFileIdx = InvalidFileIdx
     registerModule(graph, sys)
     graph.systemModule = sys
     nifDb = createRContext(graph, graph.cache, sys)
-    bridge.openSystem nifDb, toNifFile(conf, systemFileIdx), moduleSuffix(toFullPath(conf, systemFileIdx))
+    let suffix = moduleSuffix(toFullPath(conf, systemFileIdx))
+    bridge.openSystem nifDb, toNifFile(conf, systemFileIdx), suffix
+    loadInterface nifDb, sys, suffix
     #graph.compilePipelineModule(systemFileIdx, {sfMainModule, sfSystemModule})
     graph.withinSystem = false
     result = graph.compilePipelineModule(projectFile, {sfMainModule})

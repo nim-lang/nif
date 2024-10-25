@@ -609,6 +609,15 @@ proc createConf(): ConfigRef =
   #result.notes.excl hintLineTooLong
   result.errorMax = 1000
 
+proc loadInterface*(r: var RContext; module: PSym; suffix: string) =
+  let m = addr(r.modules[suffix])
+  for k, v in m.index.public:
+    #var isGlobal = false
+    #let asNimName = extractBasename(k, isGlobal)
+    var stub = loadSym(m[], k, v, r)
+    stub.setOwner module
+    r.graph.strTableAdds(module, stub)
+
 proc openSystem*(r: var RContext; modname, suffix: string) =
   openNifModule r, suffix
   #let strIdx = r.modules[modname].index.getOrDefault()

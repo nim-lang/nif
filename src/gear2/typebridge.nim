@@ -308,10 +308,7 @@ proc extractModule(s: string): string =
 
 proc readNode(c: var Cursor; r: var RContext): PNode
 
-proc loadSym*(m: var RModule; nifName: string; r: var RContext): PSym =
-  var entry = m.index.public.getOrDefault(nifName)
-  if entry.offset == 0:
-    entry = m.index.private.getOrDefault(nifName)
+proc loadSym*(m: var RModule; nifName: string; entry: NifIndexEntry; r: var RContext): PSym =
   assert entry.offset != 0, "cannot lookup: " & nifName
   m.s.r.jumpTo entry.offset
 
@@ -322,6 +319,12 @@ proc loadSym*(m: var RModule; nifName: string; r: var RContext): PSym =
   assert n != nil and n.len > 0
   assert n[0].kind == nkSym
   result = n[0].sym
+
+proc loadSym*(m: var RModule; nifName: string; r: var RContext): PSym =
+  var entry = m.index.public.getOrDefault(nifName)
+  if entry.offset == 0:
+    entry = m.index.private.getOrDefault(nifName)
+  result = loadSym(m, nifName, entry, r)
 
 proc loadSym*(nifName: string; r: var RContext): PSym =
   let modname = extractModule(nifName)
