@@ -273,8 +273,9 @@ proc expect(c: var Cursor; k: TokenKind) =
   if c.kind == k:
     inc c
   else:
-    #writeStackTrace()
-    quit "[Nif parser] expected: " & $k
+    when defined(debug):
+      writeStackTrace()
+    quit "[Nif parser] expected: " & $k & " but got: " & $c.kind & toString c
 
 proc isType*(c: Cursor): bool =
   let k = parseTypeKind(pool.tags[c.tag])
@@ -524,9 +525,13 @@ proc readTypeKind(c: var Cursor; tag: string): TTypeKind =
 
 proc readTypeImpl(c: var Cursor; r: var RContext; kind: TTypeKind; res: PType) =
   case kind
-  of tyFromExpr:
+  of tyFromExpr, tyEnum:
     res.n = readNode(c, r)
   of tyStatic:
+    res.addAllowNil readType(c, r)
+    res.n = readNode(c, r)
+  of tyObject:
+    # inheritance:
     res.addAllowNil readType(c, r)
     res.n = readNode(c, r)
   else:

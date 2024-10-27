@@ -307,8 +307,14 @@ proc toNif*(n, parent: PNode; c: var WContext) =
     for i in 1..<n.len-1:
       toNif(n[i], n, c)
     let last = n[n.len-1]
-    if last.kind == nkEmpty and name.kind == nkSym and name.sym.typ != nil:
-      toNif name.sym.typ, n, c
+    if name.kind == nkSym:
+      # ^ if this was sem'checked
+      if last.kind == nkEmpty and name.sym.typ != nil:
+        toNif name.sym.typ, n, c
+      elif name.sym.typ != nil and name.sym.typ.kind in {tyEnum, tyObject} and name.sym.typ.n != nil:
+        toNif name.sym.typ.n, n, c
+      else:
+        toNif(last, n, c)
     else:
       toNif(last, n, c)
 
@@ -459,10 +465,9 @@ proc toNif*(n, parent: PNode; c: var WContext) =
     #   EnumType
     #   (Integer value, "string value")
     relLineInfo(n, parent, c)
-    c.b.addTree(toNifTag(n.kind))
-    if n.len > 0:
-      assert n[0].kind == nkEmpty
-    for i in 1..<n.len:
+    let start = if n.len > 0 and n[0].kind == nkEmpty: 1 else: 0
+    c.b.addTree(if start == 0: "enum" else: toNifTag(n.kind))
+    for i in start..<n.len:
       let it = n[i]
 
       var name: PNode
@@ -614,6 +619,7 @@ proc loadInterface*(r: var RContext; module: PSym; suffix: string) =
   for k, v in m.index.public:
     #var isGlobal = false
     #let asNimName = extractBasename(k, isGlobal)
+    #echo "LOADING ", k
     var stub = loadSym(m[], k, v, r)
     stub.setOwner module
     r.graph.strTableAdds(module, stub)
