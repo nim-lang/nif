@@ -181,7 +181,7 @@ include selectany
 
 type
   ProcFlag = enum
-    isSelectAny, isVarargs, isInline
+    isSelectAny, isVarargs
 
 proc genProcPragmas(c: var GeneratedCode; t: Tree; n: NodePos;
                     flags: var set[ProcFlag]) =
@@ -192,18 +192,14 @@ proc genProcPragmas(c: var GeneratedCode; t: Tree; n: NodePos;
   elif t[n].kind == PragmasC:
     for ch in sons(t, n):
       case t[ch].kind
-      of CallingConventions:
-        c.add " __" & $t[ch].kind
+      of CallingConventions, InlineC, NoinlineC:
+        discard "already handled"
       of VarargsC:
         flags.incl isVarargs
       of SelectanyC:
         flags.incl isSelectAny
-      of InlineC:
-        flags.incl isInline
       of AttrC:
         c.add " __attribute__((" & c.m.lits.strings[t[ch.firstSon].litId] & "))"
-      of NoinlineC:
-        c.add " __attribute__((noinline))"
       of WasC:
         c.add "/* " & toString(t, ch.firstSon, c.m) & " */"
       else:
@@ -312,6 +308,20 @@ template moveToDataSection(body: untyped) =
 
 include genstmts
 
+
+const
+  CallingConvToStr: array[StdcallC..NoinlineC, string] = [
+    "N_STDCALL", "N_SAFECALL",
+    "N_SYSCALL", # this is probably not correct for all platforms,
+                 # but one can #define it to what one wants
+    "N_FASTCALL",
+    "N_THISCALL",
+    "N_NOCONV",
+    "N_NOCONV", #ccMember is N_NOCONV
+    "N_INLINE", "N_NOINLINE"
+    ]
+
+
 proc genProcDecl(c: var GeneratedCode; t: Tree; n: NodePos; isExtern: bool) =
   let signatureBegin = c.code.len
   let prc = asProcDecl(t, n)
@@ -319,12 +329,35 @@ proc genProcDecl(c: var GeneratedCode; t: Tree; n: NodePos; isExtern: bool) =
   if isExtern:
     c.add ExternKeyword
 
-  if t[prc.returnType].kind == Empty:
-    c.add "void"
+  var lastCallConv = Empty
+  if t[prc.pragmas].kind == PragmasC:
+    for ch in sons(t, prc.pragmas):
+      case t[ch].kind
+      of CallingConventions, InlineC, NoinlineC:
+        lastCallConv = t[ch].kind
+      else:
+        discard
+
+  let name: string
+  if lastCallConv != Empty:
+    if lastCallConv == InlineC:
+      c.add StaticKeyword
+    c.add CallingConvToStr[lastCallConv]
+    c.add ParLe
+    if t[prc.returnType].kind == Empty:
+      c.add "void"
+    else:
+      genType c, t, prc.returnType
+    c.add Comma
+    name = genSymDef(c, t, prc.name)
+    c.add ParRi
   else:
-    genType c, t, prc.returnType
-  c.add Space
-  let name = genSymDef(c, t, prc.name)
+    if t[prc.returnType].kind == Empty:
+      c.add "void"
+    else:
+      genType c, t, prc.returnType
+    c.add Space
+    name = genSymDef(c, t, prc.name)
 
   var flags: set[ProcFlag] = {}
   genProcPragmas c, t, prc.pragmas, flags
