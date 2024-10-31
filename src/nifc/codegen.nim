@@ -310,7 +310,8 @@ include genstmts
 
 
 const
-  CallingConvToStr: array[StdcallC..NoinlineC, string] = [
+  CallingConvToStr: array[CdeclC..NoinlineC, string] = [
+    "N_CDECL",
     "N_STDCALL", "N_SAFECALL",
     "N_SYSCALL", # this is probably not correct for all platforms,
                  # but one can #define it to what one wants
