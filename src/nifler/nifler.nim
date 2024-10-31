@@ -8,7 +8,7 @@
 ## No semantic checking is done and no symbol lookups are performed.
 
 import std / [parseopt, strutils, os, syncio, assertions]
-import emitter, bridge
+import emitter, bridge, configcmd
 
 const
   Version = "0.2"
@@ -18,7 +18,9 @@ const
 Usage:
   nifler [options] [command] [arguments]
 Command:
-  p|parse file.nim [output.nif]     parse project.nim and produce a NIF file
+  p|parse file.nim [output.nif]         parse project.nim, produce a NIF file
+  config project.nim [output.cfg.nif]   produce a NIF file representing the
+                                        entire configuration of `project.nim`
 
 Options:
   --version             show the version
@@ -61,6 +63,13 @@ proc handleCmdLine() =
       let inp = args[0]
       let outp = if args.len >= 2: args[1].addFileExt".nif" else: changeFileExt(inp, ".nif")
       main inp, outp
+  of "config":
+    if args.len == 0:
+      quit "'config' command takes a filename"
+    else:
+      let inp = args[0]
+      let outp = if args.len >= 2: args[1].addFileExt".nif" else: changeFileExt(inp, ".cfg.nif")
+      produceConfig inp, outp
   else:
     quit "Invalid action: " & action
 
