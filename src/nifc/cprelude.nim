@@ -161,5 +161,104 @@ typedef NU8 NU;
 #  define IL64(x) ((NI64)x)
 #endif
 
+
+/* ------------------------------------------------------------------- */
+#ifdef  __cplusplus
+#  define NIM_EXTERNC extern "C"
+#else
+#  define NIM_EXTERNC
+#endif
+
+#if defined(WIN32) || defined(_WIN32) /* only Windows has this mess... */
+#  define N_LIB_PRIVATE
+#  define N_CDECL(rettype, name) rettype __cdecl name
+#  define N_STDCALL(rettype, name) rettype __stdcall name
+#  define N_SYSCALL(rettype, name) rettype __syscall name
+#  define N_FASTCALL(rettype, name) rettype __fastcall name
+#  define N_THISCALL(rettype, name) rettype __thiscall name
+#  define N_SAFECALL(rettype, name) rettype __stdcall name
+/* function pointers with calling convention: */
+#  define N_CDECL_PTR(rettype, name) rettype (__cdecl *name)
+#  define N_STDCALL_PTR(rettype, name) rettype (__stdcall *name)
+#  define N_SYSCALL_PTR(rettype, name) rettype (__syscall *name)
+#  define N_FASTCALL_PTR(rettype, name) rettype (__fastcall *name)
+#  define N_THISCALL_PTR(rettype, name) rettype (__thiscall *name)
+#  define N_SAFECALL_PTR(rettype, name) rettype (__stdcall *name)
+
+#  ifdef __EMSCRIPTEN__
+#    define N_LIB_EXPORT  NIM_EXTERNC __declspec(dllexport) __attribute__((used))
+#    define N_LIB_EXPORT_VAR  __declspec(dllexport) __attribute__((used))
+#  else
+#    define N_LIB_EXPORT  NIM_EXTERNC __declspec(dllexport)
+#    define N_LIB_EXPORT_VAR  __declspec(dllexport)
+#  endif
+#  define N_LIB_IMPORT  extern __declspec(dllimport)
+#else
+#  define N_LIB_PRIVATE __attribute__((visibility("hidden")))
+#  if defined(__GNUC__)
+#    define N_CDECL(rettype, name) rettype name
+#    define N_STDCALL(rettype, name) rettype name
+#    define N_SYSCALL(rettype, name) rettype name
+#    define N_FASTCALL(rettype, name) __attribute__((fastcall)) rettype name
+#    define N_SAFECALL(rettype, name) rettype name
+/*   function pointers with calling convention: */
+#    define N_CDECL_PTR(rettype, name) rettype (*name)
+#    define N_STDCALL_PTR(rettype, name) rettype (*name)
+#    define N_SYSCALL_PTR(rettype, name) rettype (*name)
+#    define N_FASTCALL_PTR(rettype, name) __attribute__((fastcall)) rettype (*name)
+#    define N_SAFECALL_PTR(rettype, name) rettype (*name)
+#  else
+#    define N_CDECL(rettype, name) rettype name
+#    define N_STDCALL(rettype, name) rettype name
+#    define N_SYSCALL(rettype, name) rettype name
+#    define N_FASTCALL(rettype, name) rettype name
+#    define N_SAFECALL(rettype, name) rettype name
+/*   function pointers with calling convention: */
+#    define N_CDECL_PTR(rettype, name) rettype (*name)
+#    define N_STDCALL_PTR(rettype, name) rettype (*name)
+#    define N_SYSCALL_PTR(rettype, name) rettype (*name)
+#    define N_FASTCALL_PTR(rettype, name) rettype (*name)
+#    define N_SAFECALL_PTR(rettype, name) rettype (*name)
+#  endif
+#  ifdef __EMSCRIPTEN__
+#    define N_LIB_EXPORT NIM_EXTERNC __attribute__((visibility("default"), used))
+#    define N_LIB_EXPORT_VAR  __attribute__((visibility("default"), used))
+#  else
+#    define N_LIB_EXPORT NIM_EXTERNC __attribute__((visibility("default")))
+#    define N_LIB_EXPORT_VAR  __attribute__((visibility("default")))
+#  endif
+#  define N_LIB_IMPORT  extern
+#endif
+
+#define N_NOCONV(rettype, name) rettype name
+/* specify no calling convention */
+#define N_NOCONV_PTR(rettype, name) rettype (*name)
+
+/* calling convention mess ----------------------------------------------- */
+#if defined(__GNUC__) || defined(__TINYC__)
+  /* these should support C99's inline */
+#  define N_INLINE(rettype, name) inline rettype name
+#elif defined(__BORLANDC__) || defined(_MSC_VER)
+/* Borland's compiler is really STRANGE here; note that the __fastcall
+   keyword cannot be before the return type, but __inline cannot be after
+   the return type, so we do not handle this mess in the code generator
+   but rather here. */
+#  define N_INLINE(rettype, name) __inline rettype name
+#else /* others are less picky: */
+#  define N_INLINE(rettype, name) rettype __inline name
+#endif
+
+#define N_INLINE_PTR(rettype, name) rettype (*name)
+
+#if defined(__GNUC__) || defined(__ICC__)
+#  define N_NOINLINE(rettype, name) rettype __attribute__((__noinline__)) name
+#elif defined(_MSC_VER)
+#  define N_NOINLINE(rettype, name) __declspec(noinline) rettype name
+#else
+#  define N_NOINLINE(rettype, name) rettype name
+#endif
+
+#define N_NOINLINE_PTR(rettype, name) rettype (*name)
+
 """
 

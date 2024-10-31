@@ -147,6 +147,39 @@
     (call printf.c "hello %llu\0A" (suf +18446744073709551615u "u64"))
   ))
 
+  (proc :foo.inline . (i +32) (pragmas (inline)) (stmts
+    (ret +1)
+  ))
+
+  (proc :foo.noinline . (i +32) (pragmas (noinline)) (stmts
+    (ret +1)
+  ))
+
+  (proc :foo.cdecl . (i +32) (pragmas (cdecl)) (stmts
+    (ret +1)
+  ))
+
+  (proc :foo.stdcall . (i +32) (pragmas (stdcall)) (stmts
+    (ret +1)
+  ))
+
+  (proc :foo.safecall . (i +32) (pragmas (safecall)) (stmts
+    (ret +1)
+  ))
+
+
+  (proc :foo.fastcall . (i +32) (pragmas (fastcall)) (stmts
+    (ret +1)
+  ))
+
+  (proc :foo.noconv . (i +32) (pragmas (noconv)) (stmts
+    (ret +1)
+  ))
+
+  (proc :foo.member . (i +32) (pragmas (member)) (stmts
+    (ret +1)
+  ))
+
   (proc :main.c . (i +32) . (stmts
     1,1,hello.nim(var :x1.m . (i +32) +12)
     1,2,hello.nim(var :z2.m . (ptr (c +8)) (cast (ptr (c +8)) (suf "hello" "r")))
@@ -160,6 +193,15 @@
     (call foo.cs2)
     (call foo.floatspecial)
     (call foo.intminmax)
+
+    (call foo.inline)
+    (call foo.noinline)
+    (call foo.cdecl)
+    (call foo.stdcall)
+    (call foo.safecall)
+    (call foo.fastcall)
+    (call foo.noconv)
+    (call foo.member)
 
     (var :x.c . (i +8) (suf +12 "i8"))
     (var :x.m . (i +16) (suf -12 "i16"))
