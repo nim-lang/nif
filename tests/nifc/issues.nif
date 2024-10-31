@@ -167,9 +167,6 @@
     (ret +1)
   ))
 
-  (proc :foo.syscall . (i +32) (pragmas (syscall)) (stmts
-    (ret +1)
-  ))
 
   (proc :foo.fastcall . (i +32) (pragmas (fastcall)) (stmts
     (ret +1)
@@ -202,7 +199,6 @@
     (call foo.cdecl)
     (call foo.stdcall)
     (call foo.safecall)
-    (call foo.syscall)
     (call foo.fastcall)
     (call foo.noconv)
     (call foo.member)
