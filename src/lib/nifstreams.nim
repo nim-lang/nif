@@ -84,7 +84,7 @@ proc createLiterals*(): Literals =
 var pool* = createLiterals()
 
 proc registerTag*(tag: string; expected: TagId) =
-  ## Mostly useful for code generator like Nifgram.
+  ## Mostly useful for code generators like Nifgram.
   let t = pool.tags.getOrIncl(tag)
   assert t == expected, "tag " & tag & " expected Id " & $expected.uint32 &
       " but it is already of value " & $t.uint32

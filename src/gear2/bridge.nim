@@ -53,18 +53,19 @@ type
     modules: Table[string, RModule]
 
 proc createRContext*(g: ModuleGraph; identCache: IdentCache; module: PSym): RContext =
-  result = RContext(owner: module, idgen: idGeneratorFromModule(module), conf: g.config, graph: g)
+  result = RContext(owner: module, idgen: idGeneratorFromModule(module), conf: g.config, graph: g,
+    identCache: identCache)
 
 proc closeAll*(r: var RContext) =
   for _, m in mpairs r.modules:
     close m.s
 
-proc open*(r: var RContext; modname: string) =
+proc openNifModule*(r: var RContext; modname: string) =
   if r.modules.hasKey(modname): return
   if r.thisModule.len == 0: r.thisModule = modname
-  let filename = modname & ".nif"
+  let filename = "nifcache/" & modname & ".nif"
   r.modules[modname] = RModule(
-    index: readIndex(modname & ".idx.nif"),
+    index: readIndex("nifcache/" & modname & ".idx.nif"),
     s: nifstreams.open(filename)
   )
 
@@ -103,9 +104,10 @@ proc relLineInfo(n, parent: PNode; c: var WContext;
 
 proc symToNif(s: PSym; c: var WContext; isDef = false) =
   var m = s.name.s & '.' & $s.disamb
-  if s.skipGenericOwner().kind == skModule:
+  let ow = s.skipGenericOwner()
+  if ow.kind == skModule:
     m.add '.'
-    let fp = toFullPath(c.conf, s.info.fileIndex)
+    let fp = toFullPath(c.conf, FileIndex ow.position)
     var suf = c.toSuffix.getOrDefault(fp)
     if suf.len == 0:
       suf = moduleSuffix(fp)
@@ -302,8 +304,20 @@ proc toNif*(n, parent: PNode; c: var WContext) =
 
     toNifPragmas(pragma, name, n, c)
 
-    for i in 1..<n.len:
+    for i in 1..<n.len-1:
       toNif(n[i], n, c)
+    let last = n[n.len-1]
+    if name.kind == nkSym:
+      # ^ if this was sem'checked
+      if last.kind == nkEmpty and name.sym.typ != nil:
+        toNif name.sym.typ, n, c
+      elif name.sym.typ != nil and name.sym.typ.kind in {tyEnum, tyObject} and name.sym.typ.n != nil:
+        toNif name.sym.typ.n, n, c
+      else:
+        toNif(last, n, c)
+    else:
+      toNif(last, n, c)
+
     c.b.endTree
 
   of nkTypeSection:
@@ -451,10 +465,9 @@ proc toNif*(n, parent: PNode; c: var WContext) =
     #   EnumType
     #   (Integer value, "string value")
     relLineInfo(n, parent, c)
-    c.b.addTree(toNifTag(n.kind))
-    if n.len > 0:
-      assert n[0].kind == nkEmpty
-    for i in 1..<n.len:
+    let start = if n.len > 0 and n[0].kind == nkEmpty: 1 else: 0
+    c.b.addTree(if start == 0: "enum" else: toNifTag(n.kind))
+    for i in start..<n.len:
       let it = n[i]
 
       var name: PNode
@@ -600,6 +613,23 @@ proc createConf(): ConfigRef =
   result = newConfigRef()
   #result.notes.excl hintLineTooLong
   result.errorMax = 1000
+
+proc loadInterface*(r: var RContext; module: PSym; suffix: string) =
+  let m = addr(r.modules[suffix])
+  for k, v in m.index.public:
+    #var isGlobal = false
+    #let asNimName = extractBasename(k, isGlobal)
+    #echo "LOADING ", k
+    var stub = loadSym(m[], k, v, r)
+    stub.setOwner module
+    r.graph.strTableAdds(module, stub)
+
+proc openSystem*(r: var RContext; modname, suffix: string) =
+  openNifModule r, suffix
+  #let strIdx = r.modules[modname].index.getOrDefault()
+  r.graph.sysTypes[tyString] = loadType("string.0." & suffix, r)
+
+  assert r.graph.sysTypes[tyString].kind == tyString
 
 template bench(task, body) =
   when defined(nifBench):

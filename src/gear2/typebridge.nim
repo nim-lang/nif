@@ -273,7 +273,9 @@ proc expect(c: var Cursor; k: TokenKind) =
   if c.kind == k:
     inc c
   else:
-     quit "[Nif parser] expected: " & $k
+    when defined(debug):
+      writeStackTrace()
+    quit "[Nif parser] expected: " & $k & " but got: " & $c.kind & toString c
 
 proc isType*(c: Cursor): bool =
   let k = parseTypeKind(pool.tags[c.tag])
@@ -307,10 +309,7 @@ proc extractModule(s: string): string =
 
 proc readNode(c: var Cursor; r: var RContext): PNode
 
-proc loadSym*(m: var RModule; nifName: string; r: var RContext): PSym =
-  var entry = m.index.public.getOrDefault(nifName)
-  if entry.offset == 0:
-    entry = m.index.private.getOrDefault(nifName)
+proc loadSym*(m: var RModule; nifName: string; entry: NifIndexEntry; r: var RContext): PSym =
   assert entry.offset != 0, "cannot lookup: " & nifName
   m.s.r.jumpTo entry.offset
 
@@ -322,12 +321,18 @@ proc loadSym*(m: var RModule; nifName: string; r: var RContext): PSym =
   assert n[0].kind == nkSym
   result = n[0].sym
 
+proc loadSym*(m: var RModule; nifName: string; r: var RContext): PSym =
+  var entry = m.index.public.getOrDefault(nifName)
+  if entry.offset == 0:
+    entry = m.index.private.getOrDefault(nifName)
+  result = loadSym(m, nifName, entry, r)
+
 proc loadSym*(nifName: string; r: var RContext): PSym =
   let modname = extractModule(nifName)
   if modname.len == 0:
     result = loadSym(r.modules[r.thisModule], nifName, r)
   else:
-    r.open modname
+    r.openNifModule modname
     result = loadSym(r.modules[modname], nifName, r)
 
 proc loadLocalSym*(nifName: string; r: var RContext): PSym =
@@ -339,6 +344,11 @@ proc loadSym*(s: SymId; r: var RContext): PSym =
 
 proc loadType*(s: SymId; r: var RContext): PType =
   result = loadSym(s, r).typ
+
+proc loadType*(s: string; r: var RContext): PType =
+  let s = loadSym(s, r)
+  result = s.typ
+  assert result != nil
 
 proc readSym(c: Cursor; r: var RContext; info: TLineInfo): PSym =
   let s = c.symId
@@ -352,6 +362,7 @@ proc readSym(c: Cursor; r: var RContext; info: TLineInfo): PSym =
 proc readSymDef(c: Cursor; r: var RContext; info: TLineInfo): PSym =
   let s = c.symId
   var isGlobal = false
+  assert r.identCache != nil
   let name = getIdent(r.identCache, extractBasename(pool.syms[s], isGlobal))
   result = newSym(r.symKind, name, r.idgen, r.owner, info)
   # always overwrite the entry here so that local syms are modelled properly.
@@ -403,6 +414,8 @@ proc repair(n: PNode; r: var RContext; tag: string): PNode =
     else:
       result = n
 
+proc readType*(c: var Cursor; r: var RContext): PType
+
 proc readNode(c: var Cursor; r: var RContext): PNode =
   let info = translateLineInfo(r, c.info)
   case c.kind
@@ -416,8 +429,20 @@ proc readNode(c: var Cursor; r: var RContext): PNode =
       if c.kind == Ident:
         result.flags = parseNodeFlags(pool.strings[c.litId])
       expect c, ParRi
-    while c.kind != ParRi:
-      result.addAllowNil readNode(c, r)
+    case k
+    of nkTypeSection:
+      var childCounter = 0
+      while c.kind != ParRi:
+        if childCounter == 4:
+          let t = readType(c, r)
+          result[0].sym.typ = t
+          result.add newNode(nkEmpty)
+        else:
+          result.addAllowNil readNode(c, r)
+        inc childCounter
+    else:
+      while c.kind != ParRi:
+        result.addAllowNil readNode(c, r)
     expect c, ParRi
     if k == nkNone:
       result = repair(result, r, tag)
@@ -459,19 +484,19 @@ proc readNode(c: var Cursor; r: var RContext): PNode =
     inc c
 
 proc readTypeKind(c: var Cursor; tag: string): TTypeKind =
-  var k = parseTypeKind(tag)
+  result = parseTypeKind(tag)
   inc c
-  if k == tyNone:
+  if result == tyNone:
     case tag
     of "i":
       inc c
       if c.kind == IntLit:
         case pool.integers[c.intId]
-        of -1: k = tyInt
-        of 1: k = tyInt8
-        of 2: k = tyInt16
-        of 4: k = tyInt32
-        of 8: k = tyInt64
+        of -1: result = tyInt
+        of 1: result = tyInt8
+        of 2: result = tyInt16
+        of 4: result = tyInt32
+        of 8: result = tyInt64
         else: assert false
       else:
         expect c, IntLit
@@ -479,11 +504,11 @@ proc readTypeKind(c: var Cursor; tag: string): TTypeKind =
       inc c
       if c.kind == IntLit:
         case pool.integers[c.intId]
-        of -1: k = tyUInt
-        of 1: k = tyUInt8
-        of 2: k = tyUInt16
-        of 4: k = tyUInt32
-        of 8: k = tyUInt64
+        of -1: result = tyUInt
+        of 1: result = tyUInt8
+        of 2: result = tyUInt16
+        of 4: result = tyUInt32
+        of 8: result = tyUInt64
         else: assert false
       else:
         expect c, IntLit
@@ -491,20 +516,22 @@ proc readTypeKind(c: var Cursor; tag: string): TTypeKind =
       inc c
       if c.kind == IntLit:
         case pool.integers[c.intId]
-        of -1: k = tyFloat
-        of 4: k = tyFloat32
-        of 8: k = tyFloat64
+        of -1: result = tyFloat
+        of 4: result = tyFloat32
+        of 8: result = tyFloat64
         else: assert false
       else:
         expect c, IntLit
 
-proc readType*(c: var Cursor; r: var RContext): PType
-
 proc readTypeImpl(c: var Cursor; r: var RContext; kind: TTypeKind; res: PType) =
   case kind
-  of tyFromExpr:
+  of tyFromExpr, tyEnum:
     res.n = readNode(c, r)
   of tyStatic:
+    res.addAllowNil readType(c, r)
+    res.n = readNode(c, r)
+  of tyObject:
+    # inheritance:
     res.addAllowNil readType(c, r)
     res.n = readNode(c, r)
   else:
@@ -537,6 +564,7 @@ proc readType*(c: var Cursor; r: var RContext): PType =
         inc c
         if c.kind == Ident:
           result.flags = parseTypeFlags pool.strings[c.litId]
+          inc c
         else:
           expect c, Ident
         expect c, ParRi
