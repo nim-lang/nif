@@ -81,6 +81,9 @@ else:
     #assert dest.readers == 0, "TokenBuf still in use by some reader"
     if dest.data != nil: dealloc(dest.data)
 
+proc createTokenBuf*(cap = 100): TokenBuf =
+  result = TokenBuf(data: cast[Storage](alloc(sizeof(PackedToken)*cap)), len: 0, cap: cap)
+
 proc isMutable(b: TokenBuf): bool {.inline.} = b.cap >= 0
 
 proc freeze*(b: var TokenBuf) {.inline.} =
