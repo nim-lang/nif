@@ -168,13 +168,19 @@ proc buildConfig(b: var Builder; conf: ConfigRef) =
   b.withTree "outfile":
     b.addStrLit conf.outFile.string
 
-  b.withTree "notes":
+  b.withTree "hints":
     for note in conf.notes:
-      b.addStrLit toLowerAscii(($note).substr(4))
+      if note >= hintMin and note <= hintMax:
+        b.addStrLit toLowerAscii(($note))
+
+  b.withTree "warnings":
+    for note in conf.notes:
+      if note >= warnMin and note <= warnMax:
+        b.addStrLit toLowerAscii(($note))
 
   b.withTree "warningsaserrors":
     for note in conf.warningAsErrors:
-      b.addStrLit toLowerAscii(($note).substr(4))
+      b.addStrLit toLowerAscii(($note))
 
 
 proc produceConfig*(infile, outfile: string) =
