@@ -199,6 +199,9 @@ proc addParLe*(dest: var TokenBuf; tag: TagId; info = NoLineInfo) =
 proc addParRi*(dest: var TokenBuf) =
   dest.add toToken(ParRi, 0'u32, NoLineInfo)
 
+proc addDotToken*(dest: var TokenBuf) =
+  dest.add toToken(DotToken, 0'u32, NoLineInfo)
+
 proc toString*(b: TokenBuf): string =
   result = nifstreams.toString(toOpenArray(b.data, 0, b.len-1))
 
@@ -214,8 +217,9 @@ proc span*(c: Cursor): int =
         if nested == 0: break
         dec nested
       elif c.kind == ParLe: inc nested
-  inc c
-  inc result
+  if c.rem > 0:
+    inc c
+    inc result
 
 proc toString*(b: Cursor): string =
   let counter = span(b)

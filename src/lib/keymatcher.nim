@@ -135,7 +135,7 @@ proc genMatcher(body, selector: NimNode; a: openArray[Key]) =
   split a, solution
   decodeSolution body, solution, 0, selector
 
-macro declareMatcher*(name: untyped; e: typedesc; start: static[int]): untyped =
+macro declareMatcher*(name: untyped; e: typedesc; start: static[int] = 1): untyped =
   let typ = e.getTypeInst[1]
   let typSym = typ.getTypeImpl.getTypeInst # skip aliases etc to get type sym
   let impl = typSym.getImpl[2]
