@@ -131,6 +131,10 @@ proc traverseProc(e: var EContext; c: var Cursor) =
   # XXX to implement
   traverseExpr e, c
 
+proc traverseTypeDecl(e: var EContext; c: var Cursor) =
+  # XXX to implement
+  traverseExpr e, c
+
 proc traverseExpr(e: var EContext; c: var Cursor) =
   var nested = 0
   while true:
@@ -397,6 +401,8 @@ proc traverseStmt(e: var EContext; c: var Cursor) =
     of MacroS, TemplateS:
       # pure compile-time construct, ignore:
       skip c
+    of TypeS:
+      traverseTypeDecl e, c
   else:
     error e, "statement expected, but got: ", c
 

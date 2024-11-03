@@ -35,6 +35,7 @@ type
     MethodS = "method"
     MacroS = "macro"
     TemplateS = "template"
+    TypeS = "type"
 
   ExprKind* = enum
     NoExpr
