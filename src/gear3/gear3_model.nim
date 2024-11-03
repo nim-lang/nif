@@ -77,6 +77,8 @@ type
     NegInfX = "neginf"
     NanX = "nan"
     SufX = "suf"
+    RangeX = "range"
+    RangesX = "ranges"
 
   TypeKind* = enum
     UnionT = "union"
@@ -116,8 +118,6 @@ type
     ElifS = "elif"
     ElseS = "else"
     OfS = "of"
-    RangeS = "range"
-    RangesS = "ranges"
     ParamS = "param"
     ParamsS = "params"
     FldS = "fld"
@@ -151,3 +151,11 @@ declareMatcher parsePragmaKind, PragmaKind
 proc pragmaKind*(c: Cursor): PragmaKind {.inline.} =
   assert c.kind == ParLe
   parsePragmaKind pool.tags[tag(c)]
+
+declareMatcher parseSubstructureKind, SubstructureKind
+
+proc substructureKind*(c: Cursor): SubstructureKind {.inline.} =
+  if c.kind == ParLe:
+    result = parseSubstructureKind pool.tags[tag(c)]
+  else:
+    result = NoSub

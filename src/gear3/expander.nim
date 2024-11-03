@@ -23,7 +23,7 @@ type
     dir, main, ext: string
     dest: TokenBuf
     used, declared: HashSet[SymId]
-    nestedIn: seq[StmtKind]
+    nestedIn: seq[(StmtKind, SymId)]
     headers: HashSet[StrId]
 
 proc newNifModule(infile: string): NifModule =
@@ -101,6 +101,10 @@ proc skipExportMarker(e: var EContext; c: var Cursor) =
 proc expectSymdef(e: var EContext; c: var Cursor) =
   if c.kind != SymbolDef:
     error e, "expected symbol definition, but got: ", c
+
+proc expectSym(e: var EContext; c: var Cursor) =
+  if c.kind != Symbol:
+    error e, "expected symbol, but got: ", c
 
 proc expectStrLit(e: var EContext; c: var Cursor) =
   if c.kind != StringLit:
@@ -261,21 +265,90 @@ proc traverseLocal(e: var EContext; c: var Cursor; tag: string) =
     e.headers.incl prag.header
 
 proc traverseWhile(e: var EContext; c: var Cursor) =
-  e.nestedIn.add WhileS
+  let info = c.info
+  e.nestedIn.add (WhileS, SymId(0))
   e.dest.add c
   inc c
   traverseExpr e, c
   traverseStmt e, c
   wantParRi e, c
+  let lab = e.nestedIn[^1][1]
+  if lab != SymId(0):
+    e.dest.add tagToken("lab", info)
+    e.dest.add toToken(SymbolDef, lab, info)
+    e.dest.addParRi()
   discard e.nestedIn.pop()
 
 proc traverseBlock(e: var EContext; c: var Cursor) =
-  e.nestedIn.add BlockS
-
+  let info = c.info
+  inc c
+  if c.kind == DotToken:
+    e.nestedIn.add (BlockS, SymId(0))
+    inc c
+  else:
+    expectSymdef e, c
+    e.nestedIn.add (BlockS, c.symId)
+    inc c
+  e.dest.add tagToken("scope", info)
+  traverseStmt e, c
+  wantParRi e, c
+  let lab = e.nestedIn[^1][1]
+  if lab != SymId(0):
+    e.dest.add tagToken("lab", info)
+    e.dest.add toToken(SymbolDef, lab, info)
+    e.dest.addParRi()
   discard e.nestedIn.pop()
+
+proc traverseBreak(e: var EContext; c: var Cursor) =
+  let info = c.info
+  inc c
+  if c.kind == DotToken:
+    inc c
+    e.dest.add tagToken("break", info)
+  else:
+    expectSym e, c
+    let lab = c.symId
+    inc c
+    e.dest.add tagToken("jmp", info)
+    e.dest.add toToken(Symbol, lab, info)
+  wantParRi e, c
+
+proc traverseIf(e: var EContext; c: var Cursor) =
+  # (if cond (.. then ..) (.. else ..))
+  e.dest.add c
+  inc c
+  traverseExpr e, c
+  traverseStmt e, c
+  traverseStmt e, c
+  wantParRi e, c
+
+proc traverseCase(e: var EContext; c: var Cursor) =
+  e.dest.add c
+  inc c
+  traverseExpr e, c
+  while c.kind != ParRi:
+    case c.substructureKind
+    of OfS:
+      e.dest.add c
+      inc c
+      traverseExpr e, c
+      traverseStmt e, c
+      wantParRi e, c
+    of ElseS:
+      e.dest.add c
+      inc c
+      traverseStmt e, c
+      wantParRi e, c
+    else:
+      error e, "expected (of) or (else) but got: ", c
+  traverseStmt e, c
+  wantParRi e, c
 
 proc traverseStmt(e: var EContext; c: var Cursor) =
   case c.kind
+  of DotToken:
+    e.dest.add c
+    inc c
   of ParLe:
     case c.stmtKind
     of NoStmt:
@@ -293,7 +366,7 @@ proc traverseStmt(e: var EContext; c: var Cursor) =
         else: discard
         traverseStmt e, c
     of VarS, LetS, CursorS:
-      traverseLocal e, c, (if e.nestedIn[^1] == StmtsS: "gvar" else: "var")
+      traverseLocal e, c, (if e.nestedIn[^1][0] == StmtsS: "gvar" else: "var")
     of ConstS:
       traverseLocal e, c, "const"
     of EmitS, AsgnS, RetS:
@@ -308,8 +381,9 @@ proc traverseStmt(e: var EContext; c: var Cursor) =
         of EofToken:
           error e, "expected ')', but EOF reached"
           break
-        else: break
+        else: discard
         traverseExpr e, c
+      wantParRi e, c
 
     of BreakS: traverseBreak e, c
     of WhileS: traverseWhile e, c
@@ -338,7 +412,7 @@ proc expand*(infile: string) =
   let (dir, file, ext) = splitModulePath(infile)
   var e = EContext(dir: (if dir.len == 0: getCurrentDir() else: dir), ext: ext, main: file,
     dest: createTokenBuf(),
-    nestedIn: @[StmtsS])
+    nestedIn: @[(StmtsS, SymId(0))])
 
   var m = newNifModule(infile)
   var c = beginRead(m.buf)
