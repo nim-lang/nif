@@ -7,7 +7,7 @@
 ## Nifler is a simple tool that parses Nim code and outputs NIF code.
 ## No semantic checking is done and no symbol lookups are performed.
 
-import std / [parseopt, strutils, os, syncio, assertions]
+import std / [parseopt, strutils, os, syncio, assertions, times]
 import emitter, bridge, configcmd
 
 const
@@ -23,6 +23,7 @@ Command:
                                         entire configuration of `project.nim`
 
 Options:
+  --force, -f           force a rebuild
   --version             show the version
   --help                show this help
 """
@@ -39,6 +40,7 @@ proc main(infile, outfile: string) =
 proc handleCmdLine() =
   var action = ""
   var args: seq[string] = @[]
+  var forceRebuild = false
   for kind, key, val in getopt():
     case kind
     of cmdArgument:
@@ -50,6 +52,7 @@ proc handleCmdLine() =
       case normalize(key)
       of "help", "h": writeHelp()
       of "version", "v": writeVersion()
+      of "force", "f": forceRebuild = true
       else: writeHelp()
     of cmdEnd: assert false, "cannot happen"
 
@@ -62,14 +65,21 @@ proc handleCmdLine() =
     else:
       let inp = args[0]
       let outp = if args.len >= 2: args[1].addFileExt".nif" else: changeFileExt(inp, ".nif")
-      main inp, outp
+      if not forceRebuild and fileExists(outp) and fileExists(inp) and
+          getLastModificationTime(outp) > getLastModificationTime(inp):
+        discard "nothing to do"
+      else:
+        main inp, outp
   of "config":
     if args.len == 0:
       quit "'config' command takes a filename"
     else:
       let inp = args[0]
       let outp = if args.len >= 2: args[1].addFileExt".nif" else: changeFileExt(inp, ".cfg.nif")
-      produceConfig inp, outp
+      if not forceRebuild and fileExists(outp) and not sourcesChanged(outp):
+        discard "nothing to do"
+      else:
+        produceConfig inp, outp
   else:
     quit "Invalid action: " & action
 
