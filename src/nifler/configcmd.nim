@@ -81,7 +81,7 @@ proc handleCmdLine(cache: IdentCache; conf: ConfigRef) =
   if conf.selectedGC == gcUnselected:
     initOrcDefines(conf)
 
-proc toNifPath(p: AbsoluteDir): string =
+proc toNifPath(p: AbsoluteDir|AbsoluteFile): string =
   relativePath(p.string, getCurrentDir(), '/')
 
 proc genStringTable(b: var Builder; tag: string; tab: StringTableRef) =
@@ -159,6 +159,10 @@ proc buildConfig(b: var Builder; conf: ConfigRef) =
   b.withTree "features":
     for feature in conf.features: b.addStrLit $feature
     for feature in conf.legacyFeatures: b.addStrLit $feature
+
+  b.withTree "sources":
+    for f in conf.m.fileInfos:
+      b.addStrLit f.fullPath.toNifPath
 
   b.genStringTable "vars", conf.configVars
   b.genStringTable "dlloverrides", conf.dllOverrides
