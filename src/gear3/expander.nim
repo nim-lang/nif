@@ -132,14 +132,6 @@ proc traverseExpr(e: var EContext; c: var Cursor)
 proc traverseStmt(e: var EContext; c: var Cursor)
 proc traverseLocal(e: var EContext; c: var Cursor; tag: string)
 
-proc traverseType(e: var EContext; c: var Cursor) =
-  # XXX to implement
-  if c.kind == DotToken:
-    e.dest.add c
-    inc c
-  else:
-    traverseExpr e, c
-
 template loop(e: var EContext; c: var Cursor; body: untyped) =
   while true:
     case c.kind
@@ -152,6 +144,64 @@ template loop(e: var EContext; c: var Cursor; body: untyped) =
       break
     else: discard
     body
+
+type
+  TypeFlag = enum
+    IsTypeBody
+    IsPointerOf
+
+proc traverseType(e: var EContext; c: var Cursor; flags: set[TypeFlag] = {}) =
+  case c.kind
+  of DotToken:
+    e.dest.add c
+    inc c
+  of Symbol:
+    e.used.incl c.symId
+    e.dest.add c
+    inc c
+  of ParLe:
+    case c.typeKind
+    of NoType, OrT, AndT, NotT:
+      error e, "type expected but got: ", c
+    of IntT, UIntT, FloatT, CharT, BoolT, AutoT, SymKindT:
+      e.loop c:
+        e.dest.add c
+        inc c
+    of PtrT, RefT, MutT, OutT, LentT:
+      e.dest.add tagToken("ptr", c.info)
+      inc c
+      e.loop c:
+        traverseType e, c, {IsPointerOf}
+    of ProcT:
+      e.dest.add c
+      inc c
+      e.loop c:
+        traverseType e, c
+    of ArrayT:
+      e.dest.add c
+      inc c
+      traverseType e, c
+      traverseExpr e, c
+      wantParRi e, c
+    of UncheckedArrayT:
+      if IsPointerOf in flags:
+        inc c
+        traverseType e, c
+        skipParRi e, c
+      else:
+        e.dest.add tagToken("flexarray", c.info)
+        inc c
+        traverseType e, c
+        wantParRi e, c
+    of StaticT, SinkT, DistinctT:
+      inc c
+      traverseType e, c, flags
+      skipParRi e, c
+    of ObjectT, TupleT, EnumT, VoidT, StringT, VarargsT, NilT, ConceptT,
+       IterT, InvokeT, SetT:
+      error e, "unimplemented type: ", c
+  else:
+    error e, "type expected but got: ", c
 
 proc traverseParams(e: var EContext; c: var Cursor) =
   traverseType e, c
@@ -258,7 +308,9 @@ proc traverseProc(e: var EContext; c: var Cursor) =
   # pragmasPos* = 4
   # miscPos* = 5  # used for undocumented and hacky stuff
   # bodyPos* = 6       # position of body; use rodread.getBody() instead!
-  let toPatch = e.dest.len
+  var dst = createTokenBuf(50)
+  swap e.dest, dst
+  #let toPatch = e.dest.len
   let vinfo = c.info
   e.add "proc", vinfo
   inc c
@@ -289,14 +341,19 @@ proc traverseProc(e: var EContext; c: var Cursor) =
   # body:
   traverseStmt e, c
   wantParRi e, c
+  swap dst, e.dest
   if Nodecl in prag.flags or isGeneric:
-    e.dest.shrink toPatch
+    discard "do not add to e.dest"
+  else:
+    e.dest.add dst
   if prag.header != StrId(0):
     e.headers.incl prag.header
   discard setOwner(e, oldOwner)
 
 proc traverseTypeDecl(e: var EContext; c: var Cursor) =
-  let toPatch = e.dest.len
+  var dst = createTokenBuf(50)
+  swap e.dest, dst
+  #let toPatch = e.dest.len
   let vinfo = c.info
   e.add "type", vinfo
   inc c
@@ -311,10 +368,13 @@ proc traverseTypeDecl(e: var EContext; c: var Cursor) =
 
   let pinfo = c.info
   let prag = parsePragmas(e, c)
-  traverseType e, c
+  traverseType e, c, {IsTypeBody}
   wantParRi e, c
+  swap dst, e.dest
   if Nodecl in prag.flags or isGeneric:
-    e.dest.shrink toPatch
+    discard "do not add to e.dest"
+  else:
+    e.dest.add dst
   if prag.header != StrId(0):
     e.headers.incl prag.header
   discard setOwner(e, oldOwner)

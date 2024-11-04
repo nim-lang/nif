@@ -82,10 +82,10 @@ type
     RangesX = "ranges"
 
   TypeKind* = enum
-    UnionT = "union"
+    NoType
     ObjectT = "object"
+    TupleT = "tuple"
     EnumT = "enum"
-    ProctypeT = "proctype"
     IntT = "i"
     UIntT = "u"
     FloatT = "f"
@@ -93,12 +93,29 @@ type
     BoolT = "bool"
     VoidT = "void"
     PtrT = "ptr"
-    ArrayT = "array"
-    FlexarrayT = "flexarray"
-    APtrT = "aptr"
-    TypeT = "type"
-    AttrT = "attr"
+    RefT = "ref"
+    MutT = "mut"
+    OutT = "out"
+    LentT = "lent"
+    SinkT = "sink"
+    #FlexarrayT = "flexarray"
+    StringT = "string"
     VarargsT = "varargs"
+    NilT = "nil"
+    OrT = "or"
+    AndT = "and"
+    NotT = "not"
+    ConceptT = "concept"
+    DistinctT = "distinct"
+    StaticT = "static"
+    ProcT = "proctype"
+    IterT = "itertype"
+    InvokeT = "invok"
+    ArrayT = "array"
+    UncheckedArrayT = "uarray"
+    SetT = "set"
+    AutoT = "auto"
+    SymKindT = "symkind"
 
   PragmaKind* = enum
     NoPragma
@@ -159,3 +176,11 @@ proc substructureKind*(c: Cursor): SubstructureKind {.inline.} =
     result = parseSubstructureKind pool.tags[tag(c)]
   else:
     result = NoSub
+
+declareMatcher parseTypeKind, TypeKind
+
+proc typeKind*(c: Cursor): TypeKind {.inline.} =
+  if c.kind == ParLe:
+    result = parseTypeKind pool.tags[tag(c)]
+  else:
+    result = NoType
