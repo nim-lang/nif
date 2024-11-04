@@ -18,9 +18,8 @@ Gear 3 performs backend tasks that need to operate on multiple NIF files at once
   until no foreign symbols are left.
 - `importc`'ed symbols are replaced by their `.c` variants.
 - `importc`'ed symbols might lead to `(incl "file.h")` injections.
-- While it does that it performs proc inlining.
-- Since it performs inlining it might as well also do iterator inlining
-  so it does that too.
+- Nim types must be translated to NIFC types.
+- Types and procs must be moved to toplevel statements.
 
 
 Grammar

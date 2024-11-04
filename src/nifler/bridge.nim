@@ -495,7 +495,7 @@ proc toNif*(n, parent: PNode; em: var Emitter; c: var TranslationContext) =
     toNif(n[n.len-1], n, em, c)
 
     em.addSep patchPos
-    var patchPosU = em.prepare("unpackIntoTuple")
+    var patchPosU = em.prepare("unpacktuple")
     for i in 0..<n.len-2:
       var patchPosB = em.prepare(c.section)
       toNif(n[i], n, em, c) # name
@@ -518,7 +518,7 @@ proc toNif*(n, parent: PNode; em: var Emitter; c: var TranslationContext) =
 
     if n[0].kind == nkVarTuple:
       let v = n[0]
-      var patchPosB = em.prepare("unpackIntoTuple")
+      var patchPosB = em.prepare("unpacktuple")
       for i in 0..<v.len:
         var patchPosD = em.prepare("let")
 
@@ -530,7 +530,7 @@ proc toNif*(n, parent: PNode; em: var Emitter; c: var TranslationContext) =
         em.patch patchPosD # LetDecl
       em.patch patchPosB # UnpackIntoTuple
     else:
-      var patchPosC = em.prepare("unpackIntoFlat")
+      var patchPosC = em.prepare("unpackflat")
       for i in 0..<n.len-2:
         var patchPosD = em.prepare("let")
 
