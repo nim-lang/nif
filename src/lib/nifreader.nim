@@ -6,7 +6,7 @@
 
 ## High performance ("zero copies") NIF file reader.
 
-import std / [memfiles, tables, parseutils, assertions, syncio]
+import std / [memfiles, tables, parseutils, assertions]
 import stringviews
 
 const

@@ -285,7 +285,7 @@ proc toString*(tree: openArray[PackedToken]): string =
     of StringLit:
       b.addStrLit(pool.strings[tree[n].litId])
     of UnknownToken:
-      b.addIdent "<unkonwn token>"
+      b.addIdent "<unknown token>"
     of EofToken:
       b.addIntLit tree[n].soperand
     of ParRi:

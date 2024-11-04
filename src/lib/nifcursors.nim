@@ -44,6 +44,7 @@ proc tagId*(c: Cursor): TagId {.inline.} = nifstreams.tagId(c.load)
 proc tag*(c: Cursor): TagId {.inline.} = nifstreams.tag(c.load)
 
 proc uoperand*(c: Cursor): uint32 {.inline.} = nifstreams.uoperand(c.load)
+proc soperand*(c: Cursor): int32 {.inline.} = nifstreams.soperand(c.load)
 
 proc inc*(c: var Cursor) {.inline.} =
   assert c.rem > 0

@@ -7,7 +7,7 @@
 #    distribution, for details about the copyright.
 #
 
-import std / [os, tables, sets, syncio, times]
+import std / [hashes, os, tables, sets, syncio, times]
 
 include nifprelude
 import nifindexes
@@ -18,6 +18,8 @@ type
     buf: TokenBuf
     stream: Stream
     index: NifIndex
+  SymbolKey = (SymId, SymId) # (symbol, owner)
+
   EContext = object
     mods: Table[string, NifModule]
     dir, main, ext: string
@@ -25,6 +27,8 @@ type
     used, declared: HashSet[SymId]
     nestedIn: seq[(StmtKind, SymId)]
     headers: HashSet[StrId]
+    currentOwner: SymId
+    toMangle: Table[SymbolKey, string]
 
 proc newNifModule(infile: string): NifModule =
   result = NifModule(stream: nifstreams.open(infile))
@@ -55,6 +59,10 @@ proc error(e: var EContext; msg: string) =
   when defined(debug):
     echo getStackTrace()
   quit 1
+
+proc setOwner(e: var EContext; newOwner: SymId): SymId =
+  result = e.currentOwner
+  e.currentOwner = newOwner
 
 proc copyTree(e: var EContext; c: var Cursor) =
   var nested = 0
@@ -122,39 +130,41 @@ proc add(e: var EContext; tag: string; info: PackedLineInfo) =
 
 proc traverseExpr(e: var EContext; c: var Cursor)
 proc traverseStmt(e: var EContext; c: var Cursor)
+proc traverseLocal(e: var EContext; c: var Cursor; tag: string)
 
 proc traverseType(e: var EContext; c: var Cursor) =
   # XXX to implement
-  traverseExpr e, c
+  if c.kind == DotToken:
+    e.dest.add c
+    inc c
+  else:
+    traverseExpr e, c
 
-proc traverseProc(e: var EContext; c: var Cursor) =
-  # XXX to implement
-  traverseExpr e, c
-
-proc traverseTypeDecl(e: var EContext; c: var Cursor) =
-  # XXX to implement
-  traverseExpr e, c
-
-proc traverseExpr(e: var EContext; c: var Cursor) =
-  var nested = 0
+template loop(e: var EContext; c: var Cursor; body: untyped) =
   while true:
     case c.kind
-    of EofToken: break
-    of ParLe:
-      e.dest.add c
-      inc nested
     of ParRi:
-      if nested <= 0:
-        error e, "unmached ')': ", c
       e.dest.add c
-      dec nested
-    of SymbolDef:
-      e.dest.add c
-    of Symbol:
-      e.dest.add c
-    of UnknownToken, DotToken, Ident, StringLit, CharLit, IntLit, UIntLit, FloatLit:
-      e.dest.add c
+      inc c
+      break
+    of EofToken:
+      error e, "expected ')', but EOF reached"
+      break
+    else: discard
+    body
+
+proc traverseParams(e: var EContext; c: var Cursor) =
+  traverseType e, c
+  if c.kind == DotToken:
+    e.dest.add c
     inc c
+  elif c.kind == ParLe and pool.tags[c.tag] == $ParamsS:
+    e.dest.add c
+    inc c
+    loop e, c:
+      if c.substructureKind != ParamS:
+        error e, "expected (param) but got: ", c
+      traverseLocal(e, c, "param")
 
 type
   CollectedPragmas = object
@@ -189,7 +199,7 @@ proc parsePragmas(e: var EContext; c: var Cursor): CollectedPragmas =
           expectStrLit e, c
           result.externName = pool.strings[c.litId]
           inc c
-        of Nodecl, Selectany, Threadvar, Globalvar, CompileTime:
+        of Nodecl, Selectany, Threadvar, Globalvar:
           result.flags.incl pk
           inc c
         of Header:
@@ -213,6 +223,125 @@ proc parsePragmas(e: var EContext; c: var Cursor): CollectedPragmas =
   else:
     error e, "(pragmas) or '.' expected, but got: ", c
 
+type
+  GenPragmas = object
+    opened: bool
+
+proc openGenPragmas(): GenPragmas = GenPragmas(opened: false)
+
+proc maybeOpen(e: var EContext; g: var GenPragmas; info: PackedLineInfo) {.inline.} =
+  if not g.opened:
+    g.opened = true
+    e.dest.add tagToken("pragmas", info)
+
+proc addKey(e: var EContext; g: var GenPragmas; key: string; info: PackedLineInfo) =
+  maybeOpen e, g, info
+  e.dest.add tagToken(key, info)
+  e.dest.addParRi()
+
+proc addKeyVal(e: var EContext; g: var GenPragmas; key: string; val: PackedToken; info: PackedLineInfo) =
+  maybeOpen e, g, info
+  e.dest.add tagToken(key, info)
+  e.dest.add val
+  e.dest.addParRi()
+
+proc closeGenPragmas(e: var EContext; g: GenPragmas) =
+  if g.opened:
+    e.dest.addParRi()
+  else:
+    e.dest.addDotToken()
+
+proc traverseProc(e: var EContext; c: var Cursor) =
+  # patternPos* = 1    # empty except for term rewriting macros
+  # genericParamsPos* = 2
+  # paramsPos* = 3
+  # pragmasPos* = 4
+  # miscPos* = 5  # used for undocumented and hacky stuff
+  # bodyPos* = 6       # position of body; use rodread.getBody() instead!
+  let toPatch = e.dest.len
+  let vinfo = c.info
+  e.add "proc", vinfo
+  inc c
+  expectSymdef(e, c)
+  let s = c.symId
+  let sinfo = c.info
+  inc c
+  skipExportMarker e, c
+  skip c # patterns
+  let isGeneric = c.kind != DotToken
+  skip c # generic parameters
+  traverseParams e, c
+  let pinfo = c.info
+  let prag = parsePragmas(e, c)
+
+  e.dest.add toToken(SymbolDef, s, sinfo)
+  e.declared.incl s
+  let oldOwner = setOwner(e, s)
+
+  var genPragmas = openGenPragmas()
+  if prag.externName.len > 0:
+    e.toMangle[(s, oldOwner)] = prag.externName & ".c"
+    e.addKeyVal genPragmas, "was", toToken(Symbol, s, pinfo), pinfo
+  if Selectany in prag.flags:
+    e.addKey genPragmas, "selectany", pinfo
+  closeGenPragmas e, genPragmas
+
+  # body:
+  traverseStmt e, c
+  wantParRi e, c
+  if Nodecl in prag.flags or isGeneric:
+    e.dest.shrink toPatch
+  if prag.header != StrId(0):
+    e.headers.incl prag.header
+  discard setOwner(e, oldOwner)
+
+proc traverseTypeDecl(e: var EContext; c: var Cursor) =
+  let toPatch = e.dest.len
+  let vinfo = c.info
+  e.add "type", vinfo
+  inc c
+  expectSymdef(e, c)
+  let s = c.symId
+  let sinfo = c.info
+  let oldOwner = setOwner(e, s)
+  inc c
+  skipExportMarker e, c
+  let isGeneric = c.kind != DotToken
+  skip c # generic parameters
+
+  let pinfo = c.info
+  let prag = parsePragmas(e, c)
+  traverseType e, c
+  wantParRi e, c
+  if Nodecl in prag.flags or isGeneric:
+    e.dest.shrink toPatch
+  if prag.header != StrId(0):
+    e.headers.incl prag.header
+  discard setOwner(e, oldOwner)
+
+proc traverseExpr(e: var EContext; c: var Cursor) =
+  var nested = 0
+  while true:
+    case c.kind
+    of EofToken: break
+    of ParLe:
+      e.dest.add c
+      inc nested
+    of ParRi:
+      if nested <= 0:
+        error e, "unmached ')': ", c
+      e.dest.add c
+      dec nested
+    of SymbolDef:
+      e.dest.add c
+      e.declared.incl c.symId
+    of Symbol:
+      e.dest.add c
+      e.used.incl c.symId
+    of UnknownToken, DotToken, Ident, StringLit, CharLit, IntLit, UIntLit, FloatLit:
+      e.dest.add c
+    inc c
+
 proc traverseLocal(e: var EContext; c: var Cursor; tag: string) =
   let toPatch = e.dest.len
   let vinfo = c.info
@@ -222,50 +351,36 @@ proc traverseLocal(e: var EContext; c: var Cursor; tag: string) =
   let s = c.symId
   let sinfo = c.info
   inc c
+  skipExportMarker e, c
   let pinfo = c.info
   let prag = parsePragmas(e, c)
 
-  var pragmasOpened = false
+  e.dest.add toToken(SymbolDef, s, sinfo)
+  e.declared.incl s
+
+  var genPragmas = openGenPragmas()
+
   if prag.externName.len > 0:
-    let nifcName = pool.syms.getOrIncl(prag.externName & ".c")
-    e.dest.add toToken(SymbolDef, nifcName, sinfo)
-    e.dest.add tagToken("pragmas", pinfo)
-    pragmasOpened = true
-    e.dest.add tagToken("was", pinfo)
-    e.dest.add toToken(Symbol, s, sinfo)
-    e.dest.addParRi()
-  else:
-    e.dest.add toToken(SymbolDef, s, sinfo)
+    e.toMangle[(s, e.currentOwner)] = prag.externName & ".c"
+    e.addKeyVal genPragmas, "was", toToken(Symbol, s, pinfo), pinfo
 
   if Threadvar in prag.flags:
     e.dest[toPatch] = tagToken("tvar", vinfo)
   elif Globalvar in prag.flags:
     e.dest[toPatch] = tagToken("gvar", vinfo)
 
-  if prag.align != IntId(0) or prag.bits != IntId(0):
-    if not pragmasOpened:
-      e.dest.add tagToken("pragmas", pinfo)
-      pragmasOpened = true
-    if prag.align != IntId(0):
-      e.dest.add tagToken("align", pinfo)
-      e.dest.add toToken(IntLit, prag.align, pinfo)
-      e.dest.addParRi()
-    if prag.bits != IntId(0):
-      e.dest.add tagToken("bits", pinfo)
-      e.dest.add toToken(IntLit, prag.bits, pinfo)
-      e.dest.addParRi()
-
-  if pragmasOpened:
-    e.dest.addParRi()
-  else:
-    e.dest.addDotToken()
+  if prag.align != IntId(0):
+    e.addKeyVal genPragmas, "align", toToken(IntLit, prag.align, pinfo), pinfo
+  if prag.bits != IntId(0):
+    e.addKeyVal genPragmas, "bits", toToken(IntLit, prag.bits, pinfo), pinfo
+  closeGenPragmas e, genPragmas
 
   traverseType e, c
   traverseExpr e, c
   wantParRi e, c
-  if CompileTime in prag.flags:
+  if Nodecl in prag.flags:
     e.dest.shrink toPatch
-  elif prag.header != StrId(0):
+  if prag.header != StrId(0):
     e.headers.incl prag.header
 
 proc traverseWhile(e: var EContext; c: var Cursor) =
@@ -280,6 +395,7 @@ proc traverseWhile(e: var EContext; c: var Cursor) =
   if lab != SymId(0):
     e.dest.add tagToken("lab", info)
     e.dest.add toToken(SymbolDef, lab, info)
+    e.declared.incl lab
     e.dest.addParRi()
   discard e.nestedIn.pop()
 
@@ -300,6 +416,7 @@ proc traverseBlock(e: var EContext; c: var Cursor) =
   if lab != SymId(0):
     e.dest.add tagToken("lab", info)
     e.dest.add toToken(SymbolDef, lab, info)
+    e.declared.incl lab
     e.dest.addParRi()
   discard e.nestedIn.pop()
 
@@ -358,16 +475,9 @@ proc traverseStmt(e: var EContext; c: var Cursor) =
     of NoStmt:
       error e, "unknown statement: ", c
     of StmtsS:
+      e.dest.add c
       inc c
-      while true:
-        case c.kind
-        of ParRi:
-          inc c
-          break
-        of EofToken:
-          error e, "expected ')', but EOF reached"
-          break
-        else: discard
+      e.loop c:
         traverseStmt e, c
     of VarS, LetS, CursorS:
       traverseLocal e, c, (if e.nestedIn[^1][0] == StmtsS: "gvar" else: "var")
@@ -376,18 +486,8 @@ proc traverseStmt(e: var EContext; c: var Cursor) =
     of EmitS, AsgnS, RetS:
       e.dest.add c
       inc c
-      while true:
-        case c.kind
-        of ParRi:
-          e.dest.add c
-          inc c
-          break
-        of EofToken:
-          error e, "expected ')', but EOF reached"
-          break
-        else: discard
+      e.loop c:
         traverseExpr e, c
-      wantParRi e, c
 
     of BreakS: traverseBreak e, c
     of WhileS: traverseWhile e, c
@@ -405,6 +505,87 @@ proc traverseStmt(e: var EContext; c: var Cursor) =
       traverseTypeDecl e, c
   else:
     error e, "statement expected, but got: ", c
+
+proc writeOutput(e: var EContext) =
+  var b = nifbuilder.open(e.dir / e.main & ".c.nif")
+  b.addTree "stmts"
+  for h in e.headers:
+    b.withTree "incl":
+      b.addStrLit pool.strings[h]
+
+  var c = beginRead(e.dest)
+  var ownerStack = @[(SymId(0), -1)]
+
+  var stack: seq[PackedLineInfo] = @[]
+  var nested = 0
+  var nextIsOwner = -1
+  for n in 0 ..< e.dest.len:
+    let info = c.info
+    if info.isValid:
+      var (file, line, col) = unpack(pool.man, info)
+      var fileAsStr = ""
+      if stack.len > 0:
+        let (pfile, pline, pcol) = unpack(pool.man, stack[^1])
+        line = line - pline
+        col = col - pcol
+        if file != pfile: fileAsStr = pool.files[file]
+      b.addLineInfo(col, line, fileAsStr)
+
+    case c.kind
+    of DotToken:
+      b.addEmpty()
+    of Ident:
+      b.addIdent(pool.strings[c.litId])
+    of Symbol:
+      let owner = ownerStack[^1][0]
+      let key = (c.symId, owner)
+      let val = e.toMangle.getOrDefault(key)
+      if val.len > 0:
+        b.addSymbol(val)
+      else:
+        b.addSymbol(pool.syms[c.symId])
+    of IntLit:
+      b.addIntLit(pool.integers[c.intId])
+    of UIntLit:
+      b.addUIntLit(pool.uintegers[c.uintId])
+    of FloatLit:
+      b.addFloatLit(pool.floats[c.floatId])
+    of SymbolDef:
+      let owner = ownerStack[^1][0]
+      let key = (c.symId, owner)
+      let val = e.toMangle.getOrDefault(key)
+      if val.len > 0:
+        b.addSymbolDef(val)
+      else:
+        b.addSymbolDef(pool.syms[c.symId])
+      if nextIsOwner >= 0:
+        ownerStack.add (c.symId, nextIsOwner)
+        nextIsOwner = -1
+    of CharLit:
+      b.addCharLit char(c.uoperand)
+    of StringLit:
+      b.addStrLit(pool.strings[c.litId])
+    of UnknownToken:
+      b.addIdent "<unknown token>"
+    of EofToken:
+      b.addIntLit c.soperand
+    of ParRi:
+      discard stack.pop()
+      b.endTree()
+      if nested > 0: dec nested
+      if ownerStack[^1][1] == nested:
+        discard ownerStack.pop()
+    of ParLe:
+      let tag = pool.tags[c.tagId]
+      if tag == "proc" or tag == "type":
+        nextIsOwner = nested
+      b.addTree(tag)
+      stack.add info
+      inc nested
+    inc c
+
+  b.endTree()
+  b.close()
 
 proc splitModulePath(s: string): (string, string, string) =
   var (dir, main, ext) = splitFile(s)
@@ -430,6 +611,7 @@ proc expand*(infile: string) =
   #  importForeignSymbol()
   if c.kind != EofToken:
     quit "Internal error: file not processed completely"
+  writeOutput e
 
 when isMainModule:
   echo splitModulePath("/abc/def/name.4.nif")

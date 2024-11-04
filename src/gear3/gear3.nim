@@ -26,18 +26,7 @@ Gear 3 performs backend tasks that need to operate on multiple NIF files at once
 Grammar
 -------
 
-Gear 3 adds these rules to NIFC's grammar:
-
-```
-
-IterDecl ::= (iter SymbolDef Params Type ProcPragmas StmtList)
-
-Stmt ::= IterDecl |
-   ProcDecl | ConstDecl | TypeDecl | # Gear3 allows for nested procs and types!
-   (yld [Empty | Expr]) | # yield statement
-   ... existing NIFC's `Stmt` rules
-
-```
+Gear 3 accepts Gear 2's grammar.
 
 ]##
 

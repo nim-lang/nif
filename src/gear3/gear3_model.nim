@@ -112,7 +112,6 @@ type
     Selectany = "selectany"
     Threadvar = "threadvar"
     Globalvar = "global"
-    CompileTime = "compiletime"
 
   SubstructureKind* = enum
     NoSub
