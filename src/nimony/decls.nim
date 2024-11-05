@@ -6,12 +6,10 @@
 
 ## Helpers for declarative constructs like `let` statements or `proc` declarations.
 
-import nifstreams, nifcursors
-import ".." / specs / tags
+import nifstreams, nifcursors, nimony_model
 
-proc isRoutine*(t: TagId): bool {.inline.} =
-  t == ProcT or t == FuncT or t == IteratorT or t == MacroT or
-  t == TemplateT or t == ConverterT or t == MethodT
+proc isRoutine*(t: StmtKind): bool {.inline.} =
+  t in {ProcS, FuncS, IterS, MacroS, TemplateS, ConverterS, MethodS}
 
 proc isLocal*(t: TagId): bool {.inline.} =
   t == LetT or t == VarT or t == ConstT or t == ParamT or t == TypevarT or

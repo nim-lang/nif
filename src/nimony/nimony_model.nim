@@ -18,6 +18,7 @@ type
     VarS = "var"
     LetS = "let"
     CursorS = "cursor"
+    ResultS = "result"
     ConstS = "const"
     EmitS = "emit"
     AsgnS = "asgn"

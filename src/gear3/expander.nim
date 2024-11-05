@@ -11,7 +11,7 @@ import std / [hashes, os, tables, sets, syncio, times]
 
 include nifprelude
 import nifindexes, symparser
-import gear3_model
+import ".." / nimony / nimony_model
 
 type
   NifModule = ref object
