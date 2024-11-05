@@ -8,7 +8,7 @@
 ## No semantic checking is done and no symbol lookups are performed.
 
 import std / [parseopt, strutils, os, syncio, assertions, times]
-import emitter, bridge, configcmd
+import bridge, configcmd
 
 const
   Version = "0.2"
@@ -30,12 +30,6 @@ Options:
 
 proc writeHelp() = quit(Usage, QuitSuccess)
 proc writeVersion() = quit(Version & "\n", QuitSuccess)
-
-proc main(infile, outfile: string) =
-  var em = Emitter(minified: true)
-  parseFile em, infile
-  if em.output.len > 0:
-    writeFile outfile, em.output
 
 proc handleCmdLine() =
   var action = ""
@@ -69,7 +63,7 @@ proc handleCmdLine() =
           getLastModificationTime(outp) > getLastModificationTime(inp):
         discard "nothing to do"
       else:
-        main inp, outp
+        parseFile inp, outp
   of "config":
     if args.len == 0:
       quit "'config' command takes a filename"
