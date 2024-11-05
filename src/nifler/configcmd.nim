@@ -13,7 +13,7 @@ import compiler / [
   commands, options, msgs, idents, lineinfos, cmdlinehelper,
   pathutils, modulegraphs, condsyms]
 
-import ".." / lib / nifbuilder
+include ".." / lib / nifprelude
 
 proc nimbleLockExists(config: ConfigRef): bool =
   const nimbleLock = "nimble.lock"
@@ -81,7 +81,7 @@ proc handleCmdLine(cache: IdentCache; conf: ConfigRef) =
   if conf.selectedGC == gcUnselected:
     initOrcDefines(conf)
 
-proc toNifPath(p: AbsoluteDir): string =
+proc toNifPath(p: AbsoluteDir|AbsoluteFile): string =
   relativePath(p.string, getCurrentDir(), '/')
 
 proc genStringTable(b: var Builder; tag: string; tab: StringTableRef) =
@@ -160,6 +160,10 @@ proc buildConfig(b: var Builder; conf: ConfigRef) =
     for feature in conf.features: b.addStrLit $feature
     for feature in conf.legacyFeatures: b.addStrLit $feature
 
+  b.withTree "sources":
+    for f in conf.m.fileInfos:
+      b.addStrLit f.fullPath.toNifPath
+
   b.genStringTable "vars", conf.configVars
   b.genStringTable "dlloverrides", conf.dllOverrides
   b.genStringTable "moduleoverrides", conf.moduleOverrides
@@ -168,13 +172,19 @@ proc buildConfig(b: var Builder; conf: ConfigRef) =
   b.withTree "outfile":
     b.addStrLit conf.outFile.string
 
-  b.withTree "notes":
+  b.withTree "hints":
     for note in conf.notes:
-      b.addStrLit toLowerAscii(($note).substr(4))
+      if note >= hintMin and note <= hintMax:
+        b.addStrLit toLowerAscii(($note))
+
+  b.withTree "warnings":
+    for note in conf.notes:
+      if note >= warnMin and note <= warnMax:
+        b.addStrLit toLowerAscii(($note))
 
   b.withTree "warningsaserrors":
     for note in conf.warningAsErrors:
-      b.addStrLit toLowerAscii(($note).substr(4))
+      b.addStrLit toLowerAscii(($note))
 
 
 proc produceConfig*(infile, outfile: string) =
@@ -188,7 +198,7 @@ proc produceConfig*(infile, outfile: string) =
 
   handleCmdLine(newIdentCache(), conf)
 
-  var b = open(outfile)
+  var b = nifbuilder.open(outfile)
   try:
     b.addHeader()
     b.withTree "config":
@@ -199,3 +209,41 @@ proc produceConfig*(infile, outfile: string) =
     genSuccessX(conf)
   finally:
     b.close()
+
+proc sourcesChangedImpl(configFile: string; c: Cursor): bool =
+  var c = c
+  var nested = 0
+  let modtime = getLastModificationTime(configFile)
+  while true:
+    case c.kind
+    of ParLe:
+      inc nested
+      if pool.tags[c.tag] == "sources":
+        inc c
+        while c.kind != ParRi:
+          if c.kind == StringLit:
+            let dep = pool.strings[c.litId]
+            if not fileExists(dep):
+              return true
+            if getLastModificationTime(dep) >= modtime:
+              return true
+          inc c
+      else:
+        inc c
+    of ParRi:
+      dec nested
+      if nested == 0: break
+      inc c
+    else:
+      inc c
+  return false
+
+proc sourcesChanged*(configFile: string): bool =
+  var f = nifstreams.open(configFile)
+  discard processDirectives(f.r)
+  var buf = fromStream(f)
+  var c = beginRead(buf)
+  try:
+    result = sourcesChangedImpl(configFile, c)
+  finally:
+    f.close()

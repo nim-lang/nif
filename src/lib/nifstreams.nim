@@ -35,6 +35,9 @@ template toX(k: TokenKind; operand: uint32): uint32 =
 proc toToken*[L](kind: TokenKind; id: L; info: PackedLineInfo): PackedToken {.inline.} =
   PackedToken(x: toX(kind, uint32(id)), info: info)
 
+proc parRiToken*(info: PackedLineInfo): PackedToken {.inline.} =
+  PackedToken(x: toX(ParRi, 0'u32), info: info)
+
 proc addToken*[L](tree: var seq[PackedToken]; kind: TokenKind; id: L; info: PackedLineInfo) =
   tree.add PackedToken(x: toX(kind, uint32(id)), info: info)
 
@@ -282,7 +285,7 @@ proc toString*(tree: openArray[PackedToken]): string =
     of StringLit:
       b.addStrLit(pool.strings[tree[n].litId])
     of UnknownToken:
-      b.addIdent "<unkonwn token>"
+      b.addIdent "<unknown token>"
     of EofToken:
       b.addIntLit tree[n].soperand
     of ParRi:

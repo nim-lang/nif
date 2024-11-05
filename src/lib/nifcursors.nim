@@ -44,6 +44,7 @@ proc tagId*(c: Cursor): TagId {.inline.} = nifstreams.tagId(c.load)
 proc tag*(c: Cursor): TagId {.inline.} = nifstreams.tag(c.load)
 
 proc uoperand*(c: Cursor): uint32 {.inline.} = nifstreams.uoperand(c.load)
+proc soperand*(c: Cursor): int32 {.inline.} = nifstreams.soperand(c.load)
 
 proc inc*(c: var Cursor) {.inline.} =
   assert c.rem > 0
@@ -80,6 +81,9 @@ else:
   proc `=destroy`(dest: var TokenBuf) {.inline.} =
     #assert dest.readers == 0, "TokenBuf still in use by some reader"
     if dest.data != nil: dealloc(dest.data)
+
+proc createTokenBuf*(cap = 100): TokenBuf =
+  result = TokenBuf(data: cast[Storage](alloc(sizeof(PackedToken)*cap)), len: 0, cap: cap)
 
 proc isMutable(b: TokenBuf): bool {.inline.} = b.cap >= 0
 
@@ -196,6 +200,9 @@ proc addParLe*(dest: var TokenBuf; tag: TagId; info = NoLineInfo) =
 proc addParRi*(dest: var TokenBuf) =
   dest.add toToken(ParRi, 0'u32, NoLineInfo)
 
+proc addDotToken*(dest: var TokenBuf) =
+  dest.add toToken(DotToken, 0'u32, NoLineInfo)
+
 proc toString*(b: TokenBuf): string =
   result = nifstreams.toString(toOpenArray(b.data, 0, b.len-1))
 
@@ -211,8 +218,9 @@ proc span*(c: Cursor): int =
         if nested == 0: break
         dec nested
       elif c.kind == ParLe: inc nested
-  inc c
-  inc result
+  if c.rem > 0:
+    inc c
+    inc result
 
 proc toString*(b: Cursor): string =
   let counter = span(b)
