@@ -184,3 +184,11 @@ proc typeKind*(c: Cursor): TypeKind {.inline.} =
     result = parseTypeKind pool.tags[tag(c)]
   else:
     result = NoType
+
+declareMatcher parseCallConvKind, CallConv
+
+proc callConvKind*(c: Cursor): CallConv {.inline.} =
+  if c.kind == ParLe:
+    result = parseCallConvKind pool.tags[tag(c)]
+  else:
+    result = NoCallConv

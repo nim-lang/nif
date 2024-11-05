@@ -15,7 +15,8 @@ import compiler / [
   ast, options, pathutils, renderer, lineinfos,
   parser, llstream, idents, msgs, modulegraphs]
 
-import ".." / lib / [nifbuilder, nifindexes, nifstreams, nifcursors, bitabs, lineinfos, nifreader]
+import ".." / lib / [nifbuilder, nifindexes, nifstreams, nifcursors, bitabs, lineinfos, nifreader,
+  symparser]
 import modnames, enum2nif
 
 type
