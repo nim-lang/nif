@@ -192,3 +192,11 @@ proc callConvKind*(c: Cursor): CallConv {.inline.} =
     result = parseCallConvKind pool.tags[tag(c)]
   else:
     result = NoCallConv
+
+declareMatcher parseExprKind, ExprKind
+
+proc exprKind*(c: Cursor): ExprKind {.inline.} =
+  if c.kind == ParLe:
+    result = parseExprKind pool.tags[tag(c)]
+  else:
+    result = NoExpr
