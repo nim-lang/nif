@@ -620,6 +620,7 @@ proc importSymbol(e: var EContext; s: SymId) =
 
 proc writeOutput(e: var EContext) =
   var b = nifbuilder.open(e.dir / e.main & ".c.nif")
+  b.addHeader "gear3", "nifc"
   b.addTree "stmts"
   for h in e.headers:
     b.withTree "incl":
@@ -717,7 +718,6 @@ proc expand*(infile: string) =
   var c = beginRead(m.buf)
   e.mods[e.main] = m
 
-  e.dest.add tagToken("stmts", c.info)
   traverseStmt e, c, TraverseTopLevel
   if c.kind != EofToken:
     quit "Internal error: file not processed completely"
@@ -728,7 +728,6 @@ proc expand*(infile: string) =
     if not e.declared.contains(imp):
       importSymbol(e, imp)
     inc i
-  e.dest.addParRi()
   writeOutput e
 
 when isMainModule:
