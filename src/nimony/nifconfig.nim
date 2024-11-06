@@ -1,0 +1,72 @@
+#       Nimony
+# (c) Copyright 2024 Andreas Rumpf
+#
+# See the file "license.txt", included in this
+# distribution, for details about the copyright.
+
+## Read the configuration from the `.cfg.nif` file.
+
+import std / [sets, tables]
+
+include nifprelude
+
+type
+  NifConfig* = object
+    defines*: HashSet[string]
+    paths*, nimblePaths*: seq[string]
+    bits*: int
+
+proc parseConfig(c: Cursor): NifConfig =
+  var c = c
+  var nested = 0
+  result = default(NifConfig)
+  while true:
+    case c.kind
+    of ParLe:
+      inc nested
+      case pool.tags[c.tag]
+      of "defines":
+        inc c
+        while c.kind != ParRi:
+          if c.kind == StringLit:
+            result.defines.incl pool.strings[c.litId]
+          inc c
+      of "paths":
+        inc c
+        while c.kind != ParRi:
+          if c.kind == StringLit:
+            result.paths.add pool.strings[c.litId]
+          inc c
+      of "nimblepaths":
+        inc c
+        while c.kind != ParRi:
+          if c.kind == StringLit:
+            result.nimblePaths.add pool.strings[c.litId]
+          inc c
+      of "intbits":
+        inc c
+        if c.kind == IntLit:
+          result.bits = pool.integers[c.intId]
+          inc c
+      else:
+        inc c
+    of ParRi:
+      dec nested
+      if nested == 0: break
+      inc c
+    else:
+      inc c
+
+proc parseNifConfig*(configFile: string): NifConfig =
+  var f = nifstreams.open(configFile)
+  discard processDirectives(f.r)
+  var buf = fromStream(f)
+  var c = beginRead(buf)
+  try:
+    result = parseConfig(c)
+  finally:
+    f.close()
+
+when isMainModule:
+  let conf = parseNifConfig"src/nifler/nifler.cfg.nif"
+  echo $conf.bits
