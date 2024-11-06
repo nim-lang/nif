@@ -5,13 +5,13 @@
 # distribution, for details about the copyright.
 
 import std / [tables]
-import "../.." / nif / src / lib / [nifstreams]
-import compat
+include nifprelude
+import nimony_model
 
 type
   Sym* = object
     name*: SymId
-    tag*: TagId
+    kind*: StmtKind
     pos*: int32
 
   ScopeKind* = enum
@@ -29,12 +29,12 @@ proc openShadowScope*(s: Scope) =
 proc commitShadowScope*(s: Scope) =
   if not s.rolledBack:
     let newLen = s.undo.len - 1
-    s.undo.myshrink newLen
+    s.undo.shrink newLen
 
 proc rollbackShadowScope*(s: Scope) =
   let last = s.undo.len - 1
   for k, oldLen in pairs(s.undo[last]):
-    s.tab[k].myshrink oldLen
+    s.tab[k].shrink oldLen
   s.rolledBack = true
 
 proc remember(s: Scope; name: StrId) {.inline.} =

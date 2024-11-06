@@ -8,6 +8,8 @@
 
 import std / [parseopt, strutils, os, assertions, syncio]
 
+import sem
+
 const
   Version = "0.2"
   Usage = "Nimony Compiler. Version " & Version & """
@@ -49,8 +51,13 @@ proc requiresTool(tool, src: string; forceRebuild: bool) =
 
 proc processSingleModule(nimFile: string) =
   let nifler = findTool("nifler")
+  let name = nimFile.splitFile.name
+  let src = "nifcache" / name & ".1.nif"
+  let dest = "nifcache" / name & ".2.nif"
   exec quoteShell(nifler) & " p " & quoteShell(nimFile) & " " &
-    quoteShell("nifcache" / nimFile.splitFile.name & ".1.nif")
+    quoteShell(src)
+  if fileExists(src):
+    semcheck(src, dest)
 
 type
   Command = enum
