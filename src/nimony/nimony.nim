@@ -20,12 +20,37 @@ Command:
 
 Options:
   -r, --run                 run the makefile and the compiled program
+  -f, --forcebuild          force a rebuild
   --version                 show the version
   --help                    show this help
 """
 
 proc writeHelp() = quit(Usage, QuitSuccess)
 proc writeVersion() = quit(Version & "\n", QuitSuccess)
+
+proc exec(cmd: string) =
+  if execShellCmd(cmd) != 0: quit("FAILURE: " & cmd)
+
+proc nimexec(cmd: string) =
+  let t = findExe("nim")
+  if t.len == 0:
+    quit("FAILURE: cannot find nim.exe / nim binary")
+  exec quoteShell(t) & " " & cmd
+
+proc findTool(name: string): string =
+  let exe = name.addFileExt(ExeExt)
+  result = getAppDir() / exe
+
+proc requiresTool(tool, src: string; forceRebuild: bool) =
+  let t = findTool(tool)
+  if not fileExists(t) or forceRebuild:
+    nimexec("c -d:release " & src)
+    moveFile src.changeFileExt(ExeExt), t
+
+proc processSingleModule(nimFile: string) =
+  let nifler = findTool("nifler")
+  exec quoteShell(nifler) & " p " & quoteShell(nimFile) & " " &
+    quoteShell("nifcache" / nimFile.splitFile.name & ".1.nif")
 
 type
   Command = enum
@@ -34,6 +59,7 @@ type
 proc handleCmdLine() =
   var args: seq[string] = @[]
   var cmd = Command.None
+  var forceRebuild = false
 
   for kind, key, val in getopt():
     case kind
@@ -51,13 +77,21 @@ proc handleCmdLine() =
       case normalize(key)
       of "help", "h": writeHelp()
       of "version", "v": writeVersion()
+      of "forcebuild", "f": forceRebuild = true
       else: writeHelp()
     of cmdEnd: assert false, "cannot happen"
   if args.len == 0:
     quit "too few command line arguments"
   elif args.len > 2:
     quit "too many command line arguments"
-  createDir("nifcache")
+  case cmd
+  of None:
+    quit "command missing"
+  of SingleModule:
+    createDir("nifcache")
+    requiresTool "nifler", "src/nifler/nifler.nim", forceRebuild
+    requiresTool "nifc", "src/nifc/nifc.nim", forceRebuild
+    processSingleModule(args[0].addFileExt(".nim"))
 
 when isMainModule:
   handleCmdLine()
