@@ -36,6 +36,9 @@ proc newNifModule(infile: string): NifModule =
   discard processDirectives(result.stream.r)
 
   result.buf = fromStream(result.stream)
+  # fromStream only parses the topLevel 'stmts'
+  let eof = next(result.stream)
+  result.buf.add eof
   let indexName = infile.changeFileExt".idx.nif"
   if not fileExists(indexName) or getLastModificationTime(indexName) < getLastModificationTime(infile):
     createIndex infile
@@ -411,8 +414,9 @@ proc traverseExpr(e: var EContext; c: var Cursor) =
       e.dest.add c
       inc nested
     of ParRi:
-      if nested <= 0:
-        error e, "unmached ')': ", c
+      if nested == 0:
+        # it may be a ')' from the top level 'stmts'
+        break
       e.dest.add c
       dec nested
     of SymbolDef:
