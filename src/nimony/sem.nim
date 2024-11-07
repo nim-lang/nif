@@ -8,7 +8,7 @@
 ## Most important task is to turn identifiers into symbols and to perform
 ## type checking.
 
-import std / [tables, os, syncio]
+import std / [tables, os, syncio, times]
 include nifprelude
 import nimony_model, symtabs, nifindexes, symparser
 
@@ -86,6 +86,16 @@ proc importSymbol(e: var SemContext; s: SymId): Cursor =
     e.mem.add ensureMove(buf)
     result = fromBuffer(e.mem[e.mem.len-1])
 
+proc openScope(s: var SemContext) =
+  s.currentScope = Scope(tab: initTable[StrId, seq[Sym]](), up: s.currentScope, kind: NormalScope)
+
+proc closeScope(s: var SemContext) =
+  s.currentScope = s.currentScope.up
+
+proc buildErr*(c: var SemContext; info: PackedLineInfo; msg: string) =
+  c.dest.buildTree ErrT, info:
+    c.dest.add toToken(StringLit, pool.strings.getOrIncl(msg), info)
+
 proc semStmt(e: var SemContext; c: var Cursor) =
   discard
 
@@ -98,16 +108,18 @@ proc splitModulePath(s: string): (string, string, string) =
   result = (dir, main, ext)
 
 proc writeOutput(e: var SemContext; outfile: string) =
-  var b = nifbuilder.open(outfile)
-  b.addHeader "nimony", "nim-sem"
-  b.addRaw toString(e.dest)
-  b.close()
+  #var b = nifbuilder.open(outfile)
+  #b.addHeader "nimony", "nim-sem"
+  #b.addRaw toString(e.dest)
+  #b.close()
+  writeFile outfile, "(.nif42)\n" & toString(e.dest)
 
 proc semcheck*(infile, outfile: string) =
   let (dir, file, ext) = splitModulePath(infile)
   var e = SemContext(dir: (if dir.len == 0: getCurrentDir() else: dir), ext: ext, main: file,
     dest: createTokenBuf(),
     nestedIn: @[(StmtsS, SymId(0))])
+  e.currentScope = Scope(tab: initTable[StrId, seq[Sym]](), up: nil, kind: ToplevelScope)
 
   var m = newNifModule(infile)
   var c = beginRead(m.buf)
