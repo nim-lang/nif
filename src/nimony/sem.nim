@@ -75,19 +75,28 @@ proc semStmt(e: var SemContext; c: var Cursor) =
   c = it.n
 
 proc semCall(e: var SemContext; it: var Item) =
+  let callNode = it.n
   var dest = createTokenBuf(16)
   swap e.dest, dest
   var fn = Item(n: it.n, typ: e.types.autoType)
   semExpr e, fn
-  let firstArg = fn.n
   it.n = fn.n
+  var args: seq[Item] = @[]
   while it.n.kind != ParRi:
-    semExpr e, it
-  wantParRi e, it.n
-
+    var arg = Item(n: it.n, typ: e.types.autoType)
+    semExpr e, arg
+    let next = arg.n
+    arg.n = it.n
+    it.n = next
+    args.add arg
+  var m = createMatch()
+  sigmatch(m, fn, args, e.types.voidType)
+  # XXX e.types.voidType is a little hack to pass DotToken to `explicitTypeVars` for now
   swap e.dest, dest
-
-  e.dest.add dest
+  e.dest.add callNode
+  e.dest.add fn.n
+  e.dest.add m.args
+  wantParRi e, it.n
 
 
 proc semExpr(e: var SemContext; it: var Item) =
