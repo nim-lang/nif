@@ -586,7 +586,7 @@ proc traverseStmt(e: var EContext; c: var Cursor; mode = TraverseAll) =
     of BlockS: traverseBlock e, c
     of IfS: traverseIf e, c
     of CaseS: traverseCase e, c
-    of YieldS, IterS:
+    of YieldS, IterS, ForS:
       error e, "to implement: ", c
     of FuncS, ProcS, ConverterS, MethodS:
       traverseProc e, c, mode

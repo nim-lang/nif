@@ -8,6 +8,7 @@
 
 import std / [parseopt, strutils, os, assertions, syncio]
 
+import ".." / gear3 / gear3 # only imported to ensure it keeps compiling
 import sem
 
 const

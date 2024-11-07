@@ -8,16 +8,15 @@
 
 import nifstreams, nifcursors, nimony_model
 
-proc isRoutine*(t: StmtKind): bool {.inline.} =
-  t in {ProcS, FuncS, IterS, MacroS, TemplateS, ConverterS, MethodS}
+proc isRoutine*(t: SymKind): bool {.inline.} =
+  t in {ProcY, FuncY, IterY, MacroY, TemplateY, ConverterY, MethodY}
 
-proc isLocal*(t: TagId): bool {.inline.} =
-  t == LetT or t == VarT or t == ConstT or t == ParamT or t == TypevarT or
-  t == CursorT or t == FldT
+proc isLocal*(t: SymKind): bool {.inline.} =
+  t in {LetY, VarY, ConstY, ParamY, TypevarY, CursorY, FldY}
 
 type
   Local* = object
-    tag*: TagId
+    kind*: SymKind
     name*: Cursor
     exported*: Cursor
     pragmas*: Cursor
@@ -26,9 +25,9 @@ type
 
 proc asLocal*(c: Cursor): Local =
   var c = c
-  let t = c.tag
-  result = Local(tag: t)
-  if isLocal(t):
+  let kind = symKind c
+  result = Local(kind: kind)
+  if isLocal(kind):
     inc c
     result.name = c
     skip c
@@ -39,12 +38,10 @@ proc asLocal*(c: Cursor): Local =
     result.typ = c
     skip c
     result.val = c
-  else:
-    result.tag = ErrT
 
 type
   Routine* = object
-    tag*: TagId
+    kind*: SymKind
     name*: Cursor
     exported*: Cursor
     pattern*: Cursor # for TR templates/macros
@@ -56,13 +53,13 @@ type
     body*: Cursor
 
 proc isGeneric*(r: Routine): bool {.inline.} =
-  r.typevars.tag == TypevarsT
+  r.typevars.substructureKind == TypevarsS
 
 proc asRoutine*(c: Cursor): Routine =
   var c = c
-  let t = c.tag
-  result = Routine(tag: t)
-  if isRoutine(t):
+  let kind = symKind c
+  result = Routine(kind: kind)
+  if isRoutine(kind):
     inc c
     result.name = c
     skip c
@@ -81,12 +78,10 @@ proc asRoutine*(c: Cursor): Routine =
     result.pragmas = c
     skip c
     result.body = c
-  else:
-    result.tag = ErrT
 
 type
   TypeDecl* = object
-    tag*: TagId
+    kind*: SymKind
     name*: Cursor
     exported*: Cursor
     typevars*: Cursor
@@ -94,13 +89,13 @@ type
     body*: Cursor
 
 proc isGeneric*(r: TypeDecl): bool {.inline.} =
-  r.typevars.tag == TypevarsT
+  r.typevars.substructureKind == TypevarsS
 
 proc asTypeDecl*(c: Cursor): TypeDecl =
   var c = c
-  let t = c.tag
-  result = TypeDecl(tag: t)
-  if t == TypeT or t == TypaT:
+  let kind = symKind c
+  result = TypeDecl(kind: kind)
+  if kind == TypeY:
     inc c
     result.name = c
     skip c
@@ -111,78 +106,68 @@ proc asTypeDecl*(c: Cursor): TypeDecl =
     result.pragmas = c
     skip c
     result.body = c
-  else:
-    result.tag = ErrT
 
 type
   ObjectDecl* = object
-    tag*: TagId
+    kind*: TypeKind
     parentType*: Cursor
     firstField*: Cursor
 
 proc asObjectDecl*(c: Cursor): ObjectDecl =
   var c = c
-  let t = c.tag
-  result = ObjectDecl(tag: t)
-  if t == ObjectT:
+  let kind = typeKind c
+  result = ObjectDecl(kind: kind)
+  if kind == ObjectT:
     inc c
     result.parentType = c
     skip c
     result.firstField = c
-  else:
-    result.tag = ErrT
 
 type
   EnumDecl* = object
-    tag*: TagId
+    kind*: TypeKind
     baseType*: Cursor
     firstField*: Cursor
 
 proc asEnumDecl*(c: Cursor): EnumDecl =
   var c = c
-  let t = c.tag
-  result = EnumDecl(tag: t)
-  if t == EnumT:
+  let kind = typeKind c
+  result = EnumDecl(kind: kind)
+  if kind == EnumT:
     inc c
     result.baseType = c
     skip c
     result.firstField = c
-  else:
-    result.tag = ErrT
 
 type
   EnumField* = object
-    tag*: TagId
+    kind*: SymKind
     name*: Cursor
     val*: Cursor
 
 proc asEnumField*(c: Cursor): EnumField =
   var c = c
-  let t = c.tag
-  result = EnumField(tag: t)
-  if t == EfldT:
+  let kind = symKind c
+  result = EnumField(kind: kind)
+  if kind == EfldY:
     inc c
     result.name = c
     skip c
     result.val = c
-  else:
-    result.tag = ErrT
 
 type
   ForStmt* = object
-    tag*: TagId
+    kind*: StmtKind
     iter*, vars*, body*: Cursor
 
 proc asForStmt*(c: Cursor): ForStmt =
   var c = c
-  let t = c.tag
-  result = ForStmt(tag: t)
-  if t == ForT:
+  let kind = stmtKind c
+  result = ForStmt(kind: kind)
+  if kind == ForS:
     inc c
     result.iter = c
     skip c
     result.vars = c
     skip c
     result.body = c
-  else:
-    result.tag = ErrT

@@ -8,20 +8,12 @@
 ## Most important task is to turn identifiers into symbols and to perform
 ## type checking.
 
-import std / [tables, os, syncio, times]
+import std / [tables, os, syncio]
 include nifprelude
-import nimony_model, symtabs, nifindexes, symparser
+import nimony_model, symtabs, builtintypes, decls,
+  programs, sigmatch
 
 type
-  NifModule = ref object
-    buf: TokenBuf
-    stream: Stream
-    index: NifIndex
-
-type
-  Item* = object
-    n, typ: Cursor
-
   SemRoutine* {.acyclic.} = ref object
     kind: StmtKind
     up: SemRoutine
@@ -29,62 +21,9 @@ type
   SemContext* = object
     r: SemRoutine
     currentScope: Scope
-    mods: Table[string, NifModule]
-    dir, main, ext: string
     dest: TokenBuf
-    mem: seq[seq[PackedToken]]
     nestedIn: seq[(StmtKind, SymId)]
-
-proc newNifModule(infile: string): NifModule =
-  result = NifModule(stream: nifstreams.open(infile))
-  discard processDirectives(result.stream.r)
-
-  result.buf = fromStream(result.stream)
-  let indexName = infile.changeFileExt".idx.nif"
-  if not fileExists(indexName) or getLastModificationTime(indexName) < getLastModificationTime(infile):
-    createIndex infile
-  result.index = readIndex(indexName)
-
-proc load(e: var SemContext; suffix: string): NifModule =
-  if not e.mods.hasKey(suffix):
-    let infile = e.dir / suffix & e.ext
-    result = newNifModule(infile)
-    e.mods[suffix] = result
-  else:
-    result = e.mods[suffix]
-
-proc error(e: var SemContext; msg: string; c: Cursor) =
-  write stdout, "[Error] "
-  write stdout, msg
-  writeLine stdout, toString(c)
-  when defined(debug):
-    echo getStackTrace()
-  quit 1
-
-proc error(e: var SemContext; msg: string) =
-  write stdout, "[Error] "
-  write stdout, msg
-  when defined(debug):
-    echo getStackTrace()
-  quit 1
-
-proc importSymbol(e: var SemContext; s: SymId): Cursor =
-  let nifName = pool.syms[s]
-  let modname = extractModule(nifName)
-  if modname == "":
-    error e, "undeclared identifier: " & nifName
-  else:
-    var m = load(e, modname)
-    var entry = m.index.public.getOrDefault(nifName)
-    if entry.offset == 0:
-      entry = m.index.private.getOrDefault(nifName)
-    if entry.offset == 0:
-      error e, "undeclared identifier: " & nifName
-    m.stream.r.jumpTo entry.offset
-    var buf: seq[PackedToken] = @[]
-    discard nifstreams.parse(m.stream.r, buf, entry.info)
-    e.mem.add ensureMove(buf)
-    result = fromBuffer(e.mem[e.mem.len-1])
+    types: BuiltinTypes
 
 proc openScope(s: var SemContext) =
   s.currentScope = Scope(tab: initTable[StrId, seq[Sym]](), up: s.currentScope, kind: NormalScope)
@@ -96,16 +35,124 @@ proc buildErr*(c: var SemContext; info: PackedLineInfo; msg: string) =
   c.dest.buildTree ErrT, info:
     c.dest.add toToken(StringLit, pool.strings.getOrIncl(msg), info)
 
-proc semStmt(e: var SemContext; c: var Cursor) =
-  discard
+proc typeToString(e: var SemContext; c: Cursor): string =
+  result = toString(c)
 
-proc splitModulePath(s: string): (string, string, string) =
-  var (dir, main, ext) = splitFile(s)
-  let dotPos = find(main, '.')
-  if dotPos >= 0:
-    ext = substr(main, dotPos) & ext
-    main.setLen dotPos
-  result = (dir, main, ext)
+proc wantParRi(e: var SemContext; c: var Cursor) =
+  if c.kind == ParRi:
+    e.dest.add c
+    inc c
+  else:
+    error "expected ')', but got: ", c
+
+proc skipParRi(e: var SemContext; c: var Cursor) =
+  if c.kind == ParRi:
+    inc c
+  else:
+    error "expected ')', but got: ", c
+
+proc takeToken(e: var SemContext; c: var Cursor) {.inline.} =
+  e.dest.add c
+  inc c
+
+proc semExpr(e: var SemContext; it: var Item)
+
+proc classifyType(e: var SemContext; c: Cursor): TypeKind =
+  result = typeKind(c)
+
+proc semBoolExpr(e: var SemContext; it: var Item) =
+  semExpr e, it
+  if typeKind(it.typ) != BoolT:
+    buildErr e, it.n.info, "expected `bool` but got: " & typeToString(e, it.typ)
+
+proc semStmt(e: var SemContext; c: var Cursor) =
+  var it = Item(n: c, typ: e.types.autoType)
+  semExpr e, it
+  if classifyType(e, it.typ) in {NoType, VoidT}:
+    discard "ok"
+  else:
+    buildErr e, c.info, "expression of type `" & typeToString(e, it.typ) & "` must be discarded"
+  c = it.n
+
+proc semCall(e: var SemContext; it: var Item) =
+  var dest = createTokenBuf(16)
+  swap e.dest, dest
+  var fn = Item(n: it.n, typ: e.types.autoType)
+  semExpr e, fn
+  let firstArg = fn.n
+  it.n = fn.n
+  while it.n.kind != ParRi:
+    semExpr e, it
+  wantParRi e, it.n
+
+  swap e.dest, dest
+
+  e.dest.add dest
+
+
+proc semExpr(e: var SemContext; it: var Item) =
+  case it.n.kind
+  of IntLit:
+    if typeKind(it.typ) == AutoT:
+      it.typ = e.types.intType
+    takeToken e, it.n
+  of UIntLit:
+    if typeKind(it.typ) == AutoT:
+      it.typ = e.types.uintType
+    takeToken e, it.n
+  of FloatLit:
+    if typeKind(it.typ) == AutoT:
+      it.typ = e.types.floatType
+    takeToken e, it.n
+  of StringLit:
+    if typeKind(it.typ) == AutoT:
+      it.typ = e.types.stringType
+    takeToken e, it.n
+  of CharLit:
+    if typeKind(it.typ) == AutoT:
+      it.typ = e.types.charType
+    takeToken e, it.n
+  of Symbol, Ident:
+    buildErr e, it.n.info, "not implemented"
+  of ParLe:
+    case exprKind(it.n)
+    of NoExpr:
+      buildErr e, it.n.info, "expression expected"
+    of FalseX, TrueX:
+      if typeKind(it.typ) == AutoT:
+        it.typ = e.types.boolType
+      takeToken e, it.n
+      wantParRi e, it.n
+    of InfX, NegInfX, NanX:
+      if typeKind(it.typ) == AutoT:
+        it.typ = e.types.floatType
+      takeToken e, it.n
+      wantParRi e, it.n
+    of AndX, OrX:
+      takeToken e, it.n
+      semBoolExpr e, it
+      semBoolExpr e, it
+      wantParRi e, it.n
+    of NotX:
+      e.dest.add it.n
+      takeToken e, it.n
+      semBoolExpr e, it
+      wantParRi e, it.n
+    of ParX:
+      takeToken e, it.n
+      semExpr e, it
+      wantParRi e, it.n
+    of CallX:
+      semCall e, it
+    of AconstrX, AtX, DerefX, DotX, PatX, AddrX, NilX, NegX, SizeofX, OconstrX, KvX,
+       AddX, SubX, MulX, DivX, ModX, ShrX, ShlX, BitandX, BitorX, BitxorX, BitnotX,
+       EqX, NeqX, LeX, LtX, CastX, ConvX, SufX, RangeX, RangesX,
+       HderefX, HaddrX, OconvX, HconvX:
+      takeToken e, it.n
+      wantParRi e, it.n
+
+  of ParRi, EofToken, SymbolDef, UnknownToken, DotToken:
+    buildErr e, it.n.info, "expression expected"
 
 proc writeOutput(e: var SemContext; outfile: string) =
   #var b = nifbuilder.open(outfile)
@@ -115,15 +162,12 @@ proc writeOutput(e: var SemContext; outfile: string) =
   writeFile outfile, "(.nif42)\n" & toString(e.dest)
 
 proc semcheck*(infile, outfile: string) =
-  let (dir, file, ext) = splitModulePath(infile)
-  var e = SemContext(dir: (if dir.len == 0: getCurrentDir() else: dir), ext: ext, main: file,
+  var c = setupProgram(infile)
+  var e = SemContext(
     dest: createTokenBuf(),
-    nestedIn: @[(StmtsS, SymId(0))])
+    nestedIn: @[(StmtsS, SymId(0))],
+    types: createBuiltinTypes())
   e.currentScope = Scope(tab: initTable[StrId, seq[Sym]](), up: nil, kind: ToplevelScope)
-
-  var m = newNifModule(infile)
-  var c = beginRead(m.buf)
-  e.mods[e.main] = m
 
   semStmt e, c
   if c.kind != EofToken:
