@@ -30,6 +30,7 @@ type
     headers: HashSet[StrId]
     currentOwner: SymId
     toMangle: Table[SymbolKey, string]
+    nested: int
 
 proc newNifModule(infile: string): NifModule =
   result = NifModule(stream: nifstreams.open(infile))
@@ -406,19 +407,24 @@ proc traverseTypeDecl(e: var EContext; c: var Cursor) =
   discard setOwner(e, oldOwner)
 
 proc traverseExpr(e: var EContext; c: var Cursor) =
-  var nested = 0
   while true:
     case c.kind
     of EofToken: break
     of ParLe:
       e.dest.add c
-      inc nested
+      inc e.nested
     of ParRi:
-      if nested == 0:
-        # it may be a ')' from the top level 'stmts'
-        break
-      e.dest.add c
-      dec nested
+      if e.nested <= 0:
+        inc c
+        if c.kind == EofToken:
+          unsafeDec(c)
+          break
+        else:
+          unsafeDec(c)
+          error e, "unmached ')': ", c
+      else:
+        e.dest.add c
+        dec e.nested
     of SymbolDef:
       e.dest.add c
       e.offer c.symId
@@ -467,7 +473,7 @@ proc traverseLocal(e: var EContext; c: var Cursor; tag: string; mode: TraverseMo
     traverseExpr e, c
   else:
     skip c
-  wantParRi e, c
+  # wantParRi e, c
   if Nodecl in prag.flags:
     e.dest.shrink toPatch
   if prag.header != StrId(0):
@@ -576,9 +582,13 @@ proc traverseStmt(e: var EContext; c: var Cursor; mode = TraverseAll) =
         e.loop c:
           traverseStmt e, c, mode
     of VarS, LetS, CursorS:
+      inc e.nested
       traverseLocal e, c, (if e.nestedIn[^1][0] == StmtsS: "gvar" else: "var"), mode
+      dec e.nested
     of ConstS:
+      inc e.nested
       traverseLocal e, c, "const", mode
+      dec e.nested
     of EmitS, AsgnS, RetS:
       e.dest.add c
       inc c
