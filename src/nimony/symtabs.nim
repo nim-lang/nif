@@ -11,7 +11,7 @@ import nimony_model
 type
   Sym* = object
     name*: SymId
-    kind*: StmtKind
+    kind*: SymKind
     pos*: int32
 
   ScopeKind* = enum

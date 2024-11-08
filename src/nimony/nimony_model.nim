@@ -55,6 +55,7 @@ type
     MacroY = "macro"
     TemplateY = "template"
     TypeY = "type"
+    LabelY = "block"
 
   ExprKind* = enum
     NoExpr
@@ -76,6 +77,8 @@ type
     SizeofX = "sizeof"
     OconstrX = "oconstr"
     AconstrX = "aconstr"
+    OchoiceX = "ochoice"
+    CchoiceX = "cchoice"
     KvX = "kv"
     AddX = "add"
     SubX = "sub"
@@ -228,6 +231,12 @@ proc exprKind*(c: Cursor): ExprKind {.inline.} =
 declareMatcher parseSymKind, SymKind
 
 proc symKind*(c: Cursor): SymKind {.inline.} =
+  if c.kind == ParLe:
+    result = parseSymKind pool.tags[tag(c)]
+  else:
+    result = NoSym
+
+proc symKind*(c: PackedToken): SymKind {.inline.} =
   if c.kind == ParLe:
     result = parseSymKind pool.tags[tag(c)]
   else:

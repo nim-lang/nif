@@ -16,11 +16,11 @@ type
 
   Program* = object
     mods: Table[string, NifModule]
-    dir, main, ext: string
+    dir, main*, ext: string
     mem: seq[seq[PackedToken]]
 
 var
-  prog: Program
+  prog*: Program
 
 proc newNifModule(infile: string): NifModule =
   result = NifModule(stream: nifstreams.open(infile))
