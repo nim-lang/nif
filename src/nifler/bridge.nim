@@ -29,12 +29,12 @@ proc nodeKindTranslation(k: TNodeKind): string =
   of nkExprEqExpr: "vv"
   of nkExprColonExpr: "kv"
   of nkPar: "par"
-  of nkObjConstr: "objConstr"
-  of nkCurly: "curlyConstr"
-  of nkCurlyExpr: "curlyExpr"
-  of nkBracket: "bracketConstr"
+  of nkObjConstr: "obj"
+  of nkCurly: "set"
+  of nkCurlyExpr: "curlyx"
+  of nkBracket: "arr"
   of nkBracketExpr: "at"
-  of nkPragmaBlock, nkPragmaExpr: "pragmaExpr"
+  of nkPragmaBlock, nkPragmaExpr: "pragmax"
   of nkDotExpr: "dot"
   of nkAsgn, nkFastAsgn: "asgn"
   of nkIfExpr, nkIfStmt: "if"
@@ -43,7 +43,7 @@ proc nodeKindTranslation(k: TNodeKind): string =
   of nkCaseStmt, nkRecCase: "case"
   of nkForStmt: "for"
   of nkDiscardStmt: "discard"
-  of nkBreakStmt: "brk"
+  of nkBreakStmt: "break"
   of nkReturnStmt: "ret"
   of nkElifExpr, nkElifBranch: "elif"
   of nkElseExpr, nkElse: "else"
@@ -51,7 +51,7 @@ proc nodeKindTranslation(k: TNodeKind): string =
   of nkCast: "cast"
   of nkLambda: "proc"
   of nkAccQuoted: "quoted"
-  of nkTableConstr: "tableConstr"
+  of nkTableConstr: "tab"
   of nkStmtListType, nkStmtListExpr, nkStmtList, nkRecList, nkArgList: "stmts"
   of nkBlockStmt, nkBlockExpr, nkBlockType: "block"
   of nkStaticStmt: "static"
@@ -60,7 +60,7 @@ proc nodeKindTranslation(k: TNodeKind): string =
   of nkAddr: "addr"
   of nkGenericParams: "typevars"
   of nkFormalParams: "params"
-  of nkImportAs: "importAs"
+  of nkImportAs: "importas"
   of nkRaiseStmt: "raise"
   of nkContinueStmt: "continue"
   of nkYieldStmt: "yld"
@@ -76,10 +76,10 @@ proc nodeKindTranslation(k: TNodeKind): string =
   of nkFinally: "fin"
   of nkTryStmt: "try"
   of nkImportStmt: "import"
-  of nkImportExceptStmt: "importExcept"
+  of nkImportExceptStmt: "importexcept"
   of nkIncludeStmt: "include"
   of nkExportStmt: "export"
-  of nkExportExceptStmt: "exportExcept"
+  of nkExportExceptStmt: "exportexcept"
   of nkFromStmt: "from"
   of nkPragma: "pragmas"
   of nkAsmStmt: "asm"
@@ -97,7 +97,7 @@ proc nodeKindTranslation(k: TNodeKind): string =
   of nkIteratorTy: "iterTy"
   of nkEnumTy: "enum"
   #of nkEnumFieldDef: EnumFieldDecl
-  of nkTupleConstr: "tupleConstr"
+  of nkTupleConstr: "tup"
   of nkOutTy: "outTy"
   else: "<error>"
 
@@ -334,7 +334,7 @@ proc toNif*(n, parent: PNode; c: var TranslationContext) =
   of nkOfBranch:
     relLineInfo(n, parent, c)
     c.b.addTree("of")
-    c.b.addTree("curlyConstr")
+    c.b.addTree("set")
     for i in 0..<n.len-1:
       toNif(n[i], n, c)
     c.b.endTree()
@@ -416,7 +416,7 @@ proc toNif*(n, parent: PNode; c: var TranslationContext) =
 
       relLineInfo(it, n, c)
 
-      c.b.addTree("enumFieldDecl")
+      c.b.addTree("efld")
       relLineInfo(it, n, c)
 
       toNif name, it, c
@@ -462,10 +462,10 @@ proc toNif*(n, parent: PNode; c: var TranslationContext) =
   of nkVarTuple:
     relLineInfo(n, parent, c)
     assert n[n.len-2].kind == nkEmpty
-    c.b.addTree("unpackDecl")
+    c.b.addTree("unpackdecl")
     toNif(n[n.len-1], n, c)
 
-    c.b.addTree("unpacktuple")
+    c.b.addTree("unpacktup")
     for i in 0..<n.len-2:
       c.b.addTree(c.section)
       toNif(n[i], n, c) # name
@@ -486,7 +486,7 @@ proc toNif*(n, parent: PNode; c: var TranslationContext) =
 
     if n[0].kind == nkVarTuple:
       let v = n[0]
-      c.b.addTree("unpacktuple")
+      c.b.addTree("unpacktup")
       for i in 0..<v.len:
         c.b.addTree("let")
 

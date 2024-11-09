@@ -8,9 +8,9 @@
 ## Most important task is to turn identifiers into symbols and to perform
 ## type checking.
 
-import std / [tables, os, syncio]
+import std / [tables, os, syncio, formatfloat, assertions]
 include nifprelude
-import nimony_model, symtabs, builtintypes, decls,
+import nimony_model, symtabs, builtintypes, decls, symparser,
   programs, sigmatch
 
 type
@@ -51,6 +51,61 @@ type
     thisModuleSuffix: string
 
 # -------------- symbol lookups -------------------------------------
+
+proc unquote(c: var Cursor): StrId =
+  var r = ""
+  while true:
+    case c.kind
+    of ParRi:
+      inc c
+      break
+    of EofToken:
+      r.add "<unexpected eof>"
+      break
+    of Ident, StringLit:
+      r.add pool.strings[c.litId]
+      inc c
+    of IntLit:
+      r.addInt pool.integers[c.intId]
+      inc c
+    of CharLit:
+      let ch = char(c.uoperand)
+      r.add ch
+      inc c
+    of UIntLit:
+      r.add $pool.uintegers[c.uintId]
+      inc c
+    of FloatLit:
+      r.addFloat pool.floats[c.floatId]
+      inc c
+    else:
+      r.add "<unexpected token>: " & $c.kind
+      inc c
+  assert r.len > 0
+  result = getOrIncl(pool.strings, r)
+
+proc getIdent(e: var SemContext; c: var Cursor): StrId =
+  var nested = 0
+  while exprKind(c) in {OchoiceX, CchoiceX}:
+    inc nested
+    inc c
+  case c.kind
+  of Ident:
+    result = c.litId
+  of Symbol, SymbolDef:
+    let sym = pool.syms[c.symId]
+    var isGlobal = false
+    result = pool.strings.getOrIncl(extractBasename(sym, isGlobal))
+  of ParLe:
+    if exprKind(c) == QuotedX:
+      result = unquote(c)
+    else:
+      result = StrId(0)
+  else:
+    result = StrId(0)
+  while nested > 0:
+    if c.kind == ParRi: dec nested
+    inc c
 
 template buildTree*(dest: var TokenBuf; kind: StmtKind|ExprKind|TypeKind;
                     info: PackedLineInfo; body: untyped) =
@@ -396,7 +451,8 @@ proc semExpr(e: var SemContext; it: var Item) =
     of AconstrX, AtX, DerefX, DotX, PatX, AddrX, NilX, NegX, SizeofX, OconstrX, KvX,
        AddX, SubX, MulX, DivX, ModX, ShrX, ShlX, BitandX, BitorX, BitxorX, BitnotX,
        EqX, NeqX, LeX, LtX, CastX, ConvX, SufX, RangeX, RangesX,
-       HderefX, HaddrX, OconvX, HconvX, OchoiceX, CchoiceX:
+       HderefX, HaddrX, OconvX, HconvX, OchoiceX, CchoiceX,
+       TupleConstrX, SetX, QuotedX:
       takeToken e, it.n
       wantParRi e, it.n
 

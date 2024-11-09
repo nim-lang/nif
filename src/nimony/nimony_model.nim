@@ -59,6 +59,7 @@ type
 
   ExprKind* = enum
     NoExpr
+    QuotedX = "quoted"
     AtX = "at"
     DerefX = "deref"
     HderefX = "hderef"
@@ -75,8 +76,10 @@ type
     NotX = "not"
     NegX = "neg"
     SizeofX = "sizeof"
-    OconstrX = "oconstr"
-    AconstrX = "aconstr"
+    OconstrX = "obj"
+    TupleConstrX = "tup"
+    AconstrX = "arr"
+    SetX = "set"
     OchoiceX = "ochoice"
     CchoiceX = "cchoice"
     KvX = "kv"
@@ -139,7 +142,7 @@ type
     InvokeT = "invok"
     ArrayT = "array"
     UncheckedArrayT = "uarray"
-    SetT = "set"
+    SetT = "sett"
     AutoT = "auto"
     SymKindT = "symkind"
 
