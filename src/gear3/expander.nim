@@ -382,14 +382,12 @@ proc traverseTypeDecl(e: var EContext; c: var Cursor) =
   inc c
   expectSymdef(e, c)
   let s = c.symId
-  let sinfo = c.info
   let oldOwner = setOwner(e, s)
   inc c
   skipExportMarker e, c
   let isGeneric = c.kind != DotToken
   skip c # generic parameters
 
-  let pinfo = c.info
   let prag = parsePragmas(e, c)
   traverseType e, c, {IsTypeBody}
   wantParRi e, c

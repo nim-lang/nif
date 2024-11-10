@@ -109,6 +109,12 @@ type
     SufX = "suf"
     RangeX = "range"
     RangesX = "ranges"
+    CompilesX = "compiles"
+    DeclaredX = "declared"
+    DefinedX = "defined"
+    HighX = "high"
+    LowX = "low"
+    TypeofX = "typeof"
 
   TypeKind* = enum
     NoType
@@ -234,12 +240,6 @@ proc exprKind*(c: Cursor): ExprKind {.inline.} =
 declareMatcher parseSymKind, SymKind
 
 proc symKind*(c: Cursor): SymKind {.inline.} =
-  if c.kind == ParLe:
-    result = parseSymKind pool.tags[tag(c)]
-  else:
-    result = NoSym
-
-proc symKind*(c: PackedToken): SymKind {.inline.} =
   if c.kind == ParLe:
     result = parseSymKind pool.tags[tag(c)]
   else:

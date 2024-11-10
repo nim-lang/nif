@@ -259,12 +259,10 @@ proc identToSym(c: var SemContext; lit: StrId): SymId =
     c.makeLocalSym(name)
   result = pool.syms.getOrIncl(name)
 
-proc declareSym(c: var SemContext; it: var Item): SymStatus =
+proc declareSym(c: var SemContext; it: var Item; kind: SymKind): SymStatus =
   let info = it.n.info
   if it.n.kind == Ident:
     let lit = it.n.litId
-    let kind = c.dest[c.dest.len-1].symKind
-
     let s = Sym(name: identToSym(c, lit),
                 kind: kind, pos: 0'i32)
     if addNonOverloadable(c.currentScope, lit, s) == Conflict:
@@ -281,12 +279,10 @@ proc declareSym(c: var SemContext; it: var Item): SymStatus =
     c.buildErr info, "identifier expected"
     result = ErrNoIdent
 
-proc declareOverloadableSym(c: var SemContext; it: var Item): SymStatus =
+proc declareOverloadableSym(c: var SemContext; it: var Item; kind: SymKind): SymStatus =
   let info = it.n.info
   if it.n.kind == Ident:
     let lit = it.n.litId
-    let kind = c.dest[c.dest.len-1].symKind
-
     let s = Sym(name: identToSym(c, lit),
                 kind: kind, pos: 0'i32)
     addOverloadable(c.currentScope, lit, s)
@@ -301,11 +297,10 @@ proc declareOverloadableSym(c: var SemContext; it: var Item): SymStatus =
 proc success(s: SymStatus): bool {.inline.} = s in {OkNew, OkExisting}
 proc success(s: DelayedSym): bool {.inline.} = success s.status
 
-proc handleSymDef(c: var SemContext; it: var Item): DelayedSym =
+proc handleSymDef(c: var SemContext; it: var Item; kind: SymKind): DelayedSym =
   let info = it.n.info
   if it.n.kind == Ident:
     let lit = it.n.litId
-    let kind = c.dest[c.dest.len-1].symKind
     let def = identToSym(c, lit)
     let s = Sym(name: def,
                 kind: kind, pos: 0'i32)
@@ -421,7 +416,13 @@ proc semExpr(e: var SemContext; it: var Item) =
   of ParLe:
     case exprKind(it.n)
     of NoExpr:
-      buildErr e, it.n.info, "expression expected"
+      case stmtKind(it.n)
+      of NoStmt:
+        buildErr e, it.n.info, "expression expected"
+      of StmtsS, VarS, LetS, CursorS, ResultS, ConstS,
+         EmitS, AsgnS, BlockS, IfS, BreakS, WhileS, ForS, CaseS, RetS, YieldS,
+         ProcS, FuncS, IterS, ConverterS, MethodS, MacroS, TemplateS, TypeS:
+        discard
     of FalseX, TrueX:
       if typeKind(it.typ) == AutoT:
         it.typ = e.types.boolType
@@ -452,7 +453,8 @@ proc semExpr(e: var SemContext; it: var Item) =
        AddX, SubX, MulX, DivX, ModX, ShrX, ShlX, BitandX, BitorX, BitxorX, BitnotX,
        EqX, NeqX, LeX, LtX, CastX, ConvX, SufX, RangeX, RangesX,
        HderefX, HaddrX, OconvX, HconvX, OchoiceX, CchoiceX,
-       TupleConstrX, SetX, QuotedX:
+       TupleConstrX, SetX, QuotedX,
+       CompilesX, DeclaredX, DefinedX, HighX, LowX, TypeofX:
       takeToken e, it.n
       wantParRi e, it.n
 

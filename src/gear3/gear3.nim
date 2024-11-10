@@ -50,7 +50,7 @@ Options:
 proc writeHelp() = quit(Usage, QuitSuccess)
 proc writeVersion() = quit(Version & "\n", QuitSuccess)
 
-proc handleCmdLine() =
+proc handleCmdLine*() =
   var files: seq[string] = @[]
   for kind, key, val in getopt():
     case kind
