@@ -261,13 +261,13 @@ proc toNif*(n, parent: PNode; c: var TranslationContext) =
 
   of nkFormalParams:
     c.section = "param"
-    # put return type outside of `(params)`:
-    toNif(n[0], n, c)
     relLineInfo(n, parent, c)
     c.b.addTree("params")
     for i in 1..<n.len:
       toNif(n[i], n, c)
     c.b.endTree()
+    # put return type outside of `(params)`:
+    toNif(n[0], n, c)
   of nkGenericParams:
     c.section = "typevar"
     relLineInfo(n, parent, c)

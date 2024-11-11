@@ -42,6 +42,7 @@ type
     currentScope: Scope
     includeStack: seq[string]
     importedModules: seq[ImportedModule]
+    instantiatedFrom: seq[PackedLineInfo]
     iface: Iface
     inBlock, inLoop, inType, inCallFn: int
     inGeneric: bool
@@ -223,8 +224,13 @@ proc openScope(s: var SemContext) =
 proc closeScope(s: var SemContext) =
   s.currentScope = s.currentScope.up
 
+proc pushErrorContext(c: var SemContext; info: PackedLineInfo) = c.instantiatedFrom.add info
+proc popErrorContext(c: var SemContext) = discard c.instantiatedFrom.pop
+
 proc buildErr*(c: var SemContext; info: PackedLineInfo; msg: string) =
   c.dest.buildTree ErrT, info:
+    for instFrom in items(c.instantiatedFrom):
+      c.dest.add toToken(UnknownToken, 0'u32, instFrom)
     c.dest.add toToken(StringLit, pool.strings.getOrIncl(msg), info)
 
 proc makeGlobalSym*(c: var SemContext; result: var string) =
@@ -279,49 +285,63 @@ proc declareSym(c: var SemContext; it: var Item; kind: SymKind): SymStatus =
     c.buildErr info, "identifier expected"
     result = ErrNoIdent
 
-proc declareOverloadableSym(c: var SemContext; it: var Item; kind: SymKind): SymStatus =
+proc declareOverloadableSym(c: var SemContext; it: var Item; kind: SymKind) =
   let info = it.n.info
   if it.n.kind == Ident:
     let lit = it.n.litId
     let s = Sym(name: identToSym(c, lit),
                 kind: kind, pos: 0'i32)
     addOverloadable(c.currentScope, lit, s)
-    result = Oknew
+    c.dest.add toToken(SymbolDef, s.name, info)
     inc it.n
   elif it.n.kind == SymbolDef:
-    result = OkExisting
+    c.dest.add it.n
+    inc it.n
   else:
-    c.buildErr info, "identifier expected"
-    result = ErrNoIdent
+    let lit = getIdent(c, it.n)
+    if lit == StrId(0):
+      c.buildErr info, "identifier expected"
+    else:
+      let s = Sym(name: identToSym(c, lit),
+                  kind: kind, pos: 0'i32)
+      addOverloadable(c.currentScope, lit, s)
+      c.dest.add toToken(SymbolDef, s.name, info)
+      inc it.n
 
 proc success(s: SymStatus): bool {.inline.} = s in {OkNew, OkExisting}
 proc success(s: DelayedSym): bool {.inline.} = success s.status
 
-proc handleSymDef(c: var SemContext; it: var Item; kind: SymKind): DelayedSym =
-  let info = it.n.info
-  if it.n.kind == Ident:
-    let lit = it.n.litId
-    let def = identToSym(c, lit)
+proc handleSymDef(e: var SemContext; c: var Cursor; kind: SymKind): DelayedSym =
+  let info = c.info
+  if c.kind == Ident:
+    let lit = c.litId
+    let def = identToSym(e, lit)
     let s = Sym(name: def,
                 kind: kind, pos: 0'i32)
     result = DelayedSym(status: OkNew, lit: lit, s: s, info: info)
-    c.dest.add toToken(SymbolDef, def, info)
-    inc it.n
-  elif it.n.kind == SymbolDef:
+    e.dest.add toToken(SymbolDef, def, info)
+    inc c
+  elif c.kind == SymbolDef:
     discard "ok, and no need to re-add it to the symbol table"
     result = DelayedSym(status: OkExisting, info: info)
-    c.dest.add it.n
-    inc it.n
+    e.dest.add c
+    inc c
   else:
-    c.buildErr info, "identifier expected"
-    result = DelayedSym(status: ErrNoIdent, info: info)
+    let lit = getIdent(e, c)
+    if lit == StrId(0):
+      e.buildErr info, "identifier expected"
+      result = DelayedSym(status: ErrNoIdent, info: info)
+    else:
+      let def = identToSym(e, lit)
+      let s = Sym(name: def,
+                  kind: kind, pos: 0'i32)
+      result = DelayedSym(status: OkNew, lit: lit, s: s, info: info)
+      e.dest.add toToken(SymbolDef, def, info)
 
 proc addSym(c: var SemContext; s: DelayedSym) =
   if s.status == OkNew:
     if addNonOverloadable(c.currentScope, s.lit, s.s) == Conflict:
       c.buildErr s.info, "attempt to redeclare: " & pool.strings[s.lit]
-    else:
-      c.dest.add toToken(SymbolDef, s.lit, s.info)
 
 # -------------------------------------------------------------------------------------------------
 
@@ -345,6 +365,13 @@ proc takeToken(e: var SemContext; c: var Cursor) {.inline.} =
   e.dest.add c
   inc c
 
+proc wantDot(e: var SemContext; c: var Cursor) =
+  if c.kind == DotToken:
+    e.dest.add c
+    inc c
+  else:
+    buildErr e, c.info, "expected '.'"
+
 proc semExpr(e: var SemContext; it: var Item)
 
 proc classifyType(e: var SemContext; c: Cursor): TypeKind =
@@ -352,8 +379,19 @@ proc classifyType(e: var SemContext; c: Cursor): TypeKind =
 
 proc semBoolExpr(e: var SemContext; it: var Item) =
   semExpr e, it
-  if typeKind(it.typ) != BoolT:
+  if classifyType(e, it.typ) != BoolT:
     buildErr e, it.n.info, "expected `bool` but got: " & typeToString(e, it.typ)
+
+proc semProcBody(e: var SemContext; itB: var Item) =
+  #let beforeBodyPos = e.dest.len
+  var it = Item(n: itB.n, typ: e.types.autoType)
+  semExpr e, it
+  if classifyType(e, it.typ) == VoidT:
+    discard "ok"
+  else:
+    # XXX
+    buildErr e, itB.n.info, "proc body as expression not implemented"
+  itB.n = it.n
 
 proc semStmt(e: var SemContext; c: var Cursor) =
   var it = Item(n: c, typ: e.types.autoType)
@@ -388,28 +426,198 @@ proc semCall(e: var SemContext; it: var Item) =
   e.dest.add m.args
   wantParRi e, it.n
 
+proc combineType(dest: var Cursor; src: Cursor) =
+  if typeKind(dest) == AutoT:
+    dest = src
+
+proc semWhile(e: var SemContext; it: var Item) =
+  e.dest.add it.n
+  inc it.n
+  semBoolExpr e, it
+  inc e.routine.inLoop
+  semStmt e, it.n
+  dec e.routine.inLoop
+  wantParRi e, it.n
+  combineType it.typ, e.types.voidType
+
+proc semBreak(e: var SemContext; it: var Item) =
+  takeToken e, it.n
+  if e.routine.inLoop+e.routine.inBlock == 0:
+    buildErr e, it.n.info, "`break` only possible within a `while` or `block` statement"
+  else:
+    wantDot e, it.n
+  wantParRi e, it.n
+  combineType it.typ, e.types.voidType
+
+proc wantExportMarker(e: var SemContext; c: var Cursor) =
+  if c.kind == DotToken:
+    e.dest.add c
+    inc c
+  elif c.kind == Ident and pool.strings[c.litId] == "x":
+    if e.currentScope.kind != ToplevelScope:
+      buildErr e, c.info, "only toplevel declarations can be exported"
+    else:
+      e.dest.add c
+    inc c
+  else:
+    buildErr e, c.info, "expected '.' or 'x' for an export marker"
+
+proc patchType(e: var SemContext; typ: TypeCursor; patchPosition: int) =
+  discard "XXX to implement"
+
+proc semPragma(e: var SemContext; c: var Cursor; kind: SymKind) =
+  discard "XXX to implement"
+
+proc semPragmas(e: var SemContext; c: var Cursor; kind: SymKind) =
+  if c.kind == DotToken:
+    e.dest.add c
+    inc c
+  elif c.kind == ParLe and pool.tags[c.tagId] == "pragmas":
+    e.dest.add c
+    inc c
+    while c.kind != ParRi:
+      semPragma e, c, kind
+    wantParRi e, c
+  else:
+    buildErr e, c.info, "expected '.' or 'pragmas'"
+
+proc semLocalType(e: var SemContext; c: var Cursor): TypeCursor =
+  discard "XXX to implement"
+  result = c
+
+proc semReturnType(e: var SemContext; c: var Cursor): TypeCursor =
+  result = semLocalType(e, c)
+
+proc semLocal(e: var SemContext; c: var Cursor; kind: SymKind) =
+  e.dest.add c
+  inc c
+  let delayed = handleSymDef(e, c, kind) # 0
+  wantExportMarker e, c # 1
+  semPragmas e, c, kind # 2
+  case kind
+  of TypevarY:
+    discard semLocalType(e, c)
+    wantDot e, c
+  of ParamY, LetY, VarY, CursorY, ResultY:
+    let beforeType = e.dest.len
+    if c.kind == DotToken:
+      # no explicit type given:
+      inc c # 3
+      var it = Item(n: c, typ: e.types.autoType)
+      semExpr e, it # 4
+      c = it.n
+      patchType e, it.typ, beforeType
+    else:
+      let typ = semLocalType(e, c) # 3
+      if c.kind == DotToken:
+        # empty value
+        takeToken e, c
+      else:
+        var it = Item(n: c, typ: typ)
+        semExpr e, it # 4
+        c = it.n
+        patchType e, it.typ, beforeType
+  else:
+    assert false, "bug"
+  e.addSym delayed
+  wantParRi e, c
+
+proc semLocal(e: var SemContext; it: var Item; kind: SymKind) =
+  semLocal e, it.n, kind
+  combineType it.typ, e.types.voidType
+
+proc semGenericParam(e: var SemContext; c: var Cursor) =
+  if c.kind == ParLe and pool.tags[c.tagId] == "typevar":
+    semLocal e, c, TypevarY
+  else:
+    buildErr e, c.info, "expected 'typevar'"
+
+proc semGenericParams(e: var SemContext; c: var Cursor) =
+  if c.kind == DotToken:
+    e.dest.add c
+    inc c
+  elif c.kind == ParLe and pool.tags[c.tagId] == "typevars":
+    inc e.routine.inGeneric
+    e.dest.add c
+    inc c
+    while c.kind != ParRi:
+      semGenericParam e, c
+    wantParRi e, c
+  else:
+    buildErr e, c.info, "expected '.' or 'typevars'"
+
+proc semParam(e: var SemContext; c: var Cursor) =
+  if c.kind == ParLe and pool.tags[c.tagId] == "param":
+    semLocal e, c, ParamY
+  else:
+    buildErr e, c.info, "expected 'param'"
+
+proc semParams(e: var SemContext; c: var Cursor) =
+  if c.kind == DotToken:
+    e.dest.add c
+    inc c
+  elif c.kind == ParLe and pool.tags[c.tagId] == "params":
+    inc e.routine.inGeneric
+    e.dest.add c
+    inc c
+    while c.kind != ParRi:
+      semParam e, c
+    wantParRi e, c
+  else:
+    buildErr e, c.info, "expected '.' or 'params'"
+
+proc semProc(e: var SemContext; it: var Item; kind: SymKind) =
+  declareOverloadableSym e, it, kind
+  wantExportMarker e, it.n
+  if it.n.kind == DotToken:
+    e.dest.add it.n
+    inc it.n
+  else:
+    buildErr e, it.n.info, "TR pattern not implemented"
+    skip it.n
+  e.routine = createSemRoutine(kind, e.routine)
+  try:
+    e.openScope() # open parameter scope
+    semGenericParams e, it.n
+    semParams e, it.n
+    e.routine.returnType = semReturnType(e, it.n)
+    if it.n.kind == DotToken:
+      e.dest.add it.n
+      inc it.n
+    else:
+      buildErr e, it.n.info, "`effects` must be empyt"
+      skip it.n
+    semPragmas e, it.n, kind
+    e.openScope() # open body scope
+    semProcBody e, it
+    e.closeScope() # close body scope
+    e.closeScope() # close parameter scope
+  finally:
+    e.routine = e.routine.parent
+
+proc semStmts(e: var SemContext; it: var Item) =
+  takeToken e, it.n
+  while it.n.kind != ParRi:
+    semStmt e, it.n
+  wantParRi e, it.n
+  combineType it.typ, e.types.voidType
 
 proc semExpr(e: var SemContext; it: var Item) =
   case it.n.kind
   of IntLit:
-    if typeKind(it.typ) == AutoT:
-      it.typ = e.types.intType
+    combineType it.typ, e.types.intType
     takeToken e, it.n
   of UIntLit:
-    if typeKind(it.typ) == AutoT:
-      it.typ = e.types.uintType
+    combineType it.typ, e.types.uintType
     takeToken e, it.n
   of FloatLit:
-    if typeKind(it.typ) == AutoT:
-      it.typ = e.types.floatType
+    combineType it.typ, e.types.floatType
     takeToken e, it.n
   of StringLit:
-    if typeKind(it.typ) == AutoT:
-      it.typ = e.types.stringType
+    combineType it.typ, e.types.stringType
     takeToken e, it.n
   of CharLit:
-    if typeKind(it.typ) == AutoT:
-      it.typ = e.types.charType
+    combineType it.typ, e.types.charType
     takeToken e, it.n
   of Symbol, Ident:
     buildErr e, it.n.info, "not implemented"
@@ -419,18 +627,35 @@ proc semExpr(e: var SemContext; it: var Item) =
       case stmtKind(it.n)
       of NoStmt:
         buildErr e, it.n.info, "expression expected"
-      of StmtsS, VarS, LetS, CursorS, ResultS, ConstS,
-         EmitS, AsgnS, BlockS, IfS, BreakS, WhileS, ForS, CaseS, RetS, YieldS,
-         ProcS, FuncS, IterS, ConverterS, MethodS, MacroS, TemplateS, TypeS:
+      of ProcS:
+        semProc e, it, ProcY
+      of FuncS:
+        semProc e, it, FuncY
+      of IterS:
+        semProc e, it, IterY
+      of ConverterS:
+        semProc e, it, ConverterY
+      of MethodS:
+        semProc e, it, MethodY
+      of MacroS:
+        semProc e, it, MacroY
+      of WhileS: semWhile e, it
+      of VarS: semLocal e, it, VarY
+      of LetS: semLocal e, it, LetY
+      of CursorS: semLocal e, it, CursorY
+      of ResultS: semLocal e, it, ResultY
+      of ConstS: semLocal e, it, ConstY
+      of StmtsS: semStmts e, it
+      of BreakS: semBreak e, it
+      of EmitS, AsgnS, BlockS, IfS, ForS, CaseS, RetS, YieldS,
+         TemplateS, TypeS:
         discard
     of FalseX, TrueX:
-      if typeKind(it.typ) == AutoT:
-        it.typ = e.types.boolType
+      combineType it.typ, e.types.boolType
       takeToken e, it.n
       wantParRi e, it.n
     of InfX, NegInfX, NanX:
-      if typeKind(it.typ) == AutoT:
-        it.typ = e.types.floatType
+      combineType it.typ, e.types.floatType
       takeToken e, it.n
       wantParRi e, it.n
     of AndX, OrX:
@@ -488,4 +713,3 @@ proc semcheck*(infile, outfile: string) =
         importSymbol(e, imp)
       inc i
   writeOutput e, outfile
-

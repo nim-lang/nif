@@ -219,7 +219,6 @@ proc traverseType(e: var EContext; c: var Cursor; flags: set[TypeFlag] = {}) =
     error e, "type expected but got: ", c
 
 proc traverseParams(e: var EContext; c: var Cursor) =
-  traverseType e, c
   if c.kind == DotToken:
     e.dest.add c
     inc c
@@ -230,6 +229,7 @@ proc traverseParams(e: var EContext; c: var Cursor) =
       if c.substructureKind != ParamS:
         error e, "expected (param) but got: ", c
       traverseLocal(e, c, "param", TraverseSig)
+  traverseType e, c
 
 type
   CollectedPragmas = object
