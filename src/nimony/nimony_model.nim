@@ -1,11 +1,8 @@
+#       Nimony
+# (c) Copyright 2024 Andreas Rumpf
 #
-#
-#           Gear3 Compiler
-#        (c) Copyright 2024 Andreas Rumpf
-#
-#    See the file "copying.txt", included in this
-#    distribution, for details about the copyright.
-#
+# See the file "license.txt", included in this
+# distribution, for details about the copyright.
 
 import std / assertions
 include nifprelude
@@ -18,6 +15,7 @@ type
     VarS = "var"
     LetS = "let"
     CursorS = "cursor"
+    ResultS = "result"
     ConstS = "const"
     EmitS = "emit"
     AsgnS = "asgn"
@@ -25,6 +23,7 @@ type
     IfS = "if"
     BreakS = "break"
     WhileS = "while"
+    ForS = "for"
     CaseS = "case"
     RetS = "ret"
     YieldS = "yld"
@@ -37,14 +36,37 @@ type
     TemplateS = "template"
     TypeS = "type"
 
+  SymKind* = enum
+    NoSym
+    VarY = "var"
+    LetY = "let"
+    CursorY = "cursor"
+    ResultY = "result"
+    ConstY = "const"
+    ParamY = "param"
+    TypevarY = "typevar"
+    EfldY = "efld"
+    FldY = "fld"
+    ProcY = "proc"
+    FuncY = "func"
+    IterY = "iter"
+    ConverterY = "converter"
+    MethodY = "method"
+    MacroY = "macro"
+    TemplateY = "template"
+    TypeY = "type"
+    LabelY = "block"
+
   ExprKind* = enum
     NoExpr
     AtX = "at"
     DerefX = "deref"
+    HderefX = "hderef"
     DotX = "dot"
     PatX = "pat"
     ParX = "par"
     AddrX = "addr"
+    HaddrX = "haddr"
     NilX = "nil"
     FalseX = "false"
     TrueX = "true"
@@ -55,6 +77,8 @@ type
     SizeofX = "sizeof"
     OconstrX = "oconstr"
     AconstrX = "aconstr"
+    OchoiceX = "ochoice"
+    CchoiceX = "cchoice"
     KvX = "kv"
     AddX = "add"
     SubX = "sub"
@@ -73,6 +97,8 @@ type
     LtX = "lt"
     CastX = "cast"
     ConvX = "conv"
+    OconvX = "oconv" # object conversion
+    HconvX = "hconv" # hidden basic type conversion
     CallX = "call"
     InfX = "inf"
     NegInfX = "neginf"
@@ -101,7 +127,7 @@ type
     #FlexarrayT = "flexarray"
     StringT = "string"
     VarargsT = "varargs"
-    NilT = "nil"
+    NilT = "nilt"
     OrT = "or"
     AndT = "and"
     NotT = "not"
@@ -140,6 +166,7 @@ type
     FldS = "fld"
     EfldS = "efld"
     AtomicS = "atomic"
+    TypevarsS = "typevars"
     RoS = "ro"
     RestrictS = "restrict"
     PragmasS = "pragmas"
@@ -192,3 +219,25 @@ proc callConvKind*(c: Cursor): CallConv {.inline.} =
     result = parseCallConvKind pool.tags[tag(c)]
   else:
     result = NoCallConv
+
+declareMatcher parseExprKind, ExprKind
+
+proc exprKind*(c: Cursor): ExprKind {.inline.} =
+  if c.kind == ParLe:
+    result = parseExprKind pool.tags[tag(c)]
+  else:
+    result = NoExpr
+
+declareMatcher parseSymKind, SymKind
+
+proc symKind*(c: Cursor): SymKind {.inline.} =
+  if c.kind == ParLe:
+    result = parseSymKind pool.tags[tag(c)]
+  else:
+    result = NoSym
+
+proc symKind*(c: PackedToken): SymKind {.inline.} =
+  if c.kind == ParLe:
+    result = parseSymKind pool.tags[tag(c)]
+  else:
+    result = NoSym

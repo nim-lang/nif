@@ -11,7 +11,7 @@ import std / [hashes, os, tables, sets, syncio, times]
 
 include nifprelude
 import nifindexes, symparser
-import gear3_model
+import ".." / nimony / nimony_model
 
 type
   NifModule = ref object
@@ -581,7 +581,7 @@ proc traverseStmt(e: var EContext; c: var Cursor; mode = TraverseAll) =
         inc c
         e.loop c:
           traverseStmt e, c, mode
-    of VarS, LetS, CursorS:
+    of VarS, LetS, CursorS, ResultS:
       inc e.nested
       traverseLocal e, c, (if e.nestedIn[^1][0] == StmtsS: "gvar" else: "var"), mode
       dec e.nested
@@ -600,7 +600,7 @@ proc traverseStmt(e: var EContext; c: var Cursor; mode = TraverseAll) =
     of BlockS: traverseBlock e, c
     of IfS: traverseIf e, c
     of CaseS: traverseCase e, c
-    of YieldS, IterS:
+    of YieldS, IterS, ForS:
       error e, "to implement: ", c
     of FuncS, ProcS, ConverterS, MethodS:
       traverseProc e, c, mode
