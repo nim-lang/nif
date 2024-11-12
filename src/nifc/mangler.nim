@@ -9,7 +9,7 @@
 
 ## Name mangling. See nifc-spec.md for details.
 
-from std / strutils import toOctal
+from std / strutils import toOctal, replace, endsWith
 
 proc escape(result: var string; c: char) {.inline.} =
   const HexChars = "0123456789ABCDEF"
@@ -96,7 +96,16 @@ proc makeCString*(s: string): string =
   for c in s: toCChar(c, result)
   result.add('"')
 
+template mangleFileName*(s: string): string =
+  # strip '.c' from filenames
+  if s.endsWith(".c"):
+    s[0..<s.len-2]
+  else:
+    s
+
 when isMainModule:
+  import std/assertions
+
   assert mangle"foo.3.baz" == "foo_3_baz"
   assert mangle"Query?" == "QQueryqmarkQ"
   assert mangle"abc_def_[]=" == "abcQ_defQ_putQ"

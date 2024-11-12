@@ -10,7 +10,7 @@
 ## NIFC driver program.
 
 import std / [parseopt, strutils, os, osproc, tables, assertions, syncio]
-import codegen, noptions
+import codegen, noptions, mangler
 import preasm / genpreasm
 
 when defined(windows):
@@ -58,7 +58,7 @@ proc generateBackend(s: var State; action: Action; files: seq[string]; bits: int
   let destExt = if action == atC: ".c" else: ".cpp"
   for i in 0..<files.len:
     let inp = files[i]
-    let outp = s.config.nifcacheDir / splitFile(inp).name & destExt
+    let outp = s.config.nifcacheDir / splitFile(inp).name.mangleFileName & destExt
     generateCode s, inp, outp, bits
 
 proc handleCmdLine() =
@@ -106,7 +106,7 @@ proc handleCmdLine() =
         of atNative:
           actionTable[atNative].add key
         of atNone:
-          raiseAssert "unreachable"
+          quit "invalid command: " & key
     of cmdLongOption, cmdShortOption:
       case normalize(key)
       of "bits":
@@ -173,7 +173,7 @@ proc handleCmdLine() =
       for x in s.selects:
         write h, "#include \"" & extractFilename(x) & "\"\n"
       h.close()
-    let appName = actionTable[currentAction][^1].splitFile.name
+    let appName = actionTable[currentAction][^1].splitFile.name.mangleFileName
 
     when defined(windows):
       let makefilePath = s.config.nifcacheDir / "Makefile." & appName & ".bat"
