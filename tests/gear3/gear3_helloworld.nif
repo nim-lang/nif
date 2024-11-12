@@ -1,0 +1,23 @@
+(.nif24)
+
+(stmts
+  (var :x . . (i +32) +12)
+  (var :y . . (i +32) +12)
+
+
+ (proc :foo.c . . .
+  (params
+   (param :x . . (i +32) .)) . . .
+  (stmts
+   (var :y . . (i +32) +2)))
+
+  (proc :main.c . . . . (i +32) . .
+    (stmts
+    (var :x.c . . (i +32) +12)
+
+    (asgn x.c +6)
+
+
+    ))
+
+)
