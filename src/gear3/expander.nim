@@ -442,6 +442,14 @@ proc traverseExpr(e: var EContext; c: var Cursor) =
       e.dest.add c
     inc c
 
+proc traverseCall(e: var EContext; c: var Cursor) =
+  e.dest.add c
+  inc c
+  traverseExpr e, c
+  inc c
+  e.loop c:
+    traverseExpr e, c
+
 proc traverseLocal(e: var EContext; c: var Cursor; tag: string; mode: TraverseMode) =
   let toPatch = e.dest.len
   let vinfo = c.info
@@ -592,12 +600,11 @@ proc traverseStmt(e: var EContext; c: var Cursor; mode = TraverseAll) =
       traverseLocal e, c, (if e.nestedIn[^1][0] == StmtsS and mode == TraverseTopLevel: "gvar" else: "var"), mode
     of ConstS:
       traverseLocal e, c, "const", mode
-    of EmitS, AsgnS, RetS:
+    of EmitS, AsgnS, RetS, CallS:
       e.dest.add c
       inc c
       e.loop c:
         traverseExpr e, c
-
     of BreakS: traverseBreak e, c
     of WhileS: traverseWhile e, c
     of BlockS: traverseBlock e, c
