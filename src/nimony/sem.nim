@@ -49,6 +49,7 @@ type
     inGenericStack: seq[bool]
     globals, locals: Table[string, int]
     types: BuiltinTypes
+    typeMem: Table[string, TokenBuf]
     thisModuleSuffix: string
 
 # -------------- symbol lookups -------------------------------------
@@ -209,12 +210,13 @@ proc rawBuildSymChoice(c: var SemContext; identifier: StrId; info: PackedLineInf
     it = it.up
   inc result, considerImportedSymbols(c, identifier, info)
 
-proc buildSymChoice(c: var SemContext; identifier: StrId; info: PackedLineInfo; option: ChoiceOption) =
+proc buildSymChoice(c: var SemContext; identifier: StrId; info: PackedLineInfo;
+                    option: ChoiceOption): int =
   let oldLen = c.dest.len
   c.dest.buildTree OchoiceX, info:
-    let count = rawBuildSymChoice(c, identifier, info, option)
+    result = rawBuildSymChoice(c, identifier, info, option)
   # if the sym choice is empty, create an ident node:
-  if count == 0:
+  if result == 0:
     c.dest.shrink oldLen
     c.dest.add toToken(Ident, identifier, info)
 
@@ -224,6 +226,8 @@ proc openScope(s: var SemContext) =
 proc closeScope(s: var SemContext) =
   s.currentScope = s.currentScope.up
 
+# -------------------------- error handling -------------------------
+
 proc pushErrorContext(c: var SemContext; info: PackedLineInfo) = c.instantiatedFrom.add info
 proc popErrorContext(c: var SemContext) = discard c.instantiatedFrom.pop
 
@@ -232,6 +236,49 @@ proc buildErr*(c: var SemContext; info: PackedLineInfo; msg: string) =
     for instFrom in items(c.instantiatedFrom):
       c.dest.add toToken(UnknownToken, 0'u32, instFrom)
     c.dest.add toToken(StringLit, pool.strings.getOrIncl(msg), info)
+
+# -------------------------- type handling ---------------------------
+
+proc typeToCanon(e: var SemContext; start: int): string =
+  result = ""
+  for i in start..<e.dest.len:
+    case e.dest[i].kind
+    of ParLe:
+      result.add '('
+      result.addInt e.dest[i].tagId.int
+    of ParRi: result.add ')'
+    of Ident, StringLit:
+      result.add ' '
+      result.addInt e.dest[i].litId.int
+    of UnknownToken: result.add " unknown"
+    of EofToken: result.add " eof"
+    of DotToken: result.add '.'
+    of Symbol, SymbolDef:
+      result.add " s"
+      result.addInt e.dest[i].symId.int
+    of CharLit:
+      result.add " c"
+      result.addInt e.dest[i].uoperand.int
+    of IntLit:
+      result.add " i"
+      result.addInt e.dest[i].intId.int
+    of UIntLit:
+      result.add " u"
+      result.addInt e.dest[i].uintId.int
+    of FloatLit:
+      result.add " f"
+      result.addInt e.dest[i].floatId.int
+
+proc typeToCursor(e: var SemContext; start: int): TypeCursor =
+  let key = typeToCanon(e, start)
+  if e.typeMem.hasKey(key):
+    result = cursorAt(e.typeMem[key], 0)
+  else:
+    var buf = createTokenBuf(e.dest.len - start)
+    for i in start..<e.dest.len:
+      buf.add e.dest[i]
+    result = cursorAt(buf, 0)
+    e.typeMem[key] = buf
 
 proc makeGlobalSym*(c: var SemContext; result: var string) =
   var counter = addr c.globals.mgetOrPut(result, -1)
@@ -481,9 +528,52 @@ proc semPragmas(e: var SemContext; c: var Cursor; kind: SymKind) =
   else:
     buildErr e, c.info, "expected '.' or 'pragmas'"
 
+proc semSymUse(e: var SemContext; s: SymId): SymKind =
+  result = NoSym
+
+proc semIdentImpl(e: var SemContext; c: var Cursor; ident: StrId): SymKind =
+  let insertPos = e.dest.len
+  let info = c.info
+  if buildSymChoice(e, ident, info, InnerMost) == 1:
+    let sym = e.dest[insertPos+1].symId
+    e.dest.shrink insertPos
+    e.dest.add toToken(Symbol, sym, info)
+    result = semSymUse(e, sym)
+  else:
+    result = NoSym
+
+proc semIdent(e: var SemContext; c: var Cursor): SymKind =
+  result = semIdentImpl(e, c, c.litId)
+  inc c
+
+proc semQuoted(e: var SemContext; c: var Cursor): SymKind =
+  let nameId = unquote(c)
+  result = semIdentImpl(e, c, nameId)
+
+proc semTypeSym(e: var SemContext; kind: SymKind; info: PackedLineInfo) =
+  if kind in {TypeY, TypevarY}:
+    discard "fine"
+  else:
+    e.buildErr info, "type name expected, but got: " & $kind
+
 proc semLocalType(e: var SemContext; c: var Cursor): TypeCursor =
-  discard "XXX to implement"
-  result = c
+  let insertPos = e.dest.len
+  let info = c.info
+  case c.kind
+  of Ident:
+    let kind = semIdent(e, c)
+    semTypeSym e, kind, info
+  of Symbol:
+    let kind = semSymUse(e, c.symId)
+    inc c
+    semTypeSym e, kind, info
+  of ParLe:
+    if exprKind(c) == QuotedX:
+      let kind = semQuoted(e, c)
+      semTypeSym e, kind, info
+  else:
+    e.buildErr info, "not a type"
+  result = typeToCursor(e, insertPos)
 
 proc semReturnType(e: var SemContext; c: var Cursor): TypeCursor =
   result = semLocalType(e, c)
