@@ -442,14 +442,6 @@ proc traverseExpr(e: var EContext; c: var Cursor) =
       e.dest.add c
     inc c
 
-proc traverseCall(e: var EContext; c: var Cursor) =
-  e.dest.add c
-  inc c
-  traverseExpr e, c
-  inc c
-  e.loop c:
-    traverseExpr e, c
-
 proc traverseLocal(e: var EContext; c: var Cursor; tag: string; mode: TraverseMode) =
   let toPatch = e.dest.len
   let vinfo = c.info
