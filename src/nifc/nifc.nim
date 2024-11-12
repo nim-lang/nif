@@ -106,7 +106,7 @@ proc handleCmdLine() =
         of atNative:
           actionTable[atNative].add key
         of atNone:
-          raiseAssert "unreachable"
+          quit "invalid command: " & key
     of cmdLongOption, cmdShortOption:
       case normalize(key)
       of "bits":
