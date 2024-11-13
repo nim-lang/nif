@@ -118,7 +118,7 @@ Expr ::= Number | CharLiteral | StringLiteral |
          (conv Type Expr) |
          Call
 
-BranchValue ::= Number | CharLiteral | Symbol
+BranchValue ::= Number | CharLiteral | Symbol | (true) | (false)
 BranchRange ::= BranchValue | (range BranchValue BranchValue)
 BranchRanges ::= (ranges BranchRange+)
 

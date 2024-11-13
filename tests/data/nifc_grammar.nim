@@ -516,6 +516,12 @@ proc matchBranchValue(c: var Context; it: var Item): bool =
     if lookupSym(c, it):
       or2 = true
       break or3
+    if isTag(c, it, FalseT):
+      or2 = true
+      break or3
+    if isTag(c, it, TrueT):
+      or2 = true
+      break or3
   if not or2: return false
   when declared(handleBranchValue):
     handleBranchValue(c, it, before1)

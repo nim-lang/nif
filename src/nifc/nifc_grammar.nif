@@ -42,7 +42,7 @@
          Call
 ))
 
-(RULE :BranchValue (OR INTLIT UINTLIT CHARLITERAL SYMBOL))
+(RULE :BranchValue (OR INTLIT UINTLIT CHARLITERAL SYMBOL (false) (true)))
 (RULE :BranchRange (OR BranchValue (range BranchValue BranchValue)))
 (RULE :BranchRanges (OR (ranges (ONE_OR_MANY BranchRange))))
 
