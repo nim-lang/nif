@@ -217,7 +217,7 @@ proc testNifGram(overwrite: bool) =
 
 testNifGram(overwrite)
 
-proc testNifc(overwrite: bool) =
+proc testNifc() =
   exec "nim c src/nifc/nifc"
   let t1 = "tests/nifc/selectany/t1.nif"
   let t2 = "tests/nifc/selectany/t2.nif"
@@ -237,4 +237,17 @@ proc testNifc(overwrite: bool) =
   let issues = "tests/nifc/issues.nif"
   exec ("src" / "nifc" / "nifc").addFileExt(ExeExt) & " c -r --linedir:on " & issues
   exec ("src" / "nifc" / "nifc").addFileExt(ExeExt) & " cpp -r --linedir:off " & issues
-testNifc(overwrite)
+testNifc()
+
+
+proc testGear3() =
+  exec "nim c src/gear3/gear3"
+
+  let helloworld = "tests/gear3/gear3_helloworld"
+
+
+  exec ("src" / "gear3" / "gear3").addFileExt(ExeExt) & " " & helloworld & ".nif"
+  exec ("src" / "nifc" / "nifc").addFileExt(ExeExt) & " c -r " & helloworld & ".c.nif"
+
+
+testGear3()
