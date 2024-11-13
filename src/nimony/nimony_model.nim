@@ -35,6 +35,7 @@ type
     MacroS = "macro"
     TemplateS = "template"
     TypeS = "type"
+    CallS = "call"
 
   SymKind* = enum
     NoSym

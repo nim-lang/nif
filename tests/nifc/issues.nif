@@ -180,6 +180,14 @@
     (ret +1)
   ))
 
+  (proc :foo.switch.bool . . . (stmts
+    (var :x.c . (bool) (false))
+    (case x.c
+      (of (ranges (true)) (call printf.c "hello %d" x.c))
+      (of (ranges (false)) (call printf.c "hello %d" x.c))
+    )
+  ))
+
   (proc :main.c . (i +32) . (stmts
     1,1,hello.nim(var :x1.m . (i +32) +12)
     1,2,hello.nim(var :z2.m . (ptr (c +8)) (cast (ptr (c +8)) (suf "hello" "r")))
@@ -216,6 +224,8 @@
 
     (var :add2.m . (i +32) (add (i +32) +214 +21))
     (call printf.c "not: %d\0A" (bitnot (i +32) +12))
+
+    (call foo.switch.bool)
 
     (emit "(void)" x.c ";")
     (ret +0)

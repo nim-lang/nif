@@ -36,6 +36,9 @@ proc newNifModule(infile: string): NifModule =
   discard processDirectives(result.stream.r)
 
   result.buf = fromStream(result.stream)
+  # fromStream only parses the topLevel 'stmts'
+  let eof = next(result.stream)
+  result.buf.add eof
   let indexName = infile.changeFileExt".idx.nif"
   if not fileExists(indexName) or getLastModificationTime(indexName) < getLastModificationTime(infile):
     createIndex infile
@@ -208,6 +211,7 @@ proc traverseParams(e: var EContext; c: var Cursor) =
       if c.substructureKind != ParamS:
         error e, "expected (param) but got: ", c
       traverseLocal(e, c, "param", TraverseSig)
+  # the result type
   traverseType e, c
 
 type
@@ -301,12 +305,14 @@ proc closeGenPragmas(e: var EContext; g: GenPragmas) =
     e.dest.addDotToken()
 
 proc traverseProc(e: var EContext; c: var Cursor; mode: TraverseMode) =
+  # namePos* = 0
   # patternPos* = 1    # empty except for term rewriting macros
   # genericParamsPos* = 2
   # paramsPos* = 3
-  # pragmasPos* = 4
-  # miscPos* = 5  # used for undocumented and hacky stuff
-  # bodyPos* = 6       # position of body; use rodread.getBody() instead!
+  # resultPos* = 4
+  # pragmasPos* = 5
+  # miscPos* = 6  # used for undocumented and hacky stuff
+  # bodyPos* = 7       # position of body; use rodread.getBody() instead!
   var dst = createTokenBuf(50)
   swap e.dest, dst
   #let toPatch = e.dest.len
@@ -316,17 +322,26 @@ proc traverseProc(e: var EContext; c: var Cursor; mode: TraverseMode) =
   expectSymdef(e, c)
   let s = c.symId
   let sinfo = c.info
+
+  # namePos
+  e.dest.add toToken(SymbolDef, s, sinfo)
+  e.offer s
+
   inc c
+
   skipExportMarker e, c
+
   skip c # patterns
+
   let isGeneric = c.kind != DotToken
+
   skip c # generic parameters
+
   traverseParams e, c
+
   let pinfo = c.info
   let prag = parsePragmas(e, c)
 
-  e.dest.add toToken(SymbolDef, s, sinfo)
-  e.offer s
   let oldOwner = setOwner(e, s)
 
   var genPragmas = openGenPragmas()
@@ -336,6 +351,8 @@ proc traverseProc(e: var EContext; c: var Cursor; mode: TraverseMode) =
   if Selectany in prag.flags:
     e.addKey genPragmas, "selectany", pinfo
   closeGenPragmas e, genPragmas
+
+  skip c # miscPos
 
   # body:
   if mode != TraverseSig or prag.callConv == InlineC:
@@ -387,11 +404,14 @@ proc traverseExpr(e: var EContext; c: var Cursor) =
     of ParLe:
       e.dest.add c
       inc nested
-    of ParRi:
-      if nested <= 0:
-        error e, "unmached ')': ", c
+    of ParRi: # TODO: refactoring: take the whole statement into consideration
+      if nested == 0:
+        break
       e.dest.add c
       dec nested
+      if nested == 0:
+        inc c
+        break
     of SymbolDef:
       e.dest.add c
       e.offer c.symId
@@ -501,9 +521,17 @@ proc traverseIf(e: var EContext; c: var Cursor) =
   # (if cond (.. then ..) (.. else ..))
   e.dest.add c
   inc c
-  traverseExpr e, c
-  traverseStmt e, c
-  traverseStmt e, c
+  while c.kind == ParLe and pool.tags[c.tag] == $ElifS:
+    e.dest.add c
+    inc c # skips '(elif'
+    traverseExpr e, c
+    traverseStmt e, c
+    wantParRi e, c
+  if c.kind == ParLe and pool.tags[c.tag] == $ElseS:
+    e.dest.add c
+    inc c
+    traverseStmt e, c
+    wantParRi e, c
   wantParRi e, c
 
 proc traverseCase(e: var EContext; c: var Cursor) =
@@ -549,15 +577,14 @@ proc traverseStmt(e: var EContext; c: var Cursor; mode = TraverseAll) =
         e.loop c:
           traverseStmt e, c, mode
     of VarS, LetS, CursorS, ResultS:
-      traverseLocal e, c, (if e.nestedIn[^1][0] == StmtsS: "gvar" else: "var"), mode
+      traverseLocal e, c, (if e.nestedIn[^1][0] == StmtsS and mode == TraverseTopLevel: "gvar" else: "var"), mode
     of ConstS:
       traverseLocal e, c, "const", mode
-    of EmitS, AsgnS, RetS:
+    of EmitS, AsgnS, RetS, CallS:
       e.dest.add c
       inc c
       e.loop c:
         traverseExpr e, c
-
     of BreakS: traverseBreak e, c
     of WhileS: traverseWhile e, c
     of BlockS: traverseBlock e, c
@@ -696,7 +723,9 @@ proc expand*(infile: string) =
   e.mods[e.main] = m
 
   traverseStmt e, c, TraverseTopLevel
-  if c.kind != EofToken:
+  if c.kind == ParRi:
+    error e, "unmached ')'"
+  elif c.kind != EofToken:
     quit "Internal error: file not processed completely"
   # fix point expansion:
   var i = 0

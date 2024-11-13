@@ -68,13 +68,13 @@ proc genScope(c: var GeneratedCode; t: Tree; n: NodePos) =
   c.add CurlyRi
 
 proc genBranchValue(c: var GeneratedCode; t: Tree; n: NodePos) =
-  if t[n].kind in {IntLit, UIntLit, CharLit, Sym}:
+  if t[n].kind in {IntLit, UIntLit, CharLit, Sym, TrueC, FalseC}:
     c.genx t, n
   else:
     error c.m, "expected valid `of` value but got: ", t, n
 
 proc genCaseCond(c: var GeneratedCode; t: Tree; n: NodePos) =
-  # BranchValue ::= Number | CharLiteral | Symbol
+  # BranchValue ::= Number | CharLiteral | Symbol | (true) | (false)
   # BranchRange ::= BranchValue | (range BranchValue BranchValue)
   # BranchRanges ::= (ranges BranchRange+)
   if t[n].kind == RangesC:
