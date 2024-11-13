@@ -7,7 +7,7 @@
 ## Turn NIF trees into identifiers. See the spec section "NIF trees as identifiers"
 ## for the used algorithm.
 
-import std / tables
+import std / [assertions, tables, formatfloat]
 
 type
   Mangler* = object ## In the end `extract` must be called.
@@ -121,7 +121,7 @@ proc addSymbolDef*(b: var Mangler; s: string) =
       else:
         b.put c
 
-proc addStrLit*(b: var Mangler; s: string; suffix = "") =
+proc addStrLit*(b: var Mangler; s: string) =
   addSep b
   b.put 'U'
   for c in s:
@@ -130,11 +130,6 @@ proc addStrLit*(b: var Mangler; s: string; suffix = "") =
     else:
       b.put c
   b.put 'U'
-  for c in suffix:
-    if needsEscape c:
-      b.escape c
-    else:
-      b.put c
 
 proc addEmpty*(b: var Mangler; count = 1) =
   addSep b
@@ -150,25 +145,15 @@ proc addCharLit*(b: var Mangler; c: char) =
     b.put c
   b.escape '\''
 
-proc addIntLit*(b: var Mangler; i: BiggestInt; suffix = "") =
+proc addIntLit*(b: var Mangler; i: BiggestInt) =
   addSep b
   b.put $i
-  for c in suffix:
-    if needsEscape c:
-      b.escape c
-    else:
-      b.put c
 
-proc addUIntLit*(b: var Mangler; u: BiggestUInt; suffix = "") =
+proc addUIntLit*(b: var Mangler; u: BiggestUInt) =
   addSep b
   b.put $u
-  for c in suffix:
-    if needsEscape c:
-      b.escape c
-    else:
-      b.put c
 
-proc addFloatLit*(b: var Mangler; f: BiggestFloat; suffix = "") =
+proc addFloatLit*(b: var Mangler; f: BiggestFloat) =
   addSep b
   var x = ""
   x.addFloat f
@@ -176,11 +161,6 @@ proc addFloatLit*(b: var Mangler; f: BiggestFloat; suffix = "") =
     if c == 'e':
       b.put 'E'
     elif needsEscape c:
-      b.escape c
-    else:
-      b.put c
-  for c in suffix:
-    if needsEscape c:
       b.escape c
     else:
       b.put c

@@ -78,27 +78,6 @@ proc demand(e: var EContext; s: SymId) =
 proc offer(e: var EContext; s: SymId) =
   e.declared.incl s
 
-proc copyTree(e: var EContext; c: var Cursor) =
-  var nested = 0
-  if c.kind != ParLe:
-    e.dest.add c
-  else:
-    while true:
-      e.dest.add c
-      case c.kind
-      of Parle: inc nested
-      of ParRi:
-        e.dest.add c
-        if nested == 0:
-          inc c
-          break
-        dec nested
-      of EofToken:
-        error e, "expected ')', but EOF reached"
-        break
-      else: discard
-      inc c
-
 proc wantParRi(e: var EContext; c: var Cursor) =
   if c.kind == ParRi:
     e.dest.add c
@@ -399,14 +378,12 @@ proc traverseTypeDecl(e: var EContext; c: var Cursor) =
   inc c
   expectSymdef(e, c)
   let s = c.symId
-  let sinfo = c.info
   let oldOwner = setOwner(e, s)
   inc c
   skipExportMarker e, c
   let isGeneric = c.kind != DotToken
   skip c # generic parameters
 
-  let pinfo = c.info
   let prag = parsePragmas(e, c)
   traverseType e, c, {IsTypeBody}
   wantParRi e, c

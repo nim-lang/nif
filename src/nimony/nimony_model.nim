@@ -60,6 +60,7 @@ type
 
   ExprKind* = enum
     NoExpr
+    QuotedX = "quoted"
     AtX = "at"
     DerefX = "deref"
     HderefX = "hderef"
@@ -76,8 +77,10 @@ type
     NotX = "not"
     NegX = "neg"
     SizeofX = "sizeof"
-    OconstrX = "oconstr"
-    AconstrX = "aconstr"
+    OconstrX = "obj"
+    TupleConstrX = "tup"
+    AconstrX = "arr"
+    SetX = "set"
     OchoiceX = "ochoice"
     CchoiceX = "cchoice"
     KvX = "kv"
@@ -107,6 +110,12 @@ type
     SufX = "suf"
     RangeX = "range"
     RangesX = "ranges"
+    CompilesX = "compiles"
+    DeclaredX = "declared"
+    DefinedX = "defined"
+    HighX = "high"
+    LowX = "low"
+    TypeofX = "typeof"
 
   TypeKind* = enum
     NoType
@@ -140,7 +149,7 @@ type
     InvokeT = "invok"
     ArrayT = "array"
     UncheckedArrayT = "uarray"
-    SetT = "set"
+    SetT = "sett"
     AutoT = "auto"
     SymKindT = "symkind"
 
@@ -232,12 +241,6 @@ proc exprKind*(c: Cursor): ExprKind {.inline.} =
 declareMatcher parseSymKind, SymKind
 
 proc symKind*(c: Cursor): SymKind {.inline.} =
-  if c.kind == ParLe:
-    result = parseSymKind pool.tags[tag(c)]
-  else:
-    result = NoSym
-
-proc symKind*(c: PackedToken): SymKind {.inline.} =
   if c.kind == ParLe:
     result = parseSymKind pool.tags[tag(c)]
   else:
