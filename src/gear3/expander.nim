@@ -427,11 +427,14 @@ proc traverseExpr(e: var EContext; c: var Cursor) =
     of ParLe:
       e.dest.add c
       inc nested
-    of ParRi:
-      if nested <= 0:
+    of ParRi: # TODO: refactoring: take the whole statement into consideration
+      if nested == 0:
         break
       e.dest.add c
       dec nested
+      if nested == 0:
+        inc c
+        break
     of SymbolDef:
       e.dest.add c
       e.offer c.symId
@@ -541,9 +544,17 @@ proc traverseIf(e: var EContext; c: var Cursor) =
   # (if cond (.. then ..) (.. else ..))
   e.dest.add c
   inc c
-  traverseExpr e, c
-  traverseStmt e, c
-  traverseStmt e, c
+  while c.kind == ParLe and pool.tags[c.tag] == $ElifS:
+    e.dest.add c
+    inc c # skips '(elif'
+    traverseExpr e, c
+    traverseStmt e, c
+    wantParRi e, c
+  if c.kind == ParLe and pool.tags[c.tag] == $ElseS:
+    e.dest.add c
+    inc c
+    traverseStmt e, c
+    wantParRi e, c
   wantParRi e, c
 
 proc traverseCase(e: var EContext; c: var Cursor) =

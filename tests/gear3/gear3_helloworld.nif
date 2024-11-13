@@ -7,9 +7,25 @@
 
  (proc :foo.c . . .
   (params
-   (param :x . . (i +32) .)) . . .
+   (param :x . . (i +32) .)
+   (param :y . . (i +32) .)) . . .
   (stmts
-   (var :y . . (i +32) +2)))
+   (var :x.m . . (i +32) +2)
+
+
+    (if
+      (elif (true)
+      (stmts
+      )
+      )
+
+      (elif (false)
+      (stmts
+      )
+      )
+    )
+
+   ))
 
   (proc :main.c . . . . (i +32) . .
     (stmts
@@ -17,6 +33,27 @@
 
     (asgn x.c +6)
 
+
+    (call foo.c x.c +5)
+
+
+    (if
+      (elif (true)
+      (stmts
+        (call foo.c x.c +1))
+      )
+
+      (elif (false)
+      (stmts
+        (call foo.c x.c +2))
+      )
+
+      (else
+      (stmts
+        (call foo.c x.c +2))
+      )
+
+    )
 
     ))
 
