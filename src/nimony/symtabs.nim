@@ -10,9 +10,9 @@ import nimony_model
 
 type
   Sym* = object
-    name*: SymId
     kind*: SymKind
-    pos*: int32
+    name*: SymId
+    pos*: int
 
   ScopeKind* = enum
     NormalScope, ToplevelScope, ImportScope

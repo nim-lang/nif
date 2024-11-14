@@ -220,11 +220,11 @@ proc buildSymChoice(c: var SemContext; identifier: StrId; info: PackedLineInfo;
     c.dest.shrink oldLen
     c.dest.add toToken(Ident, identifier, info)
 
-proc openScope(s: var SemContext) =
-  s.currentScope = Scope(tab: initTable[StrId, seq[Sym]](), up: s.currentScope, kind: NormalScope)
+proc openScope(c: var SemContext) =
+  c.currentScope = Scope(tab: initTable[StrId, seq[Sym]](), up: c.currentScope, kind: NormalScope)
 
-proc closeScope(s: var SemContext) =
-  s.currentScope = s.currentScope.up
+proc closeScope(c: var SemContext) =
+  c.currentScope = c.currentScope.up
 
 # -------------------------- error handling -------------------------
 
@@ -239,46 +239,46 @@ proc buildErr*(c: var SemContext; info: PackedLineInfo; msg: string) =
 
 # -------------------------- type handling ---------------------------
 
-proc typeToCanon(e: var SemContext; start: int): string =
+proc typeToCanon(c: var SemContext; start: int): string =
   result = ""
-  for i in start..<e.dest.len:
-    case e.dest[i].kind
+  for i in start..<c.dest.len:
+    case c.dest[i].kind
     of ParLe:
       result.add '('
-      result.addInt e.dest[i].tagId.int
+      result.addInt c.dest[i].tagId.int
     of ParRi: result.add ')'
     of Ident, StringLit:
       result.add ' '
-      result.addInt e.dest[i].litId.int
+      result.addInt c.dest[i].litId.int
     of UnknownToken: result.add " unknown"
     of EofToken: result.add " eof"
     of DotToken: result.add '.'
     of Symbol, SymbolDef:
       result.add " s"
-      result.addInt e.dest[i].symId.int
+      result.addInt c.dest[i].symId.int
     of CharLit:
       result.add " c"
-      result.addInt e.dest[i].uoperand.int
+      result.addInt c.dest[i].uoperand.int
     of IntLit:
       result.add " i"
-      result.addInt e.dest[i].intId.int
+      result.addInt c.dest[i].intId.int
     of UIntLit:
       result.add " u"
-      result.addInt e.dest[i].uintId.int
+      result.addInt c.dest[i].uintId.int
     of FloatLit:
       result.add " f"
-      result.addInt e.dest[i].floatId.int
+      result.addInt c.dest[i].floatId.int
 
-proc typeToCursor(e: var SemContext; start: int): TypeCursor =
-  let key = typeToCanon(e, start)
-  if e.typeMem.hasKey(key):
-    result = cursorAt(e.typeMem[key], 0)
+proc typeToCursor(c: var SemContext; start: int): TypeCursor =
+  let key = typeToCanon(c, start)
+  if c.typeMem.hasKey(key):
+    result = cursorAt(c.typeMem[key], 0)
   else:
-    var buf = createTokenBuf(e.dest.len - start)
-    for i in start..<e.dest.len:
-      buf.add e.dest[i]
+    var buf = createTokenBuf(c.dest.len - start)
+    for i in start..<c.dest.len:
+      buf.add c.dest[i]
     result = cursorAt(buf, 0)
-    e.typeMem[key] = buf
+    c.typeMem[key] = buf
 
 # --------------------- symbol name creation -------------------------
 
@@ -318,8 +318,8 @@ proc declareSym(c: var SemContext; it: var Item; kind: SymKind): SymStatus =
   let info = it.n.info
   if it.n.kind == Ident:
     let lit = it.n.litId
-    let s = Sym(name: identToSym(c, lit),
-                kind: kind, pos: 0'i32)
+    let s = Sym(kind: kind, name: identToSym(c, lit),
+                pos: c.dest.len)
     if addNonOverloadable(c.currentScope, lit, s) == Conflict:
       c.buildErr info, "attempt to redeclare: " & pool.strings[lit]
       result = ErrRedef
@@ -338,8 +338,8 @@ proc declareOverloadableSym(c: var SemContext; it: var Item; kind: SymKind) =
   let info = it.n.info
   if it.n.kind == Ident:
     let lit = it.n.litId
-    let s = Sym(name: identToSym(c, lit),
-                kind: kind, pos: 0'i32)
+    let s = Sym(kind: kind, name: identToSym(c, lit),
+                pos: c.dest.len)
     addOverloadable(c.currentScope, lit, s)
     c.dest.add toToken(SymbolDef, s.name, info)
     inc it.n
@@ -351,8 +351,8 @@ proc declareOverloadableSym(c: var SemContext; it: var Item; kind: SymKind) =
     if lit == StrId(0):
       c.buildErr info, "identifier expected"
     else:
-      let s = Sym(name: identToSym(c, lit),
-                  kind: kind, pos: 0'i32)
+      let s = Sym(kind: kind, name: identToSym(c, lit),
+                  pos: c.dest.len)
       addOverloadable(c.currentScope, lit, s)
       c.dest.add toToken(SymbolDef, s.name, info)
       inc it.n
@@ -360,30 +360,30 @@ proc declareOverloadableSym(c: var SemContext; it: var Item; kind: SymKind) =
 proc success(s: SymStatus): bool {.inline.} = s in {OkNew, OkExisting}
 proc success(s: DelayedSym): bool {.inline.} = success s.status
 
-proc handleSymDef(e: var SemContext; c: var Cursor; kind: SymKind): DelayedSym =
-  let info = c.info
-  if c.kind == Ident:
-    let lit = c.litId
+proc handleSymDef(e: var SemContext; n: var Cursor; kind: SymKind): DelayedSym =
+  let info = n.info
+  if n.kind == Ident:
+    let lit = n.litId
     let def = identToSym(e, lit)
-    let s = Sym(name: def,
-                kind: kind, pos: 0'i32)
+    let s = Sym(kind: kind, name: def,
+                pos: e.dest.len)
     result = DelayedSym(status: OkNew, lit: lit, s: s, info: info)
     e.dest.add toToken(SymbolDef, def, info)
-    inc c
-  elif c.kind == SymbolDef:
+    inc n
+  elif n.kind == SymbolDef:
     discard "ok, and no need to re-add it to the symbol table"
     result = DelayedSym(status: OkExisting, info: info)
-    e.dest.add c
-    inc c
+    e.dest.add n
+    inc n
   else:
-    let lit = getIdent(e, c)
+    let lit = getIdent(e, n)
     if lit == StrId(0):
       e.buildErr info, "identifier expected"
       result = DelayedSym(status: ErrNoIdent, info: info)
     else:
       let def = identToSym(e, lit)
-      let s = Sym(name: def,
-                  kind: kind, pos: 0'i32)
+      let s = Sym(kind: kind, name: def,
+                  pos: e.dest.len)
       result = DelayedSym(status: OkNew, lit: lit, s: s, info: info)
       e.dest.add toToken(SymbolDef, def, info)
 
