@@ -402,7 +402,10 @@ proc traverseExpr(e: var EContext; c: var Cursor) =
     case c.kind
     of EofToken: break
     of ParLe:
-      e.dest.add c
+      if pool.tags[c.tag] == "curlyConstr":
+        e.add "ranges", c.info
+      else:
+        e.dest.add c
       inc nested
     of ParRi: # TODO: refactoring: take the whole statement into consideration
       if nested == 0:
@@ -553,7 +556,6 @@ proc traverseCase(e: var EContext; c: var Cursor) =
       wantParRi e, c
     else:
       error e, "expected (of) or (else) but got: ", c
-  traverseStmt e, c
   wantParRi e, c
 
 proc traverseStmt(e: var EContext; c: var Cursor; mode = TraverseAll) =
