@@ -86,28 +86,28 @@ proc unquote(c: var Cursor): StrId =
   assert r.len > 0
   result = getOrIncl(pool.strings, r)
 
-proc getIdent(e: var SemContext; c: var Cursor): StrId =
+proc getIdent(c: var SemContext; n: var Cursor): StrId =
   var nested = 0
-  while exprKind(c) in {OchoiceX, CchoiceX}:
+  while exprKind(n) in {OchoiceX, CchoiceX}:
     inc nested
-    inc c
-  case c.kind
+    inc n
+  case n.kind
   of Ident:
-    result = c.litId
+    result = n.litId
   of Symbol, SymbolDef:
-    let sym = pool.syms[c.symId]
+    let sym = pool.syms[n.symId]
     var isGlobal = false
     result = pool.strings.getOrIncl(extractBasename(sym, isGlobal))
   of ParLe:
-    if exprKind(c) == QuotedX:
-      result = unquote(c)
+    if exprKind(n) == QuotedX:
+      result = unquote(n)
     else:
       result = StrId(0)
   else:
     result = StrId(0)
   while nested > 0:
-    if c.kind == ParRi: dec nested
-    inc c
+    if n.kind == ParRi: dec nested
+    inc n
 
 template buildTree*(dest: var TokenBuf; kind: StmtKind|ExprKind|TypeKind;
                     info: PackedLineInfo; body: untyped) =
