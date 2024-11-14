@@ -32,7 +32,7 @@ proc asLocal*(c: Cursor): Local =
     result.name = c
     skip c
     result.exported = c
-    inc c
+    skip c
     result.pragmas = c
     skip c
     result.typ = c
@@ -64,7 +64,7 @@ proc asRoutine*(c: Cursor): Routine =
     result.name = c
     skip c
     result.exported = c
-    inc c
+    skip c
     result.pattern = c
     skip c
     result.typevars = c
@@ -100,7 +100,7 @@ proc asTypeDecl*(c: Cursor): TypeDecl =
     result.name = c
     skip c
     result.exported = c
-    inc c
+    skip c
     result.typevars = c
     skip c
     result.pragmas = c

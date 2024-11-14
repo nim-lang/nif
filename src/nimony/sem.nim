@@ -50,6 +50,7 @@ type
     globals, locals: Table[string, int]
     types: BuiltinTypes
     typeMem: Table[string, TokenBuf]
+    declMem: Table[SymId, TokenBuf]
     thisModuleSuffix: string
 
 # -------------- symbol lookups -------------------------------------
@@ -279,6 +280,27 @@ proc typeToCursor(c: var SemContext; start: int): TypeCursor =
       buf.add c.dest[i]
     result = cursorAt(buf, 0)
     c.typeMem[key] = buf
+
+proc declToCursor(c: var SemContext; s: Sym): Cursor =
+  if c.declMem.hasKey(s.name):
+    result = cursorAt(c.declMem[s.name], 0)
+  else:
+    var buf = createTokenBuf(10)
+    var pos = s.pos - 1
+    var nested = 0
+    # XXX optimize this for non-generic procs. No need to
+    # copy their bodies here.
+    while true:
+      buf.add c.dest[pos]
+      case c.dest[pos].kind
+      of ParLe: inc nested
+      of ParRi:
+        dec nested
+        if nested == 0: break
+      else: discard
+      inc pos
+    result = cursorAt(buf, 0)
+    c.declMem[s.name] = buf
 
 # --------------------- symbol name creation -------------------------
 
@@ -584,10 +606,20 @@ proc semPragmas(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; ki
   else:
     buildErr c, n.info, "expected '.' or 'pragmas'"
 
-proc semSymUse(c: var SemContext; s: SymId): SymKind =
-  result = NoSym
+proc semSymUse(c: var SemContext; s: SymId): Sym =
+  # yyy find a better solution
+  var name = pool.syms[s]
+  extractBasename name
+  let identifier = pool.strings.getOrIncl(name)
+  var it {.cursor.} = c.currentScope
+  while it != nil:
+    for sym in it.tab.getOrDefault(identifier):
+      if sym.name == s:
+        return sym
+    it = it.up
+  result = Sym(kind: NoSym, name: s)
 
-proc semIdentImpl(c: var SemContext; n: var Cursor; ident: StrId): SymKind =
+proc semIdentImpl(c: var SemContext; n: var Cursor; ident: StrId): Sym =
   let insertPos = c.dest.len
   let info = n.info
   if buildSymChoice(c, ident, info, InnerMost) == 1:
@@ -596,21 +628,33 @@ proc semIdentImpl(c: var SemContext; n: var Cursor; ident: StrId): SymKind =
     c.dest.add toToken(Symbol, sym, info)
     result = semSymUse(c, sym)
   else:
-    result = NoSym
+    result = Sym(kind: NoSym)
 
-proc semIdent(c: var SemContext; n: var Cursor): SymKind =
+proc semIdent(c: var SemContext; n: var Cursor): Sym =
   result = semIdentImpl(c, n, n.litId)
   inc n
 
-proc semQuoted(c: var SemContext; n: var Cursor): SymKind =
+proc semQuoted(c: var SemContext; n: var Cursor): Sym =
   let nameId = unquote(n)
   result = semIdentImpl(c, n, nameId)
 
-proc semTypeSym(c: var SemContext; kind: SymKind; info: PackedLineInfo) =
-  if kind in {TypeY, TypevarY}:
-    discard "fine"
+proc maybeInlineMagic(c: var SemContext; s: Sym) =
+  var pos = s.pos
+  if pos > 0 and c.dest[pos].kind == SymbolDef and c.dest[pos].symId == s.name:
+    inc pos
+    if c.dest[pos].kind == ParLe:
+      assert c.dest[c.dest.len-1].kind == Symbol
+      c.dest[c.dest.len-1] = c.dest[pos]
+      while true:
+        c.dest.add c.dest[pos]
+        if c.dest[pos].kind == ParRi: break
+        inc pos
+
+proc semTypeSym(c: var SemContext; s: Sym; info: PackedLineInfo) =
+  if s.kind in {TypeY, TypevarY}:
+    maybeInlineMagic c, s
   else:
-    c.buildErr info, "type name expected, but got: " & $kind
+    c.buildErr info, "type name expected, but got: " & pool.syms[s.name]
 
 proc semParams(c: var SemContext; n: var Cursor)
 
@@ -635,18 +679,18 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
   let info = n.info
   case n.kind
   of Ident:
-    let kind = semIdent(c, n)
-    semTypeSym c, kind, info
+    let s = semIdent(c, n)
+    semTypeSym c, s, info
   of Symbol:
-    let kind = semSymUse(c, n.symId)
+    let s = semSymUse(c, n.symId)
     inc n
-    semTypeSym c, kind, info
+    semTypeSym c, s, info
   of ParLe:
     case typeKind(n)
     of NoType:
       if exprKind(n) == QuotedX:
-        let kind = semQuoted(c, n)
-        semTypeSym c, kind, info
+        let s = semQuoted(c, n)
+        semTypeSym c, s, info
       elif context == AllowValues:
         var it = Item(n: n, typ: c.types.autoType)
         semExpr c, it
@@ -871,6 +915,28 @@ proc semStmts(c: var SemContext; it: var Item) =
   wantParRi c, it.n
   combineType it.typ, c.types.voidType
 
+proc semExprSym(c: var SemContext; it: var Item; s: Sym) =
+  if s.kind == NoSym:
+    c.buildErr it.n.info, "undeclared identifier"
+    it.typ = c.types.autoType
+  else:
+    maybeInlineMagic c, s
+    if s.pos > 0:
+      var n = declToCursor(c, s)
+      if s.kind.isLocal:
+        inc n # skip ParLe
+        inc n # skip name
+        skip n # skip export marker
+        skip n # skip pragmas
+      elif s.kind.isRoutine:
+        discard "nothing to skip"
+      else:
+        # XXX enum field, object field?
+        assert false, "not implemented"
+      it.typ = n
+    else:
+      it.typ = c.types.autoType
+
 proc semExpr(c: var SemContext; it: var Item) =
   case it.n.kind
   of IntLit:
@@ -888,10 +954,18 @@ proc semExpr(c: var SemContext; it: var Item) =
   of CharLit:
     combineType it.typ, c.types.charType
     takeToken c, it.n
-  of Symbol, Ident:
-    buildErr c, it.n.info, "not implemented"
+  of Ident:
+    let s = semIdent(c, it.n)
+    semExprSym c, it, s
+  of Symbol:
+    let s = semSymUse(c, it.n.symId)
+    inc it.n
+    semExprSym c, it, s
   of ParLe:
     case exprKind(it.n)
+    of QuotedX:
+      let s = semQuoted(c, it.n)
+      semExprSym c, it, s
     of NoExpr:
       case stmtKind(it.n)
       of NoStmt:
@@ -948,7 +1022,7 @@ proc semExpr(c: var SemContext; it: var Item) =
        AddX, SubX, MulX, DivX, ModX, ShrX, ShlX, BitandX, BitorX, BitxorX, BitnotX,
        EqX, NeqX, LeX, LtX, CastX, ConvX, SufX, RangeX, RangesX,
        HderefX, HaddrX, OconvX, HconvX, OchoiceX, CchoiceX,
-       TupleConstrX, SetX, QuotedX,
+       TupleConstrX, SetX,
        CompilesX, DeclaredX, DefinedX, HighX, LowX, TypeofX, AshrX:
       takeToken c, it.n
       wantParRi c, it.n
