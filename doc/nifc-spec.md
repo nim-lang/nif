@@ -141,8 +141,9 @@ Stmt ::= Call |
          (case Expr (of BranchRanges StmtList)* (else StmtList)?) |
          (lab SymbolDef) |
          (jmp Symbol) |
-         (scope StmtList)
-         (ret [Empty | Expr]) # return statement
+         (scope StmtList) |
+         (ret [Empty | Expr]) | # return statement
+         (discard Expr)
 
 StmtList ::= (stmts SCOPE Stmt*)
 

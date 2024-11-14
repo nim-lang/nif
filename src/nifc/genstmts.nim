@@ -201,5 +201,9 @@ proc genStmt(c: var GeneratedCode; t: Tree; n: NodePos) =
       c.add Space
       c.genx t, n.firstSon
     c.add Semicolon
+  of DiscardC:
+    c.add DiscardToken
+    c.genx t, n.firstSon
+    c.add Semicolon
   else:
     error c.m, "expected statement but got: ", t, n

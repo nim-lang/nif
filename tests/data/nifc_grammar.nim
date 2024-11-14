@@ -832,6 +832,15 @@ proc matchStmt(c: var Context; it: var Item): bool =
     if kw18:
       or2 = true
       break or3
+    var kw21 = false
+    if isTag(c, it, DiscardT):
+      if not matchExpr(c, it):
+        error(c, it, "Expr expected")
+        break or3
+      kw21 = matchParRi(c, it)
+    if kw21:
+      or2 = true
+      break or3
   if not or2: return false
   when declared(handleStmt):
     handleStmt(c, it, before1)

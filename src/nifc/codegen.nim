@@ -60,6 +60,7 @@ type
     TypedefKeyword = "typedef "
     IncludeKeyword = "#include "
     LineDirKeyword = "#line "
+    DiscardToken = "(void) "
 
 proc fillTokenTable(tab: var BiTable[Token, string]) =
   for e in EmptyToken..high(PredefinedToken):

@@ -118,6 +118,7 @@ type
     InfC = "inf"
     NegInfC = "neginf"
     NanC = "nan"
+    DiscardC = "discard"
 
 
 const
