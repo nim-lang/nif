@@ -103,6 +103,18 @@ proc expectSymdef(e: var EContext; c: var Cursor) =
   if c.kind != SymbolDef:
     error e, "expected symbol definition, but got: ", c
 
+proc getSymDef(e: var EContext; c: var Cursor): (SymId, PackedLineInfo) =
+  let isQuoted = c.kind == ParLe and pool.tags[c.tag] == "quoted"
+  if isQuoted:
+    inc c
+
+  expectSymdef(e, c)
+  result = (c.symId, c.info)
+  inc c
+
+  if isQuoted:
+    skipParRi e, c
+
 proc expectSym(e: var EContext; c: var Cursor) =
   if c.kind != Symbol:
     error e, "expected symbol, but got: ", c
@@ -319,15 +331,11 @@ proc traverseProc(e: var EContext; c: var Cursor; mode: TraverseMode) =
   let vinfo = c.info
   e.add "proc", vinfo
   inc c
-  expectSymdef(e, c)
-  let s = c.symId
-  let sinfo = c.info
+  let (s, sinfo) = getSymDef(e, c)
 
   # namePos
   e.dest.add toToken(SymbolDef, s, sinfo)
   e.offer s
-
-  inc c
 
   skipExportMarker e, c
 
@@ -376,10 +384,8 @@ proc traverseTypeDecl(e: var EContext; c: var Cursor) =
   let vinfo = c.info
   e.add "type", vinfo
   inc c
-  expectSymdef(e, c)
-  let s = c.symId
+  let (s, _) = getSymDef(e, c)
   let oldOwner = setOwner(e, s)
-  inc c
   skipExportMarker e, c
   let isGeneric = c.kind != DotToken
   skip c # generic parameters
@@ -404,9 +410,19 @@ proc traverseExpr(e: var EContext; c: var Cursor) =
     of ParLe:
       if pool.tags[c.tag] == "curlyConstr":
         e.add "ranges", c.info
+        inc nested
+      elif pool.tags[c.tag] == "quoted":
+        inc c
+        expectSym(e, c)
+        e.dest.add c
+        e.demand c.symId
+        inc c
+        skipParRi(e, c)
+        if nested == 0:
+          break
       else:
         e.dest.add c
-      inc nested
+        inc nested
     of ParRi: # TODO: refactoring: take the whole statement into consideration
       if nested == 0:
         break
@@ -430,10 +446,7 @@ proc traverseLocal(e: var EContext; c: var Cursor; tag: string; mode: TraverseMo
   let vinfo = c.info
   e.add tag, vinfo
   inc c
-  expectSymdef(e, c)
-  let s = c.symId
-  let sinfo = c.info
-  inc c
+  let (s, sinfo) = getSymDef(e, c)
   skipExportMarker e, c
   let pinfo = c.info
   let prag = parsePragmas(e, c)
@@ -492,9 +505,8 @@ proc traverseBlock(e: var EContext; c: var Cursor) =
     e.nestedIn.add (BlockS, SymId(0))
     inc c
   else:
-    expectSymdef e, c
-    e.nestedIn.add (BlockS, c.symId)
-    inc c
+    let (s, _) = getSymDef(e, c)
+    e.nestedIn.add (BlockS, s)
   e.dest.add tagToken("scope", info)
   traverseStmt e, c
   wantParRi e, c

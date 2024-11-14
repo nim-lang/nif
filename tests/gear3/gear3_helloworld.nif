@@ -66,4 +66,9 @@
      (stmts
       (call foo.c +2 +2))))
 
+  (var 
+    (quoted :var.c) . . (i +32) +1)
+
+  (var :s.var.quoted . . (i +32) (quoted var.c))
+
 )))
