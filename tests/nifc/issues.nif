@@ -203,6 +203,7 @@
     (call foo.intminmax)
 
     (call foo.inline)
+    (discard (call foo.inline))
     (call foo.noinline)
     (call foo.cdecl)
     (call foo.stdcall)
@@ -212,6 +213,7 @@
     (call foo.member)
 
     (var :x.c . (i +8) (suf +12 "i8"))
+    (discard x.c)
     (var :x.m . (i +16) (suf -12 "i16"))
     (var :x1 . (i +32) (suf +12 "i32"))
     (var :y1 . (u +32) (suf +12 "u32"))
