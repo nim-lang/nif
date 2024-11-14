@@ -29,6 +29,8 @@ type
     NotC = "not"
     NegC = "neg"
     SizeofC = "sizeof"
+    AlignofC = "alignof"
+    OffsetofC = "offsetof"
     OconstrC = "oconstr"
     AconstrC = "aconstr"
     KvC = "kv"

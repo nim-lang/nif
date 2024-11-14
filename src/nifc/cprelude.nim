@@ -260,5 +260,15 @@ typedef NU8 NU;
 
 #define N_NOINLINE_PTR(rettype, name) rettype (*name)
 
+#if defined(_MSC_VER)
+#  define NIM_ALIGN(x)  __declspec(align(x))
+#  define NIM_ALIGNOF(x) __alignof(x)
+#else
+#  define NIM_ALIGN(x)  __attribute__((aligned(x)))
+#  define NIM_ALIGNOF(x) __alignof__(x)
+#endif
+
+#include <stddef.h>
+
 """
 

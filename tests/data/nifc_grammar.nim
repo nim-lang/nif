@@ -207,21 +207,42 @@ proc matchExpr(c: var Context; it: var Item): bool =
       break or3
     var kw10 = false
     if isTag(c, it, SizeofT):
-      if not matchExpr(c, it):
-        error(c, it, "Expr expected")
+      if not matchType(c, it):
+        error(c, it, "Type expected")
         break or3
       kw10 = matchParRi(c, it)
     if kw10:
       or2 = true
       break or3
     var kw11 = false
+    if isTag(c, it, AlignofT):
+      if not matchType(c, it):
+        error(c, it, "Type expected")
+        break or3
+      kw11 = matchParRi(c, it)
+    if kw11:
+      or2 = true
+      break or3
+    var kw12 = false
+    if isTag(c, it, OffsetofT):
+      if not matchType(c, it):
+        error(c, it, "Type expected")
+        break or3
+      if not lookupSym(c, it):
+        error(c, it, "SYMBOL expected")
+        break or3
+      kw12 = matchParRi(c, it)
+    if kw12:
+      or2 = true
+      break or3
+    var kw13 = false
     if isTag(c, it, OconstrT):
       if not matchType(c, it):
         error(c, it, "Type expected")
         break or3
-      var zm12 = true
+      var zm14 = true
       while not peekParRi(c, it):
-        var kw13 = false
+        var kw15 = false
         if isTag(c, it, KvT):
           if not lookupSym(c, it):
             error(c, it, "SYMBOL expected")
@@ -229,66 +250,36 @@ proc matchExpr(c: var Context; it: var Item): bool =
           if not matchExpr(c, it):
             error(c, it, "Expr expected")
             break or3
-          kw13 = matchParRi(c, it)
-        if not kw13:
-          zm12 = false
+          kw15 = matchParRi(c, it)
+        if not kw15:
+          zm14 = false
           break
-      if not zm12:
+      if not zm14:
         error(c, it, "invalid Expr")
         break or3
-      kw11 = matchParRi(c, it)
-    if kw11:
+      kw13 = matchParRi(c, it)
+    if kw13:
       or2 = true
       break or3
-    var kw14 = false
+    var kw16 = false
     if isTag(c, it, AconstrT):
       if not matchType(c, it):
         error(c, it, "Type expected")
         break or3
-      var zm15 = true
+      var zm17 = true
       while not peekParRi(c, it):
         if not matchExpr(c, it):
-          zm15 = false
+          zm17 = false
           break
-      if not zm15:
+      if not zm17:
         error(c, it, "invalid Expr")
-        break or3
-      kw14 = matchParRi(c, it)
-    if kw14:
-      or2 = true
-      break or3
-    var kw16 = false
-    if isTag(c, it, AddT):
-      if not matchType(c, it):
-        error(c, it, "Type expected")
-        break or3
-      if not matchExpr(c, it):
-        error(c, it, "Expr expected")
-        break or3
-      if not matchExpr(c, it):
-        error(c, it, "Expr expected")
         break or3
       kw16 = matchParRi(c, it)
     if kw16:
       or2 = true
       break or3
-    var kw17 = false
-    if isTag(c, it, SubT):
-      if not matchType(c, it):
-        error(c, it, "Type expected")
-        break or3
-      if not matchExpr(c, it):
-        error(c, it, "Expr expected")
-        break or3
-      if not matchExpr(c, it):
-        error(c, it, "Expr expected")
-        break or3
-      kw17 = matchParRi(c, it)
-    if kw17:
-      or2 = true
-      break or3
     var kw18 = false
-    if isTag(c, it, MulT):
+    if isTag(c, it, AddT):
       if not matchType(c, it):
         error(c, it, "Type expected")
         break or3
@@ -303,7 +294,7 @@ proc matchExpr(c: var Context; it: var Item): bool =
       or2 = true
       break or3
     var kw19 = false
-    if isTag(c, it, DivT):
+    if isTag(c, it, SubT):
       if not matchType(c, it):
         error(c, it, "Type expected")
         break or3
@@ -318,7 +309,7 @@ proc matchExpr(c: var Context; it: var Item): bool =
       or2 = true
       break or3
     var kw20 = false
-    if isTag(c, it, ModT):
+    if isTag(c, it, MulT):
       if not matchType(c, it):
         error(c, it, "Type expected")
         break or3
@@ -333,7 +324,7 @@ proc matchExpr(c: var Context; it: var Item): bool =
       or2 = true
       break or3
     var kw21 = false
-    if isTag(c, it, ShrT):
+    if isTag(c, it, DivT):
       if not matchType(c, it):
         error(c, it, "Type expected")
         break or3
@@ -348,7 +339,7 @@ proc matchExpr(c: var Context; it: var Item): bool =
       or2 = true
       break or3
     var kw22 = false
-    if isTag(c, it, ShlT):
+    if isTag(c, it, ModT):
       if not matchType(c, it):
         error(c, it, "Type expected")
         break or3
@@ -363,7 +354,7 @@ proc matchExpr(c: var Context; it: var Item): bool =
       or2 = true
       break or3
     var kw23 = false
-    if isTag(c, it, BitandT):
+    if isTag(c, it, ShrT):
       if not matchType(c, it):
         error(c, it, "Type expected")
         break or3
@@ -378,7 +369,7 @@ proc matchExpr(c: var Context; it: var Item): bool =
       or2 = true
       break or3
     var kw24 = false
-    if isTag(c, it, BitorT):
+    if isTag(c, it, ShlT):
       if not matchType(c, it):
         error(c, it, "Type expected")
         break or3
@@ -393,9 +384,12 @@ proc matchExpr(c: var Context; it: var Item): bool =
       or2 = true
       break or3
     var kw25 = false
-    if isTag(c, it, BitnotT):
+    if isTag(c, it, BitandT):
       if not matchType(c, it):
         error(c, it, "Type expected")
+        break or3
+      if not matchExpr(c, it):
+        error(c, it, "Expr expected")
         break or3
       if not matchExpr(c, it):
         error(c, it, "Expr expected")
@@ -405,7 +399,7 @@ proc matchExpr(c: var Context; it: var Item): bool =
       or2 = true
       break or3
     var kw26 = false
-    if isTag(c, it, BitxorT):
+    if isTag(c, it, BitorT):
       if not matchType(c, it):
         error(c, it, "Type expected")
         break or3
@@ -420,9 +414,9 @@ proc matchExpr(c: var Context; it: var Item): bool =
       or2 = true
       break or3
     var kw27 = false
-    if isTag(c, it, EqT):
-      if not matchExpr(c, it):
-        error(c, it, "Expr expected")
+    if isTag(c, it, BitnotT):
+      if not matchType(c, it):
+        error(c, it, "Type expected")
         break or3
       if not matchExpr(c, it):
         error(c, it, "Expr expected")
@@ -432,7 +426,10 @@ proc matchExpr(c: var Context; it: var Item): bool =
       or2 = true
       break or3
     var kw28 = false
-    if isTag(c, it, NeqT):
+    if isTag(c, it, BitxorT):
+      if not matchType(c, it):
+        error(c, it, "Type expected")
+        break or3
       if not matchExpr(c, it):
         error(c, it, "Expr expected")
         break or3
@@ -444,7 +441,7 @@ proc matchExpr(c: var Context; it: var Item): bool =
       or2 = true
       break or3
     var kw29 = false
-    if isTag(c, it, LeT):
+    if isTag(c, it, EqT):
       if not matchExpr(c, it):
         error(c, it, "Expr expected")
         break or3
@@ -456,7 +453,7 @@ proc matchExpr(c: var Context; it: var Item): bool =
       or2 = true
       break or3
     var kw30 = false
-    if isTag(c, it, LtT):
+    if isTag(c, it, NeqT):
       if not matchExpr(c, it):
         error(c, it, "Expr expected")
         break or3
@@ -468,9 +465,9 @@ proc matchExpr(c: var Context; it: var Item): bool =
       or2 = true
       break or3
     var kw31 = false
-    if isTag(c, it, CastT):
-      if not matchType(c, it):
-        error(c, it, "Type expected")
+    if isTag(c, it, LeT):
+      if not matchExpr(c, it):
+        error(c, it, "Expr expected")
         break or3
       if not matchExpr(c, it):
         error(c, it, "Expr expected")
@@ -480,6 +477,30 @@ proc matchExpr(c: var Context; it: var Item): bool =
       or2 = true
       break or3
     var kw32 = false
+    if isTag(c, it, LtT):
+      if not matchExpr(c, it):
+        error(c, it, "Expr expected")
+        break or3
+      if not matchExpr(c, it):
+        error(c, it, "Expr expected")
+        break or3
+      kw32 = matchParRi(c, it)
+    if kw32:
+      or2 = true
+      break or3
+    var kw33 = false
+    if isTag(c, it, CastT):
+      if not matchType(c, it):
+        error(c, it, "Type expected")
+        break or3
+      if not matchExpr(c, it):
+        error(c, it, "Expr expected")
+        break or3
+      kw33 = matchParRi(c, it)
+    if kw33:
+      or2 = true
+      break or3
+    var kw34 = false
     if isTag(c, it, ConvT):
       if not matchType(c, it):
         error(c, it, "Type expected")
@@ -487,8 +508,8 @@ proc matchExpr(c: var Context; it: var Item): bool =
       if not matchExpr(c, it):
         error(c, it, "Expr expected")
         break or3
-      kw32 = matchParRi(c, it)
-    if kw32:
+      kw34 = matchParRi(c, it)
+    if kw34:
       or2 = true
       break or3
     if matchCall(c, it):

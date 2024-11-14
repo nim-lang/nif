@@ -107,13 +107,13 @@
     (call printf.c "hello %s" "file 3")
 
     (var :x.c . (bool) (true))
-    (call printf.c "hello %lu" (sizeof x.c))
+    (call printf.c "hello %lu" (sizeof (bool)))
 
     (var :y.c . MyObject2.mc (oconstr MyObject2.mc (kv a2.c +12) (kv a3.c (true))))
 
     (call printf.c "hello %ld\0A" (dot y.c a2.c +0))
 
-    (call printf.c "hello %lu\0A" (sizeof x.c))
+    (call printf.c "hello %lu\0A" (sizeof (bool)))
 
     (call printf.c "hello %d\0A" (and (par +1) (par +0)))
     (call printf.c "hello %d\0A" (or (par +1) (par -0)))
@@ -133,6 +133,15 @@
     (call printf.c "hello %d\0A" (lt +9 +4))
   )
   )
+
+  (proc :foo.sizealignoffset . . . (stmts
+    (call printf.c "size %lu\0A" (sizeof (i +32)))
+    (call printf.c "size obj %lu\0A" (sizeof MyObject2.m))
+    (call printf.c "align %lu\0A" (alignof (i +32)))
+    (call printf.c "align obj %lu\0A" (alignof MyObject2.m))
+    (call printf.c "offset obj 1 %lu\0A" (offsetof MyObject2.m a2))
+    (call printf.c "offset obj 2 %lu\0A" (offsetof MyObject2.m a3))
+  ))
 
   (proc :foo.floatspecial . . . (stmts
     (var :x.m . (f +32) (inf))
@@ -199,6 +208,7 @@
     (call foo.while)
     (call foo.neg)
     (call foo.cs2)
+    (call foo.sizealignoffset)
     (call foo.floatspecial)
     (call foo.intminmax)
 

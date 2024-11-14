@@ -96,7 +96,9 @@ Expr ::= Number | CharLiteral | StringLiteral |
          (or Expr Expr) | # "||"
          (not Expr) | # "!"
          (neg Type Expr) |
-         (sizeof Expr) |
+         (sizeof Type) |
+         (alignof Type) |
+         (offsetof Type SYMBOL) |
          (oconstr Type (kv Symbol Expr)*) |  # (object constructor){...}
          (aconstr Type Expr*) |              # array constructor
          (add Type Expr Expr) |

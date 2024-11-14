@@ -267,8 +267,17 @@ proc genx(c: var GeneratedCode; t: Tree; n: NodePos; mode: XMode) =
     genx c, t, n.firstSon, WantAddr
   of SizeofC:
     # we evaluate it at compile-time:
-    let a = getAsmSlot(c, n.firstSon)
+    let a = typeToSlot(c, n.firstSon)
     genIntLit c, a.size, info
+  of AlignofC:
+    # we evaluate it at compile-time:
+    let a = typeToSlot(c, n.firstSon)
+    genIntLit c, a.align, info
+  of OffsetofC:
+    let (obj, fld) = sons2(t, n)
+    let field = t[fld].litId
+    let ftyp = c.fields[field]
+    genIntLit c, ftyp.offset, info
   of CallC: genCall c, t, n
   of AddC: typedBinOp AddT
   of SubC: typedBinOp SubT
