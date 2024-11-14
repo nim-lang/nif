@@ -63,7 +63,7 @@ proc analyseVarUsages(c: var Context; t: Tree; n: NodePos) =
   let k = t[n].kind
   case k
   of Empty, Ident, SymDef, IntLit, UIntLit, FloatLit, CharLit, StrLit, Err,
-     NilC, FalseC, TrueC, SizeofC, InfC, NegInfC, NanC:
+     NilC, FalseC, TrueC, SizeofC, AlignofC, OffsetofC, InfC, NegInfC, NanC:
     discard
   of StmtsC, ScopeC:
     c.openScope()

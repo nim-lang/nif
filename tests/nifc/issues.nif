@@ -134,6 +134,13 @@
   )
   )
 
+  (proc :foo.alignoffset . . . (stmts
+    (call printf.c "align %lu\0A" (alignof (i +32)))
+    (call printf.c "align obj %lu\0A" (alignof MyObject2.m))
+    (call printf.c "offset obj 1 %lu\0A" (offsetof MyObject2.m a2))
+    (call printf.c "offset obj 2 %lu\0A" (offsetof MyObject2.m a3))
+  ))
+
   (proc :foo.floatspecial . . . (stmts
     (var :x.m . (f +32) (inf))
     (var :x2.m . (f +64) (neginf))
@@ -199,6 +206,7 @@
     (call foo.while)
     (call foo.neg)
     (call foo.cs2)
+    (call foo.alignoffset)
     (call foo.floatspecial)
     (call foo.intminmax)
 

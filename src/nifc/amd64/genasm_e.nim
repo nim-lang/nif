@@ -789,6 +789,19 @@ proc genx(c: var GeneratedCode; t: Tree; n: NodePos; dest: var Location) =
     let typ = AsmSlot(kind: AUInt, size: WordSize, align: WordSize)
     let d = immediateLoc(uint(a.size), typ)
     into c, dest, d
+  of AlignofC:
+    # we evaluate it at compile-time:
+    let a = typeToSlot(c, n.firstSon)
+    let typ = AsmSlot(kind: AUInt, size: WordSize, align: WordSize)
+    let d = immediateLoc(uint(a.align), typ)
+    into c, dest, d
+  of OffsetofC:
+    let (obj, fld) = sons2(t, n)
+    let field = t[fld].litId
+    let ftyp = c.fields[field]
+    let typ = AsmSlot(kind: AUInt, size: WordSize, align: WordSize)
+    let d = immediateLoc(uint(ftyp.offset), typ)
+    into c, dest, d
   of CallC: genCall c, t, n, dest
   of AddC: typedBinOp AddT
   of SubC: typedBinOp SubT

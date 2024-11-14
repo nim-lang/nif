@@ -209,6 +209,22 @@ proc genx(c: var GeneratedCode; t: Tree; n: NodePos) =
     c.add ParLe
     genx c, t, arg
     c.add ParRi
+  of AlignofC:
+    let arg = n.firstSon
+    c.add "NIM_ALIGNOF"
+    c.add ParLe
+    genType c, t, arg
+    c.add ParRi
+  of OffsetofC:
+    let (typ, mem) = sons2(t, n)
+    c.add "offsetof"
+    c.add ParLe
+    genType c, t, typ
+    c.add Comma
+    let lit = t[mem].litId
+    let name = mangle(c.m.lits.strings[lit])
+    c.add name
+    c.add ParRi
   of CallC: genCall c, t, n
   of AddC: typedBinOp " + "
   of SubC: typedBinOp " - "
