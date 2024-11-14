@@ -531,16 +531,47 @@ proc wantExportMarker(e: var SemContext; c: var Cursor) =
     else:
       e.dest.add c
     inc c
+  elif c.kind == ParLe:
+    # export marker could have been turned into a NIF tag
+    copyTree e, c
   else:
     buildErr e, c.info, "expected '.' or 'x' for an export marker"
 
 proc patchType(e: var SemContext; typ: TypeCursor; patchPosition: int) =
   discard "XXX to implement"
 
-proc semPragma(e: var SemContext; c: var Cursor; kind: SymKind) =
-  discard "XXX to implement"
+type
+  CrucialPragma* = object
+    magic: string
+    bits: int
 
-proc semPragmas(e: var SemContext; c: var Cursor; kind: SymKind) =
+proc semPragma(e: var SemContext; c: var Cursor; crucial: var CrucialPragma; kind: SymKind) =
+  case pragmaKind(c)
+  of NoPragma:
+    if kind.isRoutine and callConvKind(c) != NoCallConv:
+      takeToken e, c
+      wantParRi e, c
+    else:
+      buildErr e, c.info, "expected pragma"
+  of Magic:
+    takeToken e, c
+    if c.kind in {StringLit, Ident}:
+      let m = parseMagic(pool.strings[c.litId])
+      if m == mNone:
+        buildErr e, c.info, "unknown `magic`"
+      else:
+        let (magicWord, bits) = magicToTag(m)
+        crucial.magic = magicWord
+        crucial.bits = bits
+      takeToken e, c
+    else:
+      buildErr e, c.info, "`magic` pragma takes a string literal"
+    wantParRi e, c
+  of ImportC, ImportCpp, ExportC, Nodecl, Header, Align, Bits, Selectany,
+     Threadvar, Globalvar:
+    copyTree e, c
+
+proc semPragmas(e: var SemContext; c: var Cursor; crucial: var CrucialPragma; kind: SymKind) =
   if c.kind == DotToken:
     e.dest.add c
     inc c
@@ -548,7 +579,7 @@ proc semPragmas(e: var SemContext; c: var Cursor; kind: SymKind) =
     e.dest.add c
     inc c
     while c.kind != ParRi:
-      semPragma e, c, kind
+      semPragma e, c, crucial, kind
     wantParRi e, c
   else:
     buildErr e, c.info, "expected '.' or 'pragmas'"
@@ -692,7 +723,8 @@ proc semLocalTypeImpl(e: var SemContext; c: var Cursor; context: TypeDeclContext
       wantDot e, c # name
       semParams e, c
       semLocalTypeImpl e, c, InReturnTypeDecl
-      semPragmas e, c, ProcY
+      var ignored = default CrucialPragma
+      semPragmas e, c, ignored, ProcY
       wantParRi e, c
   else:
     e.buildErr info, "not a type"
@@ -705,12 +737,28 @@ proc semLocalType(e: var SemContext; c: var Cursor): TypeCursor =
 proc semReturnType(e: var SemContext; c: var Cursor): TypeCursor =
   result = semLocalType(e, c)
 
+proc exportMarkerBecomesNifTag(e: var SemContext; insertPos: int; crucial: CrucialPragma) =
+  assert crucial.magic.len > 0
+  let info = e.dest[insertPos].info
+  e.dest[insertPos] = toToken(ParLe, pool.tags.getOrIncl(crucial.magic), info)
+  if crucial.bits != 0:
+    let arr = [toToken(IntLit, pool.integers.getOrIncl(crucial.bits), info),
+               toToken(ParRi, 0'u32, info)]
+    e.dest.insert arr, insertPos
+  else:
+    let arr = [toToken(ParRi, 0'u32, info)]
+    e.dest.insert arr, insertPos
+
 proc semLocal(e: var SemContext; c: var Cursor; kind: SymKind) =
   e.dest.add c
   inc c
   let delayed = handleSymDef(e, c, kind) # 0
+  let beforeExportMarker = e.dest.len
   wantExportMarker e, c # 1
-  semPragmas e, c, kind # 2
+  var crucial = default CrucialPragma
+  semPragmas e, c, crucial, kind # 2
+  if crucial.magic.len > 0:
+    exportMarkerBecomesNifTag e, beforeExportMarker, crucial
   case kind
   of TypevarY:
     discard semLocalType(e, c)
@@ -785,6 +833,7 @@ proc semParams(e: var SemContext; c: var Cursor) =
 
 proc semProc(e: var SemContext; it: var Item; kind: SymKind) =
   declareOverloadableSym e, it, kind
+  let beforeExportMarker = e.dest.len
   wantExportMarker e, it.n
   if it.n.kind == DotToken:
     e.dest.add it.n
@@ -804,7 +853,10 @@ proc semProc(e: var SemContext; it: var Item; kind: SymKind) =
     else:
       buildErr e, it.n.info, "`effects` must be empyt"
       skip it.n
-    semPragmas e, it.n, kind
+    var crucial = default CrucialPragma
+    semPragmas e, it.n, crucial, kind
+    if crucial.magic.len > 0:
+      exportMarkerBecomesNifTag e, beforeExportMarker, crucial
     e.openScope() # open body scope
     semProcBody e, it
     e.closeScope() # close body scope

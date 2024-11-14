@@ -7,7 +7,7 @@
 ## Same as compiler/ast.nim, but could remove plenty of magics and then add new ones
 ## so it's better not to import it from compiler/ast.nim.
 
-import nimony_model
+import nimony_model, stringviews, keymatcher
 
 type
   TMagic* = enum # symbols that require compiler magic:
@@ -86,6 +86,8 @@ type
     mException, mBuiltinType, mSymOwner, mUncheckedArray, mGetImplTransf,
     mSymIsInstantiationOf, mNodeId, mPrivateAccess, mZeroDefault
 
+declareMatcher parseMagic, TMagic, 1, 1
+
 template res(t: ExprKind | StmtKind | TypeKind; bits = 0): (string, int) = ($t, bits)
 
 const
@@ -151,3 +153,6 @@ proc magicToTag*(m: TMagic): (string, int) =
   of mString: res StringT
   of mVoidType: res VoidT
   else: ("", 0)
+
+when isMainModule:
+  echo parseMagic "Int32"

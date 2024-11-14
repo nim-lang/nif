@@ -156,6 +156,7 @@ type
 
   PragmaKind* = enum
     NoPragma
+    Magic = "magic"
     ImportC = "importc"
     ImportCpp = "importcpp"
     ExportC = "exportc"
@@ -204,8 +205,10 @@ proc stmtKind*(c: Cursor): StmtKind {.inline.} =
 declareMatcher parsePragmaKind, PragmaKind
 
 proc pragmaKind*(c: Cursor): PragmaKind {.inline.} =
-  assert c.kind == ParLe
-  parsePragmaKind pool.tags[tag(c)]
+  if c.kind == ParLe:
+    result = parsePragmaKind pool.tags[tag(c)]
+  else:
+    result = NoPragma
 
 declareMatcher parseSubstructureKind, SubstructureKind
 
