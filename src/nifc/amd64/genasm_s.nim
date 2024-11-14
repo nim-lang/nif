@@ -319,10 +319,9 @@ proc genConstData(c: var GeneratedCode; t: Tree; n: NodePos) =
     let arg = n.firstSon
     genConstData c, t, arg
   of SizeofC:
-    let a = getAsmSlot(c, n.firstSon)
+    let a = typeToSlot(c, n.firstSon)
     c.genIntLit a.size, info
   of AlignofC:
-    # we evaluate it at compile-time:
     let a = typeToSlot(c, n.firstSon)
     c.genIntLit a.align, info
   of OffsetofC:

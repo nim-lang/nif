@@ -19,7 +19,7 @@
          (or Expr Expr)
          (not Expr)
          (neg Type Expr)
-         (sizeof Expr)
+         (sizeof Type)
          (alignof Type)
          (offsetof Type SYMBOL)
          (oconstr Type (ZERO_OR_MANY (kv SYMBOL Expr)))

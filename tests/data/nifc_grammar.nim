@@ -207,8 +207,8 @@ proc matchExpr(c: var Context; it: var Item): bool =
       break or3
     var kw10 = false
     if isTag(c, it, SizeofT):
-      if not matchExpr(c, it):
-        error(c, it, "Expr expected")
+      if not matchType(c, it):
+        error(c, it, "Type expected")
         break or3
       kw10 = matchParRi(c, it)
     if kw10:

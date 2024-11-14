@@ -207,7 +207,7 @@ proc genx(c: var GeneratedCode; t: Tree; n: NodePos) =
     let arg = n.firstSon
     c.add "sizeof"
     c.add ParLe
-    genx c, t, arg
+    genType c, t, arg
     c.add ParRi
   of AlignofC:
     let arg = n.firstSon
