@@ -4,7 +4,8 @@
 # See the file "license.txt", included in this
 # distribution, for details about the copyright.
 
-import std / [syncio, terminal]
+import std / [syncio, strutils, os, terminal]
+import nifstreams, bitabs, lineinfos
 
 type
   MsgKind* = enum
@@ -72,3 +73,23 @@ proc fatal*(msg: string) =
   when defined(debug):
     writeStackTrace()
   quit "[Error] " & msg
+
+proc shortenDir(x: string; to: var string): string =
+  when defined(windows):
+    let x = x.replace('\\', '/')
+    to = to.replace('\\', '/')
+  if not to.endsWith('/'):
+    to.add '/'
+  if startsWith(x, to):
+    result = substr(x, to.len, x.len-1)
+  else:
+    result = x
+
+proc infoToStr*(info: PackedLineInfo): string =
+  let (file, line, col) = unpack(pool.man, info)
+  if not info.isValid:
+    result = "???"
+  else:
+    var cwd = getCurrentDir()
+    result = pool.files[file].shortenDir(cwd)
+    result.add "(" & $line & ", " & $(col+1) & ")"

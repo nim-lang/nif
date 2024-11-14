@@ -11,7 +11,7 @@
 import std / [tables, os, syncio, formatfloat, assertions]
 include nifprelude
 import nimony_model, symtabs, builtintypes, decls, symparser,
-  programs, sigmatch
+  programs, sigmatch, magics, reporters
 
 type
   TypeCursor = Cursor
@@ -864,6 +864,7 @@ proc semExpr(e: var SemContext; it: var Item) =
       of ConstS: semLocal e, it, ConstY
       of StmtsS: semStmts e, it
       of BreakS: semBreak e, it
+      of CallS: semCall e, it
       of EmitS, AsgnS, BlockS, IfS, ForS, CaseS, RetS, YieldS,
          TemplateS, TypeS:
         discard
@@ -896,12 +897,31 @@ proc semExpr(e: var SemContext; it: var Item) =
        EqX, NeqX, LeX, LtX, CastX, ConvX, SufX, RangeX, RangesX,
        HderefX, HaddrX, OconvX, HconvX, OchoiceX, CchoiceX,
        TupleConstrX, SetX, QuotedX,
-       CompilesX, DeclaredX, DefinedX, HighX, LowX, TypeofX:
+       CompilesX, DeclaredX, DefinedX, HighX, LowX, TypeofX, AshrX:
       takeToken e, it.n
       wantParRi e, it.n
 
   of ParRi, EofToken, SymbolDef, UnknownToken, DotToken:
     buildErr e, it.n.info, "expression expected"
+
+proc reportErrors(e: var SemContext): int =
+  let errTag = pool.tags.getOrIncl("err")
+  var i = 0
+  var r = Reporter(verbosity: 2)
+  result = 0
+  while i < e.dest.len:
+    if e.dest[i].kind == ParLe and e.dest[i].tagId == errTag:
+      inc result
+      let info = e.dest[i].info
+      inc i
+      while e.dest[i].kind == UnknownToken:
+        r.trace infoToStr(e.dest[i].info), "instantiation from here"
+        inc i
+      assert e.dest[i].kind == StringLit
+      r.error infoToStr(info), pool.strings[e.dest[i].litId]
+      inc i
+    else:
+      inc i
 
 proc writeOutput(e: var SemContext; outfile: string) =
   #var b = nifbuilder.open(outfile)
@@ -929,4 +949,5 @@ proc semcheck*(infile, outfile: string) =
       if not e.declared.contains(imp):
         importSymbol(e, imp)
       inc i
-  writeOutput e, outfile
+  if reportErrors(e) == 0:
+    writeOutput e, outfile

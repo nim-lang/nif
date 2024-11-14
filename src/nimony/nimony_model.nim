@@ -91,6 +91,7 @@ type
     ModX = "mod"
     ShrX = "shr"
     ShlX = "shl"
+    AshrX = "ashr"
     BitandX = "bitand"
     BitorX = "bitor"
     BitxorX = "bitxor"
