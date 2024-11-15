@@ -594,7 +594,7 @@ proc traverseStmt(e: var EContext; c: var Cursor; mode = TraverseAll) =
       traverseLocal e, c, (if e.nestedIn[^1][0] == StmtsS and mode == TraverseTopLevel: "gvar" else: "var"), mode
     of ConstS:
       traverseLocal e, c, "const", mode
-    of EmitS, AsgnS, RetS, CallS:
+    of EmitS, AsgnS, RetS, CallS, DiscardS:
       e.dest.add c
       inc c
       e.loop c:

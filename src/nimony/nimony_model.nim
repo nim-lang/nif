@@ -36,6 +36,7 @@ type
     TemplateS = "template"
     TypeS = "type"
     CallS = "call"
+    DiscardS = "discard"
 
   SymKind* = enum
     NoSym

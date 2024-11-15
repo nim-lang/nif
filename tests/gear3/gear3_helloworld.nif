@@ -71,4 +71,7 @@
 
   (var :s.var.quoted . . (i +32) (quoted var.c))
 
+  (var :foo.c1 . . (i +32) +1)
+  (discard foo.c1)
+
 )))
