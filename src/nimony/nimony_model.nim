@@ -37,6 +37,7 @@ type
     TypeS = "type"
     CallS = "call"
     DiscardS = "discard"
+    ImportS = "import"
 
   SymKind* = enum
     NoSym

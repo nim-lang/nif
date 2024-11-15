@@ -366,6 +366,7 @@ proc traverseProc(e: var EContext; c: var Cursor; mode: TraverseMode) =
   if mode != TraverseSig or prag.callConv == InlineC:
     traverseStmt e, c, TraverseAll
   else:
+    e.dest.addDotToken()
     skip c
   wantParRi e, c
   swap dst, e.dest
@@ -613,6 +614,8 @@ proc traverseStmt(e: var EContext; c: var Cursor; mode = TraverseAll) =
       skip c
     of TypeS:
       traverseTypeDecl e, c
+    of ImportS:
+      skip c
   else:
     error e, "statement expected, but got: ", c
 
@@ -634,6 +637,7 @@ proc importSymbol(e: var EContext; s: SymId) =
     var c = fromBuffer(buf)
     e.dest.add tagToken("imp", c.info)
     traverseStmt e, c, TraverseSig
+    e.dest.addDotToken()
     e.dest.addParRi()
 
 proc writeOutput(e: var EContext) =

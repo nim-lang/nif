@@ -4,11 +4,12 @@
   (var :x . . (i +32) +12)
   (var :y . . (i +32) +12)
 
+  (import mod1)
 
- (proc :foo.c . . .
+  (proc :foo.c . . .
   (params
-   (param :x . . (i +32) .)
-   (param :y . . (i +32) .)) . . .
+    (param :x . . (i +32) .)
+    (param :y . . (i +32) .)) . . .
   (stmts
    (var :x.m . . (i +32) +2)
 
@@ -73,5 +74,7 @@
 
   (var :foo.c1 . . (i +32) +1)
   (discard foo.c1)
+
+  (call foo.c12.mod1 +1 +2)
 
 )))

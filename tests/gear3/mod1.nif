@@ -1,0 +1,8 @@
+(.nif24)
+
+(proc :foo.c12.mod1 . . .
+  (params
+  (param :x . . (i +32) .)
+  (param :y . . (i +32) .)) . . .
+  (stmts
+  (var :x.m . . (i +32) +2)))
