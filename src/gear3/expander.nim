@@ -476,6 +476,7 @@ proc traverseLocal(e: var EContext; c: var Cursor; tag: string; mode: TraverseMo
   if mode != TraverseSig:
     traverseExpr e, c
   else:
+    e.dest.addDotToken()
     skip c
   wantParRi e, c
   if Nodecl in prag.flags:
