@@ -8,10 +8,10 @@
 ## Most important task is to turn identifiers into symbols and to perform
 ## type checking.
 
-import std / [tables, os, syncio, formatfloat, assertions]
+import std / [tables, sets, os, syncio, formatfloat, assertions]
 include nifprelude
 import nimony_model, symtabs, builtintypes, decls, symparser,
-  programs, sigmatch, magics, reporters
+  programs, sigmatch, magics, reporters, nifconfig
 
 type
   TypeCursor = Cursor
@@ -36,22 +36,25 @@ type
     typeParams*: seq[TypeCursor]
     requestFrom*: seq[PackedLineInfo]
 
+  ProgramContext = ref object # shared for every `SemContext`
+    config: NifConfig
+
   SemContext = object
     dest: TokenBuf
     routine: SemRoutine
     currentScope: Scope
+    g: ProgramContext
     includeStack: seq[string]
     importedModules: seq[ImportedModule]
     instantiatedFrom: seq[PackedLineInfo]
     iface: Iface
     inBlock, inLoop, inType, inCallFn: int
-    inGeneric: bool
-    inGenericStack: seq[bool]
     globals, locals: Table[string, int]
     types: BuiltinTypes
     typeMem: Table[string, TokenBuf]
     declMem: Table[SymId, TokenBuf]
     thisModuleSuffix: string
+    processedModules: HashSet[string]
 
 # -------------- symbol lookups -------------------------------------
 
@@ -466,6 +469,206 @@ proc wantDot(c: var SemContext; n: var Cursor) =
   else:
     buildErr c, n.info, "expected '.'"
 
+# -------------------- path handling ----------------------------
+
+proc stdFile(f: string): string =
+  getAppDir() / "lib" / f
+
+proc resolveFile*(c: SemContext; origin: string; toResolve: string): string =
+  let nimFile = toResolve.addFileExt(".nim")
+  #if toResolve.startsWith("std/") or toResolve.startsWith("ext/"):
+  #  result = stdFile nimFile
+  if toResolve.isAbsolute:
+    result = nimFile
+  else:
+    result = splitFile(origin).dir / nimFile
+    var i = 0
+    while not fileExists(result) and i < c.g.config.paths.len:
+      result = c.g.config.paths[i] / nimFile
+      inc i
+
+proc filenameVal(n: var Cursor; res: var seq[string]; hasError: var bool) =
+  case n.kind
+  of StringLit, Ident:
+    res.add pool.strings[n.litId]
+  of Symbol:
+    var s = pool.syms[n.symId]
+    extractBasename s
+    res.add s
+  of ParLe:
+    case exprKind(n)
+    of OchoiceX, CchoiceX:
+      inc n
+      if n.kind != ParRi:
+        filenameVal(n, res, hasError)
+        while n.kind != ParRi: skip n
+        inc n
+      else:
+        hasError = true
+        inc n
+    of CallX:
+      var x = n
+      skip n # ensure we skipped it completely
+      inc x
+      var isSlash = false
+      case x.kind
+      of StringLit, Ident:
+        isSlash = pool.strings[x.litId] == "/"
+      of Symbol:
+        var s = pool.syms[x.symId]
+        extractBasename s
+        isSlash = s == "/"
+      else: hasError = true
+      if not hasError:
+        inc x # skip slash
+        var prefix: seq[string] = @[]
+        filenameVal(x, prefix, hasError)
+        var suffix: seq[string] = @[]
+        filenameVal(x, suffix, hasError)
+        if x.kind != ParRi: hasError = true
+        for pre in mitems(prefix):
+          for suf in mitems(suffix):
+            if pre != "" and suf != "":
+              res.add pre & "/" & suf
+            else:
+              hasError = true
+        if prefix.len == 0 or suffix.len == 0:
+          hasError = true
+      else:
+        hasError = true
+    of ParX, AconstrX:
+      inc n
+      if n.kind != ParRi:
+        while n.kind != ParRi:
+          filenameVal(n, res, hasError)
+        inc n
+      else:
+        hasError = true
+        inc n
+    of TupleConstrX:
+      inc n
+      skip n # skip type
+      if n.kind != ParRi:
+        while n.kind != ParRi:
+          filenameVal(n, res, hasError)
+        inc n
+      else:
+        hasError = true
+        inc n
+    else:
+      hasError = true
+  else:
+    hasError = true
+
+# ------------------ include/import handling ------------------------
+
+proc findTool*(name: string): string =
+  let exe = name.addFileExt(ExeExt)
+  result = getAppDir() / exe
+
+proc exec*(cmd: string) =
+  if execShellCmd(cmd) != 0: quit("FAILURE: " & cmd)
+
+proc parseFile(nimFile: string): TokenBuf =
+  let nifler = findTool("nifler")
+  let name = nimFile.splitFile.name
+  let src = "nifcache" / name & ".1.nif"
+  exec quoteShell(nifler) & " p " & quoteShell(nimFile) & " " &
+    quoteShell(src)
+
+  var stream = nifstreams.open(src)
+  try:
+    discard processDirectives(stream.r)
+    result = fromStream(stream)
+  finally:
+    nifstreams.close(stream)
+
+proc semStmt(c: var SemContext; n: var Cursor)
+
+proc combineType(dest: var Cursor; src: Cursor) =
+  if typeKind(dest) == AutoT:
+    dest = src
+
+proc getFile(c: var SemContext; info: PackedLineInfo): string =
+  let (fid, _, _) = unpack(pool.man, info)
+  result = pool.files[fid]
+
+proc semInclude(c: var SemContext; it: var Item) =
+  var files: seq[string] = @[]
+  var hasError = false
+  let info = it.n.info
+  var x = it.n
+  copyTree c, it.n
+  inc x # skip the `include`
+  filenameVal(x, files, hasError)
+
+  if hasError:
+    c.buildErr info, "wrong `include` statement"
+  else:
+    for f1 in items(files):
+      let f2 = resolveFile(c, getFile(c, info), f1)
+      # check for recursive include files:
+      var isRecursive = false
+      for a in c.includeStack:
+        if a == f2:
+          isRecursive = true
+          break
+
+      if not isRecursive:
+        var buf = parseFile f2
+        c.includeStack.add f2
+        #c.m.includes.add f2
+        var n = cursorAt(buf, 0)
+        semStmt(c, n)
+        c.includeStack.setLen c.includeStack.len - 1
+      else:
+        var m = ""
+        for i in 0..<c.includeStack.len:
+          m.add c.includeStack[i]
+          m.add " -> "
+        m.add f2
+        c.buildErr info, "recursive include: " & m
+
+  combineType it.typ, c.types.voidType
+
+proc importSingleFile(c: var SemContext; f1, origin: string; info: PackedLineInfo) =
+  let f2 = resolveFile(c, origin, f1)
+  if not c.processedModules.containsOrIncl(f2):
+    discard "XXX to implement"
+
+proc cyclicImport(c: var SemContext; x: var Cursor) =
+  c.buildErr x.info, "cyclic module imports are not implemented"
+
+proc semImport(c: var SemContext; it: var Item) =
+  let info = it.n.info
+  var x = it.n
+  copyTree c, it.n
+  inc x # skip the `import`
+
+  if x.kind == ParLe and pool.tags[x.tagId] == "pragmax":
+    inc x
+    var y = x
+    skip y
+    if y.substructureKind == PragmasS:
+      inc y
+      if y.kind == Ident and pool.strings[y.litId] == "cyclic":
+        cyclicImport(c, x)
+        return
+
+  var files: seq[string] = @[]
+  var hasError = false
+  filenameVal(x, files, hasError)
+  if hasError:
+    c.buildErr info, "wrong `import` statement"
+  else:
+    let origin = getFile(c, info)
+    for f in files:
+      importSingleFile c, f, origin, info
+
+  combineType it.typ, c.types.voidType
+
+# -------------------- sem checking -----------------------------
+
 proc semExpr(c: var SemContext; it: var Item)
 
 proc classifyType(c: var SemContext; n: Cursor): TypeKind =
@@ -519,10 +722,6 @@ proc semCall(c: var SemContext; it: var Item) =
   c.dest.add fn.n
   c.dest.add m.args
   wantParRi c, it.n
-
-proc combineType(dest: var Cursor; src: Cursor) =
-  if typeKind(dest) == AutoT:
-    dest = src
 
 proc semWhile(c: var SemContext; it: var Item) =
   c.dest.add it.n
@@ -991,6 +1190,8 @@ proc semExpr(c: var SemContext; it: var Item) =
       of StmtsS: semStmts c, it
       of BreakS: semBreak c, it
       of CallS: semCall c, it
+      of IncludeS: semInclude c, it
+      of ImportS: semImport c, it
       of EmitS, AsgnS, BlockS, IfS, ForS, CaseS, RetS, YieldS,
          TemplateS, TypeS:
         discard
@@ -1061,7 +1262,8 @@ proc semcheck*(infile, outfile: string) =
   var c = SemContext(
     dest: createTokenBuf(),
     types: createBuiltinTypes(),
-    thisModuleSuffix: prog.main)
+    thisModuleSuffix: prog.main,
+    g: ProgramContext())
   c.currentScope = Scope(tab: initTable[StrId, seq[Sym]](), up: nil, kind: ToplevelScope)
 
   semStmt c, n
@@ -1071,7 +1273,7 @@ proc semcheck*(infile, outfile: string) =
   when false:
     var i = 0
     while i < c.requires.len:
-      let imp = c.requires[i]
+      let r = c.requires[i]
       if not c.declared.contains(imp):
         importSymbol(c, imp)
       inc i

@@ -31,18 +31,11 @@ Options:
 proc writeHelp() = quit(Usage, QuitSuccess)
 proc writeVersion() = quit(Version & "\n", QuitSuccess)
 
-proc exec(cmd: string) =
-  if execShellCmd(cmd) != 0: quit("FAILURE: " & cmd)
-
 proc nimexec(cmd: string) =
   let t = findExe("nim")
   if t.len == 0:
     quit("FAILURE: cannot find nim.exe / nim binary")
   exec quoteShell(t) & " " & cmd
-
-proc findTool(name: string): string =
-  let exe = name.addFileExt(ExeExt)
-  result = getAppDir() / exe
 
 proc requiresTool(tool, src: string; forceRebuild: bool) =
   let t = findTool(tool)

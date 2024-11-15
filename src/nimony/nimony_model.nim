@@ -36,6 +36,8 @@ type
     TemplateS = "template"
     TypeS = "type"
     CallS = "call"
+    IncludeS = "include"
+    ImportS = "import"
 
   SymKind* = enum
     NoSym
