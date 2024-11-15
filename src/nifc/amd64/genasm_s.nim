@@ -319,8 +319,16 @@ proc genConstData(c: var GeneratedCode; t: Tree; n: NodePos) =
     let arg = n.firstSon
     genConstData c, t, arg
   of SizeofC:
-    let a = getAsmSlot(c, n.firstSon)
+    let a = typeToSlot(c, n.firstSon)
     c.genIntLit a.size, info
+  of AlignofC:
+    let a = typeToSlot(c, n.firstSon)
+    c.genIntLit a.align, info
+  of OffsetofC:
+    let (obj, fld) = sons2(t, n)
+    let field = t[fld].litId
+    let ftyp = c.fields[field]
+    c.genIntLit ftyp.offset, info
   else:
     error c.m, "unsupported expression for const: ", t, n
 

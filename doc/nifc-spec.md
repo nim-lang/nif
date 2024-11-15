@@ -96,7 +96,9 @@ Expr ::= Number | CharLiteral | StringLiteral |
          (or Expr Expr) | # "||"
          (not Expr) | # "!"
          (neg Type Expr) |
-         (sizeof Expr) |
+         (sizeof Type) |
+         (alignof Type) |
+         (offsetof Type SYMBOL) |
          (oconstr Type (kv Symbol Expr)*) |  # (object constructor){...}
          (aconstr Type Expr*) |              # array constructor
          (add Type Expr Expr) |
@@ -141,8 +143,9 @@ Stmt ::= Call |
          (case Expr (of BranchRanges StmtList)* (else StmtList)?) |
          (lab SymbolDef) |
          (jmp Symbol) |
-         (scope StmtList)
-         (ret [Empty | Expr]) # return statement
+         (scope StmtList) |
+         (ret [Empty | Expr]) | # return statement
+         (discard Expr)
 
 StmtList ::= (stmts SCOPE Stmt*)
 

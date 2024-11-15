@@ -3,3 +3,4 @@ nimblecache/
 htmldocs/
 *.exe
 nifcache/
+src/nifc/nifc_grammar.nim
