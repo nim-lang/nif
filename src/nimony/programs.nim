@@ -9,6 +9,8 @@ include nifprelude
 import nifindexes, symparser
 
 type
+  Iface* = OrderedTable[StrId, seq[SymId]] # eg. "foo" -> @["foo.1.mod", "foo.3.mod"]
+
   NifModule = ref object
     buf: TokenBuf
     stream: Stream
@@ -39,6 +41,15 @@ proc load*(suffix: string): NifModule =
     prog.mods[suffix] = result
   else:
     result = prog.mods[suffix]
+
+proc loadInterface*(suffix: string; importTab: var Iface) =
+  let m = load(suffix)
+  for k, _ in m.index.public:
+    var base = k
+    extractBasename(base)
+    let strId = pool.strings.getOrIncl(base)
+    let symId = pool.syms.getOrIncl(k)
+    importTab.mgetOrPut(strId, @[]).add symId
 
 proc error*(msg: string; c: Cursor) =
   write stdout, "[Error] "

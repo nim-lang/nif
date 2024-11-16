@@ -13,6 +13,8 @@ include nifprelude
 import nimony_model, symtabs, builtintypes, decls, symparser,
   programs, sigmatch, magics, reporters, nifconfig
 
+import ".." / gear2 / modnames
+
 type
   TypeCursor = Cursor
   SemRoutine {.acyclic.} = ref object
@@ -26,7 +28,6 @@ proc createSemRoutine(kind: SymKind; parent: SemRoutine): SemRoutine =
   result = SemRoutine(kind: kind, parent: parent, resId: SymId(0))
 
 type
-  Iface = OrderedTable[StrId, seq[SymId]] # eg. "foo" -> @["foo.1.mod", "foo.3.mod"]
   ImportedModule = object
     iface: Iface
 
@@ -45,10 +46,10 @@ type
     currentScope: Scope
     g: ProgramContext
     includeStack: seq[string]
-    importedModules: seq[ImportedModule]
+    #importedModules: seq[ImportedModule]
     instantiatedFrom: seq[PackedLineInfo]
-    iface: Iface
-    inBlock, inLoop, inType, inCallFn: int
+    importTab: Iface
+    inType, inCallFn: int
     globals, locals: Table[string, int]
     types: BuiltinTypes
     typeMem: Table[string, TokenBuf]
@@ -121,11 +122,10 @@ template buildTree*(dest: var TokenBuf; kind: StmtKind|ExprKind|TypeKind;
 
 proc considerImportedSymbols(c: var SemContext; name: StrId; info: PackedLineInfo): int =
   result = 0
-  for imported in items c.importedModules:
-    let candidates = imported.iface.getOrDefault(name)
-    inc result, candidates.len
-    for defId in candidates:
-      c.dest.add toToken(Symbol, defId, info)
+  let candidates = c.importTab.getOrDefault(name)
+  inc result, candidates.len
+  for defId in candidates:
+    c.dest.add toToken(Symbol, defId, info)
 
 proc addSymUse(dest: var TokenBuf; s: Sym; info: PackedLineInfo) =
   dest.add toToken(Symbol, s.name, info)
@@ -633,8 +633,9 @@ proc semInclude(c: var SemContext; it: var Item) =
 
 proc importSingleFile(c: var SemContext; f1, origin: string; info: PackedLineInfo) =
   let f2 = resolveFile(c, origin, f1)
-  if not c.processedModules.containsOrIncl(f2):
-    discard "XXX to implement"
+  let suffix = moduleSuffix(f2)
+  if not c.processedModules.containsOrIncl(suffix):
+    loadInterface suffix, c.importTab
 
 proc cyclicImport(c: var SemContext; x: var Cursor) =
   c.buildErr x.info, "cyclic module imports are not implemented"
