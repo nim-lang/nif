@@ -4,8 +4,6 @@
   (var :x . . (i +32) +12)
   (var :y . . (i +32) +12)
 
-  (import mod1)
-
   (proc :foo.c . . .
   (params
     (param :x . . (i +32) .)

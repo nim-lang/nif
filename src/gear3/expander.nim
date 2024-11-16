@@ -615,8 +615,6 @@ proc traverseStmt(e: var EContext; c: var Cursor; mode = TraverseAll) =
       skip c
     of TypeS:
       traverseTypeDecl e, c
-    of ImportS:
-      skip c
   else:
     error e, "statement expected, but got: ", c
 
