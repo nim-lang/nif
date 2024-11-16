@@ -1257,13 +1257,13 @@ proc writeOutput(c: var SemContext; outfile: string) =
   #b.close()
   writeFile outfile, "(.nif42)\n" & toString(c.dest)
 
-proc semcheck*(infile, outfile: string) =
+proc semcheck*(infile, outfile: string; config: sink NifConfig) =
   var n = setupProgram(infile)
   var c = SemContext(
     dest: createTokenBuf(),
     types: createBuiltinTypes(),
     thisModuleSuffix: prog.main,
-    g: ProgramContext())
+    g: ProgramContext(config: config))
   c.currentScope = Scope(tab: initTable[StrId, seq[Sym]](), up: nil, kind: ToplevelScope)
 
   semStmt c, n
