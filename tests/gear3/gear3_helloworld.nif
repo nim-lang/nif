@@ -57,11 +57,11 @@
     (var :m.c . . (bool) (true))
     (case m.c
     (of
-     (curlyConstr (true))
+     (ranges (true))
      (stmts
       (call foo.c +1 +2)))
     (of
-     (curlyConstr (false))
+     (ranges (false))
      (stmts
       (call foo.c +2 +2))))
 

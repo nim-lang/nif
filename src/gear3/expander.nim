@@ -410,12 +410,8 @@ proc traverseExpr(e: var EContext; c: var Cursor) =
     case c.kind
     of EofToken: break
     of ParLe:
-      if pool.tags[c.tag] == "curlyConstr":
-        e.add "ranges", c.info
-        inc nested
-      else:
-        e.dest.add c
-        inc nested
+      e.dest.add c
+      inc nested
     of ParRi: # TODO: refactoring: take the whole statement into consideration
       if nested == 0:
         break
