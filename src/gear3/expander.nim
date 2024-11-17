@@ -106,6 +106,11 @@ proc expectSymdef(e: var EContext; c: var Cursor) =
   if c.kind != SymbolDef:
     error e, "expected symbol definition, but got: ", c
 
+proc getSymDef(e: var EContext; c: var Cursor): (SymId, PackedLineInfo) =
+  expectSymdef(e, c)
+  result = (c.symId, c.info)
+  inc c
+
 proc expectSym(e: var EContext; c: var Cursor) =
   if c.kind != Symbol:
     error e, "expected symbol, but got: ", c
@@ -327,15 +332,11 @@ proc traverseProc(e: var EContext; c: var Cursor; mode: TraverseMode) =
   let vinfo = c.info
   e.add "proc", vinfo
   inc c
-  expectSymdef(e, c)
-  let s = c.symId
-  let sinfo = c.info
+  let (s, sinfo) = getSymDef(e, c)
 
   # namePos
   e.dest.add toToken(SymbolDef, s, sinfo)
   e.offer s
-
-  inc c
 
   skipExportMarker e, c
 
@@ -366,6 +367,7 @@ proc traverseProc(e: var EContext; c: var Cursor; mode: TraverseMode) =
   if mode != TraverseSig or prag.callConv == InlineC:
     traverseStmt e, c, TraverseAll
   else:
+    e.dest.addDotToken()
     skip c
   wantParRi e, c
   swap dst, e.dest
@@ -384,10 +386,8 @@ proc traverseTypeDecl(e: var EContext; c: var Cursor) =
   let vinfo = c.info
   e.add "type", vinfo
   inc c
-  expectSymdef(e, c)
-  let s = c.symId
+  let (s, _) = getSymDef(e, c)
   let oldOwner = setOwner(e, s)
-  inc c
   skipExportMarker e, c
   let isGeneric = c.kind != DotToken
   skip c # generic parameters
@@ -435,10 +435,7 @@ proc traverseLocal(e: var EContext; c: var Cursor; tag: string; mode: TraverseMo
   let vinfo = c.info
   e.add tag, vinfo
   inc c
-  expectSymdef(e, c)
-  let s = c.symId
-  let sinfo = c.info
-  inc c
+  let (s, sinfo) = getSymDef(e, c)
   skipExportMarker e, c
   let pinfo = c.info
   let prag = parsePragmas(e, c)
@@ -467,6 +464,7 @@ proc traverseLocal(e: var EContext; c: var Cursor; tag: string; mode: TraverseMo
   if mode != TraverseSig:
     traverseExpr e, c
   else:
+    e.dest.addDotToken()
     skip c
   wantParRi e, c
   if Nodecl in prag.flags:
@@ -497,9 +495,8 @@ proc traverseBlock(e: var EContext; c: var Cursor) =
     e.nestedIn.add (BlockS, SymId(0))
     inc c
   else:
-    expectSymdef e, c
-    e.nestedIn.add (BlockS, c.symId)
-    inc c
+    let (s, _) = getSymDef(e, c)
+    e.nestedIn.add (BlockS, s)
   e.dest.add tagToken("scope", info)
   traverseStmt e, c
   wantParRi e, c
@@ -561,7 +558,6 @@ proc traverseCase(e: var EContext; c: var Cursor) =
       wantParRi e, c
     else:
       error e, "expected (of) or (else) but got: ", c
-  traverseStmt e, c
   wantParRi e, c
 
 proc traverseStmt(e: var EContext; c: var Cursor; mode = TraverseAll) =
@@ -588,7 +584,7 @@ proc traverseStmt(e: var EContext; c: var Cursor; mode = TraverseAll) =
       traverseLocal e, c, (if e.nestedIn[^1][0] == StmtsS and mode == TraverseTopLevel: "gvar" else: "var"), mode
     of ConstS:
       traverseLocal e, c, "const", mode
-    of EmitS, AsgnS, RetS, CallS:
+    of EmitS, AsgnS, RetS, CallS, DiscardS:
       e.dest.add c
       inc c
       e.loop c:
@@ -628,6 +624,7 @@ proc importSymbol(e: var EContext; s: SymId) =
     var c = fromBuffer(buf)
     e.dest.add tagToken("imp", c.info)
     traverseStmt e, c, TraverseSig
+    e.dest.addDotToken()
     e.dest.addParRi()
 
 proc writeOutput(e: var EContext) =
