@@ -734,11 +734,11 @@ proc semCall(c: var SemContext; it: var Item) =
   wantParRi c, it.n
 
 proc semWhile(c: var SemContext; it: var Item) =
-  c.dest.add it.n
-  inc it.n
+  takeToken c, it.n
   semBoolExpr c, it
   inc c.routine.inLoop
-  semStmt c, it.n
+  withNewScope c:
+    semStmt c, it.n
   dec c.routine.inLoop
   wantParRi c, it.n
   combineType it.typ, c.types.voidType
@@ -773,7 +773,8 @@ proc insertType(c: var SemContext; typ: TypeCursor; patchPosition: int) =
   c.dest.insert t, patchPosition
 
 proc patchType(c: var SemContext; typ: TypeCursor; patchPosition: int) =
-  discard "XXX to implement"
+  let t = skipModifier(typ)
+  c.dest.replace t, patchPosition
 
 type
   CrucialPragma* = object
@@ -964,7 +965,6 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
       semLocalTypeImpl c, n, context
       if n.kind == DotToken:
         takeToken c, n
-        inc n
       else:
         var it = Item(n: n, typ: c.types.autoType)
         semExpr c, it
@@ -1029,8 +1029,7 @@ proc exportMarkerBecomesNifTag(c: var SemContext; insertPos: int; crucial: Cruci
     c.dest.insert arr, insertPos
 
 proc semLocal(c: var SemContext; n: var Cursor; kind: SymKind) =
-  c.dest.add n
-  inc n
+  takeToken c, n
   let delayed = handleSymDef(c, n, kind) # 0
   let beforeExportMarker = c.dest.len
   wantExportMarker c, n # 1
@@ -1078,12 +1077,10 @@ proc semGenericParam(c: var SemContext; n: var Cursor) =
 
 proc semGenericParams(c: var SemContext; n: var Cursor) =
   if n.kind == DotToken:
-    c.dest.add n
-    inc n
+    takeToken c, n
   elif n.kind == ParLe and pool.tags[n.tagId] == "typevars":
     inc c.routine.inGeneric
-    c.dest.add n
-    inc n
+    takeToken c, n
     while n.kind != ParRi:
       semGenericParam c, n
     wantParRi c, n
@@ -1098,12 +1095,10 @@ proc semParam(c: var SemContext; n: var Cursor) =
 
 proc semParams(c: var SemContext; n: var Cursor) =
   if n.kind == DotToken:
-    c.dest.add n
-    inc n
+    takeToken c, n
   elif n.kind == ParLe and pool.tags[n.tagId] == "params":
     inc c.routine.inGeneric
-    c.dest.add n
-    inc n
+    takeToken c, n
     while n.kind != ParRi:
       semParam c, n
     wantParRi c, n
@@ -1115,8 +1110,7 @@ proc semProc(c: var SemContext; it: var Item; kind: SymKind) =
   let beforeExportMarker = c.dest.len
   wantExportMarker c, it.n
   if it.n.kind == DotToken:
-    c.dest.add it.n
-    inc it.n
+    takeToken c, it.n
   else:
     buildErr c, it.n.info, "TR pattern not implemented"
     skip it.n
@@ -1127,8 +1121,7 @@ proc semProc(c: var SemContext; it: var Item; kind: SymKind) =
     semParams c, it.n
     c.routine.returnType = semReturnType(c, it.n)
     if it.n.kind == DotToken:
-      c.dest.add it.n
-      inc it.n
+      takeToken c, it.n
     else:
       buildErr c, it.n.info, "`effects` must be empyt"
       skip it.n
@@ -1173,6 +1166,110 @@ proc semExprSym(c: var SemContext; it: var Item; s: Sym) =
     else:
       c.buildErr it.n.info, "could not load symbol: " & pool.syms[s.name] & "; errorCode: " & $res.status
       it.typ = c.types.autoType
+
+proc semAsgn(c: var SemContext; it: var Item) =
+  takeToken c, it.n
+  var a = Item(n: it.n, typ: c.types.autoType)
+  semExpr c, a # infers type of `left-hand-side`
+  semExpr c, a # ensures type compatibility with `left-hand-side`
+  it.n = a.n
+  wantParRi c, it.n
+  combineType it.typ, c.types.voidType
+
+proc semEmit(c: var SemContext; it: var Item) =
+  takeToken c, it.n
+  while it.n.kind != ParRi:
+    var a = Item(n: it.n, typ: c.types.autoType)
+    semExpr c, a
+    it.n = a.n
+  wantParRi c, it.n
+  combineType it.typ, c.types.voidType
+
+proc semDiscard(c: var SemContext; it: var Item) =
+  takeToken c, it.n
+  var a = Item(n: it.n, typ: c.types.autoType)
+  semExpr c, a
+  it.n = a.n
+  if classifyType(c, it.typ) == VoidT:
+    buildErr c, it.n.info, "expression of type `" & typeToString(c, it.typ) & "` must not be discarded"
+  wantParRi c, it.n
+  combineType it.typ, c.types.voidType
+
+proc semIf(c: var SemContext; it: var Item) =
+  takeToken c, it.n
+  if it.n.substructureKind == ElifS:
+    while it.n.substructureKind == ElifS:
+      takeToken c, it.n
+      semBoolExpr c, it
+      withNewScope c:
+        semStmt c, it.n
+      wantParRi c, it.n
+  else:
+    buildErr c, it.n.info, "illformed AST: `elif` inside `if` expected"
+  if it.n.substructureKind == ElseS:
+    takeToken c, it.n
+    withNewScope c:
+      semStmt c, it.n
+    wantParRi c, it.n
+  wantParRi c, it.n
+  combineType it.typ, c.types.voidType
+
+proc semReturn(c: var SemContext; it: var Item) =
+  takeToken c, it.n
+  if c.routine.kind == NoSym:
+    buildErr c, it.n.info, "`return` only allowed within a routine"
+  if it.n.kind == DotToken:
+    takeToken c, it.n
+  else:
+    var a = Item(n: it.n, typ: c.routine.returnType)
+    semExpr c, a
+    it.n = a.n
+  wantParRi c, it.n
+  combineType it.typ, c.types.voidType
+
+proc semYield(c: var SemContext; it: var Item) =
+  takeToken c, it.n
+  if c.routine.kind != IterY:
+    buildErr c, it.n.info, "`yield` only allowed within an `iterator`"
+  if it.n.kind == DotToken:
+    takeToken c, it.n
+  else:
+    var a = Item(n: it.n, typ: c.routine.returnType)
+    semExpr c, a
+    it.n = a.n
+  wantParRi c, it.n
+  combineType it.typ, c.types.voidType
+
+proc semTypeSection(c: var SemContext; n: var Cursor) =
+  takeToken c, n
+  # name, export marker, generic params, pragmas, body
+  let delayed = handleSymDef(c, n, TypeY) # 0
+  let beforeExportMarker = c.dest.len
+  wantExportMarker c, n # 1
+
+  var isGeneric: bool
+  if n.kind == DotToken:
+    takeToken c, n
+    isGeneric = false
+  else:
+    openScope c
+    semGenericParams c, n
+    isGeneric = true
+
+  var crucial = default CrucialPragma
+  semPragmas c, n, crucial, TypeY # 2
+  if crucial.magic.len > 0:
+    exportMarkerBecomesNifTag c, beforeExportMarker, crucial
+
+  if n.kind == DotToken:
+    takeToken c, n
+  else:
+    # body
+    semLocalTypeImpl c, n, InTypeSection
+  if isGeneric:
+    closeScope c
+  c.addSym delayed
+  wantParRi c, n
 
 proc semExpr(c: var SemContext; it: var Item) =
   case it.n.kind
@@ -1230,8 +1327,16 @@ proc semExpr(c: var SemContext; it: var Item) =
       of CallS: semCall c, it
       of IncludeS: semInclude c, it
       of ImportS: semImport c, it
-      of EmitS, AsgnS, BlockS, IfS, ForS, CaseS, RetS, YieldS,
-         TemplateS, TypeS, DiscardS:
+      of AsgnS: semAsgn c, it
+      of EmitS: semEmit c, it
+      of DiscardS: semDiscard c, it
+      of IfS: semIf c, it
+      of RetS: semReturn c, it
+      of YieldS: semYield c, it
+      of TypeS:
+        semTypeSection c, it.n
+        combineType it.typ, c.types.voidType
+      of BlockS, ForS, CaseS, TemplateS:
         discard "XXX to implement"
     of FalseX, TrueX:
       combineType it.typ, c.types.boolType
@@ -1302,7 +1407,8 @@ proc semcheck*(infile, outfile: string; config: sink NifConfig) =
     dest: createTokenBuf(),
     types: createBuiltinTypes(),
     thisModuleSuffix: prog.main,
-    g: ProgramContext(config: config))
+    g: ProgramContext(config: config),
+    routine: SemRoutine(kind: NoSym))
   c.currentScope = Scope(tab: initTable[StrId, seq[Sym]](), up: nil, kind: ToplevelScope)
 
   semStmt c, n

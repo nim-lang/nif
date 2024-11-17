@@ -246,9 +246,31 @@ proc insert*(dest: var TokenBuf; src: openArray[PackedToken]; pos: int) =
 proc insert*(dest: var TokenBuf; src: Cursor; pos: int) =
   insert dest, toOpenArray(cast[ptr  UncheckedArray[PackedToken]](src.p), 0, span(src)-1), pos
 
+proc replace*(dest: var TokenBuf; by: Cursor; pos: int) =
+  let len = span(Cursor(p: addr dest.data[pos], rem: dest.len-pos))
+  let actualLen = min(len, dest.len - pos)
+  let byLen = span(by)
+  let oldLen = dest.len
+  let newLen = oldLen + byLen - actualLen
+  if byLen > actualLen:
+    # Need to make room for additional elements
+    dest.grow(newLen)
+    # Move existing elements to the right
+    for i in countdown(oldLen - 1, pos + actualLen):
+      dest[i + byLen - actualLen] = dest[i]
+  elif byLen < actualLen:
+    # Need to remove elements
+    for i in pos + byLen ..< dest.len - (actualLen - byLen):
+      dest[i] = dest[i + actualLen - byLen]
+    dest.shrink(newLen)
+  # Copy new elements
+  var by = by
+  for i in 0 ..< byLen:
+    dest[pos + i] = by.load
+    inc by
+
 proc toString*(b: TokenBuf): string =
   result = nifstreams.toString(toOpenArray(b.data, 0, b.len-1))
-
 
 proc toString*(b: Cursor): string =
   let counter = span(b)
