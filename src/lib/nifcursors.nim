@@ -211,6 +211,22 @@ proc addParRi*(dest: var TokenBuf) =
 proc addDotToken*(dest: var TokenBuf) =
   dest.add toToken(DotToken, 0'u32, NoLineInfo)
 
+proc span*(c: Cursor): int =
+  result = 0
+  var c = c
+  if c.kind == ParLe:
+    var nested = 0
+    while true:
+      inc c
+      inc result
+      if c.kind == ParRi:
+        if nested == 0: break
+        dec nested
+      elif c.kind == ParLe: inc nested
+  if c.rem > 0:
+    inc c
+    inc result
+
 proc insert*(dest: var TokenBuf; src: openArray[PackedToken]; pos: int) =
   var j = len(dest) - 1
   var i = j + len(src)
@@ -227,24 +243,12 @@ proc insert*(dest: var TokenBuf; src: openArray[PackedToken]; pos: int) =
     dest[j] = item
     inc j
 
+proc insert*(dest: var TokenBuf; src: Cursor; pos: int) =
+  insert dest, toOpenArray(cast[ptr  UncheckedArray[PackedToken]](src.p), 0, span(src)-1), pos
+
 proc toString*(b: TokenBuf): string =
   result = nifstreams.toString(toOpenArray(b.data, 0, b.len-1))
 
-proc span*(c: Cursor): int =
-  result = 0
-  var c = c
-  if c.kind == ParLe:
-    var nested = 0
-    while true:
-      inc c
-      inc result
-      if c.kind == ParRi:
-        if nested == 0: break
-        dec nested
-      elif c.kind == ParLe: inc nested
-  if c.rem > 0:
-    inc c
-    inc result
 
 proc toString*(b: Cursor): string =
   let counter = span(b)

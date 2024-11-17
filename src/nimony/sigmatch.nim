@@ -162,7 +162,7 @@ proc linearMatch(m: var Match; f, a: var Cursor) =
 const
   TypeModifiers = {MutT, OutT, LentT, SinkT, StaticT}
 
-proc skipModifier(a: Cursor): Cursor =
+proc skipModifier*(a: Cursor): Cursor =
   result = a
   if result.kind == ParLe and result.typeKind in TypeModifiers:
     inc result

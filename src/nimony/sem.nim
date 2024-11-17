@@ -340,9 +340,9 @@ type
     s: Sym
     info: PackedLineInfo
 
-proc identToSym(c: var SemContext; lit: StrId): SymId =
+proc identToSym(c: var SemContext; lit: StrId; kind: SymKind): SymId =
   var name = pool.strings[lit]
-  if c.currentScope.kind == ToplevelScope:
+  if c.currentScope.kind == ToplevelScope or kind in {FldY, EfldY}:
     c.makeGlobalSym(name)
   else:
     c.makeLocalSym(name)
@@ -352,7 +352,7 @@ proc declareSym(c: var SemContext; it: var Item; kind: SymKind): SymStatus =
   let info = it.n.info
   if it.n.kind == Ident:
     let lit = it.n.litId
-    let s = Sym(kind: kind, name: identToSym(c, lit),
+    let s = Sym(kind: kind, name: identToSym(c, lit, kind),
                 pos: c.dest.len)
     if addNonOverloadable(c.currentScope, lit, s) == Conflict:
       c.buildErr info, "attempt to redeclare: " & pool.strings[lit]
@@ -372,7 +372,7 @@ proc declareOverloadableSym(c: var SemContext; it: var Item; kind: SymKind) =
   let info = it.n.info
   if it.n.kind == Ident:
     let lit = it.n.litId
-    let s = Sym(kind: kind, name: identToSym(c, lit),
+    let s = Sym(kind: kind, name: identToSym(c, lit, kind),
                 pos: c.dest.len)
     addOverloadable(c.currentScope, lit, s)
     c.dest.add toToken(SymbolDef, s.name, info)
@@ -385,7 +385,7 @@ proc declareOverloadableSym(c: var SemContext; it: var Item; kind: SymKind) =
     if lit == StrId(0):
       c.buildErr info, "identifier expected"
     else:
-      let s = Sym(kind: kind, name: identToSym(c, lit),
+      let s = Sym(kind: kind, name: identToSym(c, lit, kind),
                   pos: c.dest.len)
       addOverloadable(c.currentScope, lit, s)
       c.dest.add toToken(SymbolDef, s.name, info)
@@ -398,7 +398,7 @@ proc handleSymDef(c: var SemContext; n: var Cursor; kind: SymKind): DelayedSym =
   let info = n.info
   if n.kind == Ident:
     let lit = n.litId
-    let def = identToSym(c, lit)
+    let def = identToSym(c, lit, kind)
     let s = Sym(kind: kind, name: def,
                 pos: c.dest.len)
     result = DelayedSym(status: OkNew, lit: lit, s: s, info: info)
@@ -415,7 +415,7 @@ proc handleSymDef(c: var SemContext; n: var Cursor; kind: SymKind): DelayedSym =
       c.buildErr info, "identifier expected"
       result = DelayedSym(status: ErrNoIdent, info: info)
     else:
-      let def = identToSym(c, lit)
+      let def = identToSym(c, lit, kind)
       let s = Sym(kind: kind, name: def,
                   pos: c.dest.len)
       result = DelayedSym(status: OkNew, lit: lit, s: s, info: info)
@@ -768,6 +768,10 @@ proc wantExportMarker(c: var SemContext; n: var Cursor) =
   else:
     buildErr c, n.info, "expected '.' or 'x' for an export marker"
 
+proc insertType(c: var SemContext; typ: TypeCursor; patchPosition: int) =
+  let t = skipModifier(typ)
+  c.dest.insert t, patchPosition
+
 proc patchType(c: var SemContext; typ: TypeCursor; patchPosition: int) =
   discard "XXX to implement"
 
@@ -800,6 +804,7 @@ proc semPragma(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; kin
     wantParRi c, n
   of ImportC, ImportCpp, ExportC, Nodecl, Header, Align, Bits, Selectany,
      Threadvar, Globalvar:
+    # XXX More checking here
     copyTree c, n
 
 proc semPragmas(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; kind: SymKind) =
@@ -872,23 +877,38 @@ proc semTypeSym(c: var SemContext; s: Sym; info: PackedLineInfo) =
     c.buildErr info, "type name expected, but got: " & pool.syms[s.name]
 
 proc semParams(c: var SemContext; n: var Cursor)
-
-proc semObjectType(c: var SemContext; n: var Cursor) =
-  # XXX implement me
-  copyTree c, n
-
-proc semEnumType(c: var SemContext; n: var Cursor) =
-  # XXX implement me
-  copyTree c, n
-
-proc semConceptType(c: var SemContext; n: var Cursor) =
-  # XXX implement me
-  copyTree c, n
+proc semLocal(c: var SemContext; n: var Cursor; kind: SymKind)
 
 type
   TypeDeclContext = enum
     InLocalDecl, InTypeSection, InObjectDecl, InParamDecl, InInheritanceDecl, InReturnTypeDecl, AllowValues,
     InGenericConstraint
+
+proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext)
+
+proc semObjectType(c: var SemContext; n: var Cursor) =
+  takeToken c, n
+  # inherits from?
+  if n.kind == DotToken:
+    takeToken c, n
+  else:
+    semLocalTypeImpl c, n, InLocalDecl
+  # object fields:
+  withNewScope c:
+    while n.substructureKind == FldS:
+      semLocal(c, n, FldY)
+  wantParRi c, n
+
+proc semEnumType(c: var SemContext; n: var Cursor) =
+  takeToken c, n
+  wantDot c, n
+  while n.substructureKind == EfldS:
+    semLocal(c, n, EfldY)
+  wantParRi c, n
+
+proc semConceptType(c: var SemContext; n: var Cursor) =
+  # XXX implement me
+  copyTree c, n
 
 proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext) =
   let info = n.info
@@ -1022,7 +1042,7 @@ proc semLocal(c: var SemContext; n: var Cursor; kind: SymKind) =
   of TypevarY:
     discard semLocalType(c, n)
     wantDot c, n
-  of ParamY, LetY, VarY, CursorY, ResultY:
+  of ParamY, LetY, VarY, CursorY, ResultY, FldY, EfldY:
     let beforeType = c.dest.len
     if n.kind == DotToken:
       # no explicit type given:
@@ -1030,7 +1050,7 @@ proc semLocal(c: var SemContext; n: var Cursor; kind: SymKind) =
       var it = Item(n: n, typ: c.types.autoType)
       semExpr c, it # 4
       n = it.n
-      patchType c, it.typ, beforeType
+      insertType c, it.typ, beforeType
     else:
       let typ = semLocalType(c, n) # 3
       if n.kind == DotToken:
@@ -1151,6 +1171,7 @@ proc semExprSym(c: var SemContext; it: var Item; s: Sym) =
         assert false, "not implemented"
       it.typ = n
     else:
+      c.buildErr it.n.info, "could not load symbol: " & pool.syms[s.name] & "; errorCode: " & $res.status
       it.typ = c.types.autoType
 
 proc semExpr(c: var SemContext; it: var Item) =
@@ -1242,6 +1263,7 @@ proc semExpr(c: var SemContext; it: var Item) =
        HderefX, HaddrX, OconvX, HconvX, OchoiceX, CchoiceX,
        TupleConstrX, SetX,
        CompilesX, DeclaredX, DefinedX, HighX, LowX, TypeofX, AshrX:
+      # XXX To implement
       takeToken c, it.n
       wantParRi c, it.n
 
