@@ -104,16 +104,9 @@ proc expectSymdef(e: var EContext; c: var Cursor) =
     error e, "expected symbol definition, but got: ", c
 
 proc getSymDef(e: var EContext; c: var Cursor): (SymId, PackedLineInfo) =
-  let isQuoted = c.kind == ParLe and pool.tags[c.tag] == "quoted"
-  if isQuoted:
-    inc c
-
   expectSymdef(e, c)
   result = (c.symId, c.info)
   inc c
-
-  if isQuoted:
-    skipParRi e, c
 
 proc expectSym(e: var EContext; c: var Cursor) =
   if c.kind != Symbol:
@@ -412,15 +405,6 @@ proc traverseExpr(e: var EContext; c: var Cursor) =
       if pool.tags[c.tag] == "curlyConstr":
         e.add "ranges", c.info
         inc nested
-      elif pool.tags[c.tag] == "quoted":
-        inc c
-        expectSym(e, c)
-        e.dest.add c
-        e.demand c.symId
-        inc c
-        skipParRi(e, c)
-        if nested == 0:
-          break
       else:
         e.dest.add c
         inc nested
