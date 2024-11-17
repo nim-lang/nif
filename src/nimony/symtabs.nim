@@ -8,6 +8,10 @@ import std / [tables]
 include nifprelude
 import nimony_model
 
+const
+  InvalidPos* = -1
+  ImportedPos* = -2
+
 type
   Sym* = object
     kind*: SymKind

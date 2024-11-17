@@ -7,7 +7,7 @@
 ## Cursors into token streams. Suprisingly effective even for more complex algorithms.
 
 import std / assertions
-import nifstreams, lineinfos
+import nifreader, nifstreams, bitabs, lineinfos
 
 type
   Cursor* = object
@@ -249,3 +249,20 @@ proc span*(c: Cursor): int =
 proc toString*(b: Cursor): string =
   let counter = span(b)
   result = nifstreams.toString(toOpenArray(cast[ptr UncheckedArray[PackedToken]](b.p), 0, counter-1))
+
+proc addToken[L](tree: var TokenBuf; kind: TokenKind; id: L; info: PackedLineInfo) =
+  tree.add toToken(kind, id, info)
+
+template copyInto*(dest: var TokenBuf; tag: TagId; info: PackedLineInfo; body: untyped) =
+  dest.addToken ParLe, tag, info
+  body
+  dest.addToken ParRi, 0'u32, info
+
+template copyIntoUnchecked*(dest: var TokenBuf; tag: string; info: PackedLineInfo; body: untyped) =
+  dest.addToken ParLe, pool.strings.getOrIncl(tag), info
+  body
+  dest.addToken ParRi, 0'u32, info
+
+proc parse*(r: var Reader; dest: var TokenBuf;
+            parentInfo: PackedLineInfo): bool =
+  nifstreams.parseImpl()

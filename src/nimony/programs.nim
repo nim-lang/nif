@@ -19,7 +19,7 @@ type
   Program* = object
     mods: Table[string, NifModule]
     dir, main*, ext: string
-    mem: seq[seq[PackedToken]]
+    mem: Table[SymId, TokenBuf]
 
 var
   prog*: Program
@@ -66,26 +66,40 @@ proc error*(msg: string) =
     echo getStackTrace()
   quit 1
 
-proc importSymbol*(s: SymId): Cursor =
-  let nifName = pool.syms[s]
-  let modname = extractModule(nifName)
-  if modname == "":
-    error "undeclared identifier: " & nifName
-  else:
-    var m = load(modname)
-    var entry = m.index.public.getOrDefault(nifName)
-    if entry.offset == 0:
-      entry = m.index.private.getOrDefault(nifName)
-    if entry.offset == 0:
-      error "undeclared identifier: " & nifName
-    m.stream.r.jumpTo entry.offset
-    var buf: seq[PackedToken] = @[]
-    discard nifstreams.parse(m.stream.r, buf, entry.info)
-    prog.mem.add ensureMove(buf)
-    result = fromBuffer(prog.mem[prog.mem.len-1])
+type
+  LoadStatus* = enum
+    LacksModuleName, LacksOffset, LacksPosition, LacksNothing
+  LoadResult* = object
+    status*: LoadStatus
+    decl*: Cursor
 
-proc loadSym*(s: SymId): Cursor =
-  result = importSymbol(s)
+proc tryLoadSym*(s: SymId): LoadResult =
+  if prog.mem.hasKey(s):
+    result = LoadResult(status: LacksNothing, decl: cursorAt(prog.mem[s], 0))
+  else:
+    let nifName = pool.syms[s]
+    let modname = extractModule(nifName)
+    if modname == "":
+      result = LoadResult(status: LacksModuleName)
+    else:
+      var m = load(modname)
+      var entry = m.index.public.getOrDefault(nifName)
+      if entry.offset == 0:
+        entry = m.index.private.getOrDefault(nifName)
+      if entry.offset == 0:
+        result = LoadResult(status: LacksOffset)
+      else:
+        m.stream.r.jumpTo entry.offset
+        var buf = createTokenBuf(30)
+        discard nifcursors.parse(m.stream.r, buf, entry.info)
+        let decl = cursorAt(buf, 0)
+        prog.mem[s] = ensureMove(buf)
+        result = LoadResult(status: LacksNothing, decl: decl)
+
+proc knowsSym*(s: SymId): bool {.inline.} = prog.mem.hasKey(s)
+
+proc publish*(s: SymId; buf: sink TokenBuf) =
+  prog.mem[s] = buf
 
 proc splitModulePath(s: string): (string, string, string) =
   var (dir, main, ext) = splitFile(s)

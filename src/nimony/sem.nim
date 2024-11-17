@@ -53,7 +53,7 @@ type
     globals, locals: Table[string, int]
     types: BuiltinTypes
     typeMem: Table[string, TokenBuf]
-    declMem: Table[SymId, TokenBuf]
+    #declMem: Table[SymId, TokenBuf]
     thisModuleSuffix: string
     processedModules: HashSet[string]
 
@@ -230,6 +230,13 @@ proc openScope(c: var SemContext) =
 proc closeScope(c: var SemContext) =
   c.currentScope = c.currentScope.up
 
+template withNewScope(cc: var SemContext; body: untyped) =
+  openScope(c)
+  try:
+    body
+  finally:
+    closeScope(c)
+
 # -------------------------- error handling -------------------------
 
 proc pushErrorContext(c: var SemContext; info: PackedLineInfo) = c.instantiatedFrom.add info
@@ -284,10 +291,10 @@ proc typeToCursor(c: var SemContext; start: int): TypeCursor =
     result = cursorAt(buf, 0)
     c.typeMem[key] = buf
 
-proc declToCursor(c: var SemContext; s: Sym): Cursor =
-  if c.declMem.hasKey(s.name):
-    result = cursorAt(c.declMem[s.name], 0)
-  else:
+proc declToCursor(c: var SemContext; s: Sym): LoadResult =
+  if knowsSym(s.name) or s.pos == ImportedPos:
+    result = tryLoadSym(s.name)
+  elif s.pos > 0:
     var buf = createTokenBuf(10)
     var pos = s.pos - 1
     var nested = 0
@@ -302,8 +309,10 @@ proc declToCursor(c: var SemContext; s: Sym): Cursor =
         if nested == 0: break
       else: discard
       inc pos
-    result = cursorAt(buf, 0)
-    c.declMem[s.name] = buf
+    result = LoadResult(status: LacksNothing, decl: cursorAt(buf, 0))
+    publish s.name, buf
+  else:
+    result = LoadResult(status: LacksPosition)
 
 # --------------------- symbol name creation -------------------------
 
@@ -795,11 +804,9 @@ proc semPragma(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; kin
 
 proc semPragmas(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; kind: SymKind) =
   if n.kind == DotToken:
-    c.dest.add n
-    inc n
+    takeToken c, n
   elif n.kind == ParLe and pool.tags[n.tagId] == "pragmas":
-    c.dest.add n
-    inc n
+    takeToken c, n
     while n.kind != ParRi:
       semPragma c, n, crucial, kind
     wantParRi c, n
@@ -817,7 +824,12 @@ proc semSymUse(c: var SemContext; s: SymId): Sym =
       if sym.name == s:
         return sym
     it = it.up
-  result = Sym(kind: NoSym, name: s)
+
+  let res = tryLoadSym(s)
+  if res.status == LacksNothing:
+    result = Sym(kind: symKind(res.decl), name: s, pos: ImportedPos)
+  else:
+    result = Sym(kind: NoSym, name: s, pos: InvalidPos)
 
 proc semIdentImpl(c: var SemContext; n: var Cursor; ident: StrId): Sym =
   let insertPos = c.dest.len
@@ -838,21 +850,24 @@ proc semQuoted(c: var SemContext; n: var Cursor): Sym =
   let nameId = unquote(n)
   result = semIdentImpl(c, n, nameId)
 
-proc maybeInlineMagic(c: var SemContext; s: Sym) =
-  var pos = s.pos
-  if pos > 0 and c.dest[pos].kind == SymbolDef and c.dest[pos].symId == s.name:
-    inc pos
-    if c.dest[pos].kind == ParLe:
-      assert c.dest[c.dest.len-1].kind == Symbol
-      c.dest[c.dest.len-1] = c.dest[pos]
-      while true:
-        c.dest.add c.dest[pos]
-        if c.dest[pos].kind == ParRi: break
-        inc pos
+proc maybeInlineMagic(c: var SemContext; res: LoadResult) =
+  if res.status == LacksNothing:
+    var n = res.decl
+    inc n # skip the symbol kind
+    if n.kind == SymbolDef:
+      inc n # skip the SymbolDef
+      if n.kind == ParLe:
+        # ^ export marker position has a `(`? If so, it is a magic!
+        c.dest[c.dest.len-1] = n.load
+        while true:
+          c.dest.add n
+          if n.kind == ParRi: break
+          inc n
 
 proc semTypeSym(c: var SemContext; s: Sym; info: PackedLineInfo) =
   if s.kind in {TypeY, TypevarY}:
-    maybeInlineMagic c, s
+    let res = tryLoadSym(s.name)
+    maybeInlineMagic c, res
   else:
     c.buildErr info, "type name expected, but got: " & pool.syms[s.name]
 
@@ -1120,9 +1135,10 @@ proc semExprSym(c: var SemContext; it: var Item; s: Sym) =
     c.buildErr it.n.info, "undeclared identifier"
     it.typ = c.types.autoType
   else:
-    maybeInlineMagic c, s
-    if s.pos > 0:
-      var n = declToCursor(c, s)
+    let res = declToCursor(c, s)
+    maybeInlineMagic c, res
+    if res.status == LacksNothing:
+      var n = res.decl
       if s.kind.isLocal:
         inc n # skip ParLe
         inc n # skip name
