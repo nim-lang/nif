@@ -1231,8 +1231,8 @@ proc semExpr(c: var SemContext; it: var Item) =
       of IncludeS: semInclude c, it
       of ImportS: semImport c, it
       of EmitS, AsgnS, BlockS, IfS, ForS, CaseS, RetS, YieldS,
-         TemplateS, TypeS:
-        discard
+         TemplateS, TypeS, DiscardS:
+        discard "XXX to implement"
     of FalseX, TrueX:
       combineType it.typ, c.types.boolType
       takeToken c, it.n
