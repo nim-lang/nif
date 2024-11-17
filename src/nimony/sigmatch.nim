@@ -51,7 +51,9 @@ proc expected(f, a: Cursor): string =
   concat("expected: ", toString(f), " but got: ", toString(a))
 
 proc typeImpl(s: SymId): Cursor =
-  result = loadSym(s)
+  let res = tryLoadSym(s)
+  assert res.status == LacksNothing
+  result = res.decl
   assert result.stmtKind == TypeS
   inc result # skip ParLe
   for i in 1..4:
@@ -339,7 +341,9 @@ proc sigmatchLoop(m: var Match; f: var Cursor; args: openArray[Item]) =
 
 
 iterator typeVars(fn: SymId): SymId =
-  var c = loadSym(fn)
+  let res = tryLoadSym(fn)
+  assert res.status == LacksNothing
+  var c = res.decl
   if isRoutine(c.symKind):
     inc c # skip routine tag
     for i in 1..3:
