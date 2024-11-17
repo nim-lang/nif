@@ -16,10 +16,9 @@ type
     paths*, nimblePaths*: seq[string]
     bits*: int
 
-proc parseConfig(c: Cursor): NifConfig =
+proc parseConfig(c: Cursor; result: var NifConfig) =
   var c = c
   var nested = 0
-  result = default(NifConfig)
   while true:
     case c.kind
     of ParLe:
@@ -57,16 +56,17 @@ proc parseConfig(c: Cursor): NifConfig =
     else:
       inc c
 
-proc parseNifConfig*(configFile: string): NifConfig =
+proc parseNifConfig*(configFile: string; result: var NifConfig) =
   var f = nifstreams.open(configFile)
   discard processDirectives(f.r)
   var buf = fromStream(f)
   var c = beginRead(buf)
   try:
-    result = parseConfig(c)
+    parseConfig(c, result)
   finally:
     f.close()
 
 when isMainModule:
-  let conf = parseNifConfig"src/nifler/nifler.cfg.nif"
+  var conf = default(NifConfig)
+  parseNifConfig "src/nifler/nifler.cfg.nif", conf
   echo $conf.bits

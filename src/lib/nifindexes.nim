@@ -46,7 +46,7 @@ proc createIndex*(infile: string) =
       let sym = t.symId
       if pool.syms[sym].isImportant:
         let tb = next(s)
-        let isPublic = tb.kind == Ident and pool.strings[tb.litId] == "x"
+        let isPublic = tb.kind != DotToken
         var dest =
           if isPublic:
             addr(public)
