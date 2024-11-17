@@ -6,10 +6,10 @@
 
 ## Nimony driver program.
 
-import std / [parseopt, strutils, os, assertions, syncio]
+import std / [parseopt, sets, strutils, os, assertions, syncio]
 
 import ".." / gear3 / gear3 # only imported to ensure it keeps compiling
-import sem
+import sem, nifconfig
 
 const
   Version = "0.2"
@@ -22,8 +22,12 @@ Command:
   m file.nim [project.nim]    compile a single Nim module to gear3
 
 Options:
+  -d, --define:SYMBOL       define a symbol for conditional compilation
+  -p, --path:PATH           add PATH to the search path
   -r, --run                 run the makefile and the compiled program
   -f, --forcebuild          force a rebuild
+  --noenv                   do not read configuration from `NIM_*`
+                            environment variables
   --version                 show the version
   --help                    show this help
 """
@@ -31,18 +35,11 @@ Options:
 proc writeHelp() = quit(Usage, QuitSuccess)
 proc writeVersion() = quit(Version & "\n", QuitSuccess)
 
-proc exec(cmd: string) =
-  if execShellCmd(cmd) != 0: quit("FAILURE: " & cmd)
-
 proc nimexec(cmd: string) =
   let t = findExe("nim")
   if t.len == 0:
     quit("FAILURE: cannot find nim.exe / nim binary")
   exec quoteShell(t) & " " & cmd
-
-proc findTool(name: string): string =
-  let exe = name.addFileExt(ExeExt)
-  result = getAppDir() / exe
 
 proc requiresTool(tool, src: string; forceRebuild: bool) =
   let t = findTool(tool)
@@ -50,7 +47,7 @@ proc requiresTool(tool, src: string; forceRebuild: bool) =
     nimexec("c -d:release " & src)
     moveFile src.changeFileExt(ExeExt), t
 
-proc processSingleModule(nimFile: string) =
+proc processSingleModule(nimFile: string; config: sink NifConfig) =
   let nifler = findTool("nifler")
   let name = nimFile.splitFile.name
   let src = "nifcache" / name & ".1.nif"
@@ -58,7 +55,7 @@ proc processSingleModule(nimFile: string) =
   exec quoteShell(nifler) & " p " & quoteShell(nimFile) & " " &
     quoteShell(src)
   if fileExists(src):
-    semcheck(src, dest)
+    semcheck(src, dest, ensureMove config)
 
 type
   Command = enum
@@ -68,6 +65,9 @@ proc handleCmdLine() =
   var args: seq[string] = @[]
   var cmd = Command.None
   var forceRebuild = false
+  var useEnv = true
+  var config = NifConfig()
+  config.defines.incl "nimony"
 
   for kind, key, val in getopt():
     case kind
@@ -86,12 +86,20 @@ proc handleCmdLine() =
       of "help", "h": writeHelp()
       of "version", "v": writeVersion()
       of "forcebuild", "f": forceRebuild = true
+      of "path", "p": config.paths.add val
+      of "define", "d": config.defines.incl val
+      of "noenv": useEnv = false
       else: writeHelp()
     of cmdEnd: assert false, "cannot happen"
   if args.len == 0:
     quit "too few command line arguments"
   elif args.len > 2:
     quit "too many command line arguments"
+  if useEnv:
+    let nimPath = getEnv("NIMPATH")
+    for entry in split(nimPath, PathSep):
+      if entry.strip != "":
+        config.paths.add entry
   case cmd
   of None:
     quit "command missing"
@@ -99,7 +107,7 @@ proc handleCmdLine() =
     createDir("nifcache")
     requiresTool "nifler", "src/nifler/nifler.nim", forceRebuild
     requiresTool "nifc", "src/nifc/nifc.nim", forceRebuild
-    processSingleModule(args[0].addFileExt(".nim"))
+    processSingleModule(args[0].addFileExt(".nim"), config)
 
 when isMainModule:
   handleCmdLine()

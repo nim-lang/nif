@@ -7,7 +7,7 @@
 ## Cursors into token streams. Suprisingly effective even for more complex algorithms.
 
 import std / assertions
-import nifstreams, lineinfos
+import nifreader, nifstreams, bitabs, lineinfos
 
 type
   Cursor* = object
@@ -189,6 +189,14 @@ proc shrink*(b: var TokenBuf; newLen: int) =
   assert newLen >= 0 and newLen <= b.len
   b.len = newLen
 
+proc grow(b: var TokenBuf; newLen: int) =
+  assert isMutable(b), "attempt to mutate frozen TokenBuf"
+  assert newLen > b.len
+  if b.cap < newLen:
+    b.cap = max(b.cap * 3 div 2, newLen)
+    b.data = cast[Storage](realloc(b.data, sizeof(PackedToken)*b.cap))
+  b.len = newLen
+
 template buildTree*(dest: var TokenBuf; tag: TagId; info: PackedLineInfo; body: untyped) =
   dest.add toToken(ParLe, tag, info)
   body
@@ -202,6 +210,22 @@ proc addParRi*(dest: var TokenBuf) =
 
 proc addDotToken*(dest: var TokenBuf) =
   dest.add toToken(DotToken, 0'u32, NoLineInfo)
+
+proc insert*(dest: var TokenBuf; src: openArray[PackedToken]; pos: int) =
+  var j = len(dest) - 1
+  var i = j + len(src)
+  dest.grow(i + 1)
+
+  # Move items after `pos` to the end of the sequence.
+  while j >= pos:
+    dest[i] = dest[j]
+    dec i
+    dec j
+  # Insert items from `dest` into `dest` at `pos`
+  inc j
+  for item in src:
+    dest[j] = item
+    inc j
 
 proc toString*(b: TokenBuf): string =
   result = nifstreams.toString(toOpenArray(b.data, 0, b.len-1))
@@ -225,3 +249,20 @@ proc span*(c: Cursor): int =
 proc toString*(b: Cursor): string =
   let counter = span(b)
   result = nifstreams.toString(toOpenArray(cast[ptr UncheckedArray[PackedToken]](b.p), 0, counter-1))
+
+proc addToken[L](tree: var TokenBuf; kind: TokenKind; id: L; info: PackedLineInfo) =
+  tree.add toToken(kind, id, info)
+
+template copyInto*(dest: var TokenBuf; tag: TagId; info: PackedLineInfo; body: untyped) =
+  dest.addToken ParLe, tag, info
+  body
+  dest.addToken ParRi, 0'u32, info
+
+template copyIntoUnchecked*(dest: var TokenBuf; tag: string; info: PackedLineInfo; body: untyped) =
+  dest.addToken ParLe, pool.strings.getOrIncl(tag), info
+  body
+  dest.addToken ParRi, 0'u32, info
+
+proc parse*(r: var Reader; dest: var TokenBuf;
+            parentInfo: PackedLineInfo): bool =
+  nifstreams.parseImpl()

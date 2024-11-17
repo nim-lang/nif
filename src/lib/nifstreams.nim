@@ -164,8 +164,7 @@ proc skip*(s: var Stream; current: PackedToken): PackedToken =
         dec nested
   result = next(s)
 
-proc parse*(r: var Reader; dest: var seq[PackedToken];
-            parentInfo: PackedLineInfo): bool =
+template parseImpl*() {.dirty.} =
   let t = next(r)
   var currentInfo = parentInfo
   if t.filename.len == 0:
@@ -210,6 +209,10 @@ proc parse*(r: var Reader; dest: var seq[PackedToken];
     dest.addToken UIntLit, pool.uintegers.getOrIncl(decodeUInt t), currentInfo
   of FloatLit:
     dest.addToken FloatLit, pool.floats.getOrIncl(decodeFloat t), currentInfo
+
+proc parse*(r: var Reader; dest: var seq[PackedToken];
+            parentInfo: PackedLineInfo): bool =
+  parseImpl()
 
 proc litId*(n: PackedToken): StrId {.inline.} =
   assert n.kind in {Ident, StringLit}

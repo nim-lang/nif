@@ -19,6 +19,15 @@ proc extractBasename*(s: string; isGlobal: var bool): string =
     dec i
   return ""
 
+proc extractBasename*(s: var string) =
+  var i = s.len - 2
+  while i > 0:
+    if s[i] == '.':
+      if s[i+1] in {'0'..'9'}:
+        s.setLen i
+        return
+    dec i
+
 proc extractModule*(s: string): string =
   # From "abc.12.Mod132a3bc" extract "Mod132a3bc".
   # From "abc.12" extract "".

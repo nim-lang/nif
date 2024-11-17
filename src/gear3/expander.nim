@@ -96,6 +96,9 @@ proc skipExportMarker(e: var EContext; c: var Cursor) =
     inc c
   elif c.kind == Ident and pool.strings[c.litId] == "x":
     inc c
+  elif c.kind == ParLe:
+    # can now also be `(tag)` or `(tag <bits>)`:
+    skip c
   else:
     error e, "expected '.' or 'x' for an export marker: ", c
 
@@ -246,6 +249,11 @@ proc parsePragmas(e: var EContext; c: var Cursor): CollectedPragmas =
             error e, "unknown pragma: ", c
           else:
             result.callConv = cc
+          inc c
+        of Magic:
+          inc c
+          expectStrLit e, c
+          result.flags.incl Nodecl
           inc c
         of ImportC, ImportCpp, ExportC:
           inc c
@@ -594,7 +602,7 @@ proc traverseStmt(e: var EContext; c: var Cursor; mode = TraverseAll) =
       error e, "to implement: ", c
     of FuncS, ProcS, ConverterS, MethodS:
       traverseProc e, c, mode
-    of MacroS, TemplateS:
+    of MacroS, TemplateS, IncludeS, ImportS:
       # pure compile-time construct, ignore:
       skip c
     of TypeS:

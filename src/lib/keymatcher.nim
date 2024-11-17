@@ -135,7 +135,8 @@ proc genMatcher(body, selector: NimNode; a: openArray[Key]) =
   split a, solution
   decodeSolution body, solution, 0, selector
 
-macro declareMatcher*(name: untyped; e: typedesc; start: static[int] = 1): untyped =
+macro declareMatcher*(name: untyped; e: typedesc; start: static[int] = 1;
+                      prefixLen: static[int] = 0): untyped =
   let typ = e.getTypeInst[1]
   let typSym = typ.getTypeImpl.getTypeInst # skip aliases etc to get type sym
   let impl = typSym.getImpl[2]
@@ -174,7 +175,7 @@ macro declareMatcher*(name: untyped; e: typedesc; start: static[int] = 1): untyp
         else:
           error("Invalid tuple syntax!", f[1])
     else: error("Invalid node for enum type `" & $f.kind & "`!", f)
-    a.add (fStr, fVal)
+    a.add (fStr.substr(prefixLen), fVal)
 
   var body = newStmtList()
   genMatcher body, ident"sel", a

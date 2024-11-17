@@ -8,11 +8,15 @@ import std / [tables]
 include nifprelude
 import nimony_model
 
+const
+  InvalidPos* = -1
+  ImportedPos* = -2
+
 type
   Sym* = object
-    name*: SymId
     kind*: SymKind
-    pos*: int32
+    name*: SymId
+    pos*: int
 
   ScopeKind* = enum
     NormalScope, ToplevelScope, ImportScope
