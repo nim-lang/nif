@@ -413,12 +413,15 @@ proc genInclude(c: var GeneratedCode; t: Tree; n: NodePos) =
     c.includes.add Token NewLine
 
 proc genImp(c: var GeneratedCode; t: Tree; n: NodePos) =
-  c.add ExternKeyword
   let arg = n.firstSon
   case t[arg].kind
   of ProcC: genProcDecl c, t, arg, true
-  of VarC: genStmt c, t, arg
-  of ConstC: genStmt c, t, arg
+  of VarC:
+    c.add ExternKeyword
+    genStmt c, t, arg
+  of ConstC:
+    c.add ExternKeyword
+    genStmt c, t, arg
   else:
     error c.m, "expected declaration for `imp` but got: ", t, n
 

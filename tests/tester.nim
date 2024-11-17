@@ -243,11 +243,12 @@ testNifc()
 proc testGear3() =
   exec "nim c src/gear3/gear3"
 
+  let mod1 = "tests/gear3/mod1"
   let helloworld = "tests/gear3/gear3_helloworld"
 
-
+  exec ("src" / "gear3" / "gear3").addFileExt(ExeExt) & " " & mod1 & ".nif"
   exec ("src" / "gear3" / "gear3").addFileExt(ExeExt) & " " & helloworld & ".nif"
-  exec ("src" / "nifc" / "nifc").addFileExt(ExeExt) & " c -r " & helloworld & ".c.nif"
+  exec ("src" / "nifc" / "nifc").addFileExt(ExeExt) & " c -r " & mod1 & ".c.nif " & helloworld & ".c.nif"
 
 
 testGear3()
