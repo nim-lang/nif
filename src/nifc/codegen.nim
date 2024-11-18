@@ -82,7 +82,6 @@ type
     headerFile: seq[Token]
     generatedTypes: IntSet
     requestedSyms: HashSet[string]
-    toExtern: bool
 
 proc initGeneratedCode*(m: sink Module): GeneratedCode =
   result = GeneratedCode(m: m, code: @[], tokens: initBiTable[Token, string](), fileIds: initPackedSet[FileId]())
@@ -280,13 +279,13 @@ type
   VarKind = enum
     IsLocal, IsGlobal, IsThreadlocal, IsConst
 
-proc genVarDecl(c: var GeneratedCode; t: Tree; n: NodePos; vk: VarKind) =
+proc genVarDecl(c: var GeneratedCode; t: Tree; n: NodePos; vk: VarKind; toExtern = false) =
   let d = asVarDecl(t, n)
   genCLineDir(c, t, info(t, n))
   if t[d.name].kind == SymDef:
     let lit = t[d.name].litId
     let name = mangle(c.m.lits.strings[lit])
-    if c.toExtern:
+    if toExtern:
       c.add ExternKeyword
 
     if vk == IsConst:
@@ -420,14 +419,8 @@ proc genImp(c: var GeneratedCode; t: Tree; n: NodePos) =
   let arg = n.firstSon
   case t[arg].kind
   of ProcC: genProcDecl c, t, arg, true
-  of VarC, GvarC, TvarC:
-    c.toExtern = true
-    genStmt c, t, arg
-    c.toExtern = false
-  of ConstC:
-    c.toExtern = true
-    genStmt c, t, arg
-    c.toExtern = false
+  of VarC, GvarC, TvarC, ConstC:
+    genVar c, t, arg, true
   else:
     error c.m, "expected declaration for `imp` but got: ", t, n
 
