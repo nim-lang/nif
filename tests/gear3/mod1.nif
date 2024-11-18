@@ -2,8 +2,8 @@
 
 (stmts
 
-(var :x.c12.mod1 . . (i +32) +12)
-
+(const :x.c12.mod1 . . (i +32) +12)
+(var :y.c12.mod1 . . (i +32) +12)
 
 (proc :foo.c12.mod1 . . .
   (params

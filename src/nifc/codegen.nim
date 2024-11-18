@@ -82,6 +82,7 @@ type
     headerFile: seq[Token]
     generatedTypes: IntSet
     requestedSyms: HashSet[string]
+    toExtern: bool
 
 proc initGeneratedCode*(m: sink Module): GeneratedCode =
   result = GeneratedCode(m: m, code: @[], tokens: initBiTable[Token, string](), fileIds: initPackedSet[FileId]())
@@ -285,6 +286,9 @@ proc genVarDecl(c: var GeneratedCode; t: Tree; n: NodePos; vk: VarKind) =
   if t[d.name].kind == SymDef:
     let lit = t[d.name].litId
     let name = mangle(c.m.lits.strings[lit])
+    if c.toExtern:
+      c.add ExternKeyword
+
     if vk == IsConst:
       c.add ConstKeyword
     if vk == IsThreadlocal:
@@ -416,12 +420,14 @@ proc genImp(c: var GeneratedCode; t: Tree; n: NodePos) =
   let arg = n.firstSon
   case t[arg].kind
   of ProcC: genProcDecl c, t, arg, true
-  of VarC:
-    c.add ExternKeyword
+  of VarC, GvarC, TvarC:
+    c.toExtern = true
     genStmt c, t, arg
+    c.toExtern = false
   of ConstC:
-    c.add ExternKeyword
+    c.toExtern = true
     genStmt c, t, arg
+    c.toExtern = false
   else:
     error c.m, "expected declaration for `imp` but got: ", t, n
 
