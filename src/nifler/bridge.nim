@@ -229,7 +229,7 @@ proc toNif*(n, parent: PNode; c: var TranslationContext) =
     toNif(name, n, c)
 
     if visibility != nil:
-      c.b.addRaw "x"
+      c.b.addRaw " x"
     else:
       c.b.addEmpty
 
@@ -303,7 +303,7 @@ proc toNif*(n, parent: PNode; c: var TranslationContext) =
       toNif(name, n[i], c) # name
 
       if visibility != nil:
-        c.b.addRaw "x"
+        c.b.addRaw " x"
       else:
         c.b.addEmpty
 
@@ -451,7 +451,7 @@ proc toNif*(n, parent: PNode; c: var TranslationContext) =
 
     toNif(name, n, c)
     if visibility != nil:
-      c.b.addRaw "x"
+      c.b.addRaw " x"
     else:
       c.b.addEmpty
 
