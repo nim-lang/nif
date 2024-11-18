@@ -71,4 +71,7 @@
 
   (call foo.c12.mod1 +1 +2)
 
+  (var :s.frommod1 .. (i +32) x.c12.mod1)
+  (var :s2.frommod1 .. (i +32) y.c12.mod1)
+
 )))

@@ -279,12 +279,15 @@ type
   VarKind = enum
     IsLocal, IsGlobal, IsThreadlocal, IsConst
 
-proc genVarDecl(c: var GeneratedCode; t: Tree; n: NodePos; vk: VarKind) =
+proc genVarDecl(c: var GeneratedCode; t: Tree; n: NodePos; vk: VarKind; toExtern = false) =
   let d = asVarDecl(t, n)
   genCLineDir(c, t, info(t, n))
   if t[d.name].kind == SymDef:
     let lit = t[d.name].litId
     let name = mangle(c.m.lits.strings[lit])
+    if toExtern:
+      c.add ExternKeyword
+
     if vk == IsConst:
       c.add ConstKeyword
     if vk == IsThreadlocal:
@@ -416,12 +419,8 @@ proc genImp(c: var GeneratedCode; t: Tree; n: NodePos) =
   let arg = n.firstSon
   case t[arg].kind
   of ProcC: genProcDecl c, t, arg, true
-  of VarC:
-    c.add ExternKeyword
-    genStmt c, t, arg
-  of ConstC:
-    c.add ExternKeyword
-    genStmt c, t, arg
+  of VarC, GvarC, TvarC, ConstC:
+    genVar c, t, arg, true
   else:
     error c.m, "expected declaration for `imp` but got: ", t, n
 

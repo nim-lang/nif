@@ -155,6 +155,22 @@ proc genSwitch(c: var GeneratedCode; t: Tree; caseStmt: NodePos) =
     error c.m, "`case` expects `of` or `else` but got: ", t, caseStmt
   c.add CurlyRi
 
+proc genVar(c: var GeneratedCode; t: Tree; n: NodePos; toExtern = false) =
+  case t[n].kind
+  of VarC:
+    genVarDecl c, t, n, IsLocal, toExtern
+  of GvarC:
+    moveToDataSection:
+      genVarDecl c, t, n, IsGlobal, toExtern
+  of TvarC:
+    moveToDataSection:
+      genVarDecl c, t, n, IsThreadlocal, toExtern
+  of ConstC:
+    moveToDataSection:
+      genVarDecl c, t, n, IsConst, toExtern
+  else:
+    quit "unreachable"
+
 proc genStmt(c: var GeneratedCode; t: Tree; n: NodePos) =
   case t[n].kind
   of Empty:
@@ -167,17 +183,8 @@ proc genStmt(c: var GeneratedCode; t: Tree; n: NodePos) =
   of CallC:
     genCall c, t, n
     c.add Semicolon
-  of VarC:
-    genVarDecl c, t, n, IsLocal
-  of GvarC:
-    moveToDataSection:
-      genVarDecl c, t, n, IsGlobal
-  of TvarC:
-    moveToDataSection:
-      genVarDecl c, t, n, IsThreadlocal
-  of ConstC:
-    moveToDataSection:
-      genVarDecl c, t, n, IsConst
+  of VarC, GvarC, TvarC, ConstC:
+    genVar c, t, n
   of EmitC:
     genEmitStmt c, t, n
   of AsgnC:
