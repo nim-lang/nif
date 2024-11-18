@@ -33,12 +33,18 @@ type
 
   InstRequest* = object
     origin*: SymId
-    target*: (SymId, TypeCursor)
+    targetSym*: SymId
+    targetType*: TypeCursor
     typeParams*: seq[TypeCursor]
     requestFrom*: seq[PackedLineInfo]
 
   ProgramContext = ref object # shared for every `SemContext`
     config: NifConfig
+
+  ObjField = object
+    sym: SymId
+    level: int # inheritance level
+    typ: TypeCursor
 
   SemContext = object
     dest: TokenBuf
@@ -53,9 +59,9 @@ type
     globals, locals: Table[string, int]
     types: BuiltinTypes
     typeMem: Table[string, TokenBuf]
-    #declMem: Table[SymId, TokenBuf]
     thisModuleSuffix: string
     processedModules: HashSet[string]
+    #fieldsCache: Table[SymId, Table[StrId, ObjField]]
 
 # -------------- symbol lookups -------------------------------------
 
@@ -733,6 +739,67 @@ proc semCall(c: var SemContext; it: var Item) =
   c.dest.add m.args
   wantParRi c, it.n
 
+proc sameIdent(sym: SymId; str: StrId): bool =
+  # XXX speed this up by using the `fieldCache` idea
+  var name = pool.syms[sym]
+  extractBasename(name)
+  result = pool.strings.getOrIncl(name) == str
+
+proc findObjField(t: Cursor; name: StrId; level = 0): ObjField =
+  let baseType = t
+  var n = t
+  skip n # skip basetype
+  while n.kind == ParLe and n.substructureKind == FldS:
+    inc n # skip FldS
+    if n.kind == SymbolDef and sameIdent(n.symId, name):
+      let symId = n.symId
+      inc n # skip name
+      skip n # export marker
+      skip n # pragmas
+      return ObjField(sym: n.symId, level: level, typ: n)
+    skip n # skip name
+    skip n # export marker
+    skip n # pragmas
+    skip n # type
+    skip n # value
+  if baseType.kind == Symbol:
+    result = findObjField(objtypeImpl(baseType.symId), name, level+1)
+  else:
+    result = ObjField(level: -1)
+
+type
+  DotExprMode = enum
+    OrdinaryDot, AlsoTryDotCall, DotDontReportError
+
+proc semDot(c: var SemContext; it: var Item; mode: DotExprMode) =
+  takeToken c, it.n
+  var a = Item(n: it.n, typ: c.types.autoType)
+  semExpr c, a
+  it.n = a.n
+  let info = it.n.info
+  let fieldName = getIdent(c, it.n)
+  var isMatch = false
+  if fieldName == StrId(0):
+    c.buildErr it.n.info, "identifier after `.` expected"
+  else:
+    let t = skipModifier(a.typ)
+    if t.kind == Symbol:
+      let objType = objtypeImpl(t.symId)
+      if objType.typeKind == ObjectT:
+        let field = findObjField(objType, fieldName)
+        if field.level >= 0:
+          c.dest.add toToken(Symbol, field.sym, info)
+          c.dest.add toToken(IntLit, pool.integers.getOrIncl(field.level), info)
+          combineType it.typ, field.typ
+          isMatch = true
+        else:
+          c.buildErr it.n.info, "undeclared field: " & pool.strings[fieldName]
+      else:
+        c.buildErr it.n.info, "object type exptected"
+    else:
+      c.buildErr it.n.info, "object type exptected"
+  wantParRi c, it.n
+
 proc semWhile(c: var SemContext; it: var Item) =
   takeToken c, it.n
   semBoolExpr c, it
@@ -1362,7 +1429,9 @@ proc semExpr(c: var SemContext; it: var Item) =
       wantParRi c, it.n
     of CallX:
       semCall c, it
-    of AconstrX, AtX, DerefX, DotX, PatX, AddrX, NilX, NegX, SizeofX, OconstrX, KvX,
+    of DotX:
+      semDot c, it, AlsoTryDotCall
+    of AconstrX, AtX, DerefX, PatX, AddrX, NilX, NegX, SizeofX, OconstrX, KvX,
        AddX, SubX, MulX, DivX, ModX, ShrX, ShlX, BitandX, BitorX, BitxorX, BitnotX,
        EqX, NeqX, LeX, LtX, CastX, ConvX, SufX, RangeX, RangesX,
        HderefX, HaddrX, OconvX, HconvX, OchoiceX, CchoiceX,

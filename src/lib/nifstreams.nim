@@ -14,7 +14,7 @@ import bitabs, stringviews, lineinfos, nifreader, nifbuilder
 export TokenKind
 
 const
-  InlineInt* = EofToken
+  InlineInt* = UnknownToken
 
 type
   PackedToken* = object     # 8 bytes

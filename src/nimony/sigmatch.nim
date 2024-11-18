@@ -59,7 +59,7 @@ proc typeImpl(s: SymId): Cursor =
   for i in 1..4:
     skip(result) # name, export marker, pragmas, generic parameter
 
-proc objtypeImpl(s: SymId): Cursor =
+proc objtypeImpl*(s: SymId): Cursor =
   result = typeImpl(s)
   let k = typeKind result
   if k in {RefT, PtrT}:
