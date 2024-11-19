@@ -411,6 +411,26 @@ proc matchesBool*(m: var Match; t: Cursor) =
     if a.kind == ParRi: return
   m.error concat("expected: 'bool' but got: ", toString(t))
 
+type
+  DisambiguationResult* = enum
+    NobodyWins,
+    FirstWins,
+    SecondWins
+
+proc cmpMatches*(a, b: Match): DisambiguationResult =
+  assert not a.err
+  assert not b.err
+  if a.inheritanceCosts < b.inheritanceCosts:
+    result = FirstWins
+  elif a.inheritanceCosts > b.inheritanceCosts:
+    result = SecondWins
+  elif a.intCosts < b.intCosts:
+    result = FirstWins
+  elif a.intCosts > b.intCosts:
+    result = SecondWins
+  else:
+    result = NobodyWins
+
 # How to implement named parameters: In a preprocessing step
 # The signature is matched against the named parameters. The
 # call is then reordered to `f`'s needs. This keeps the common case fast

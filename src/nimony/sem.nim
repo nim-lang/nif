@@ -690,6 +690,24 @@ proc semExpr(c: var SemContext; it: var Item)
 proc classifyType(c: var SemContext; n: Cursor): TypeKind =
   result = typeKind(n)
 
+proc semSymUse(c: var SemContext; s: SymId): Sym =
+  # yyy find a better solution
+  var name = pool.syms[s]
+  extractBasename name
+  let identifier = pool.strings.getOrIncl(name)
+  var it {.cursor.} = c.currentScope
+  while it != nil:
+    for sym in it.tab.getOrDefault(identifier):
+      if sym.name == s:
+        return sym
+    it = it.up
+
+  let res = tryLoadSym(s)
+  if res.status == LacksNothing:
+    result = Sym(kind: symKind(res.decl), name: s, pos: ImportedPos)
+  else:
+    result = Sym(kind: NoSym, name: s, pos: InvalidPos)
+
 proc semBoolExpr(c: var SemContext; it: var Item) =
   semExpr c, it
   if classifyType(c, it.typ) != BoolT:
@@ -715,6 +733,49 @@ proc semStmt(c: var SemContext; n: var Cursor) =
     buildErr c, n.info, "expression of type `" & typeToString(c, it.typ) & "` must be discarded"
   n = it.n
 
+template emptyNode(): Cursor =
+  # XXX find a better solution for this
+  c.types.voidType
+
+proc fetchType(c: var SemContext; it: var Item; s: Sym) =
+  if s.kind == NoSym:
+    c.buildErr it.n.info, "undeclared identifier"
+    it.typ = c.types.autoType
+  else:
+    let res = declToCursor(c, s)
+    if res.status == LacksNothing:
+      var n = res.decl
+      if s.kind.isLocal:
+        inc n # skip ParLe
+        inc n # skip name
+        skip n # skip export marker
+        skip n # skip pragmas
+      elif s.kind.isRoutine:
+        discard "nothing to skip"
+      else:
+        # XXX enum field, object field?
+        assert false, "not implemented"
+      it.typ = n
+    else:
+      c.buildErr it.n.info, "could not load symbol: " & pool.syms[s.name] & "; errorCode: " & $res.status
+      it.typ = c.types.autoType
+
+proc pickBestMatch(c: var SemContext; m: openArray[Match]): int =
+  result = -1
+  for i in 0..<m.len:
+    if not m[i].err:
+      if result < 0:
+        result = i
+      else:
+        case cmpMatches(m[result], m[i])
+        of NobodyWins:
+          result = -1 # ambiguous
+          break
+        of FirstWins:
+          discard "result remains the same"
+        of SecondWins:
+          result = i
+
 proc semCall(c: var SemContext; it: var Item) =
   let callNode = it.n
   var dest = createTokenBuf(16)
@@ -730,13 +791,31 @@ proc semCall(c: var SemContext; it: var Item) =
     arg.n = it.n
     it.n = next
     args.add arg
-  var m = createMatch()
-  sigmatch(m, fn, args, c.types.voidType)
-  # XXX c.types.voidType is a little hack to pass DotToken to `explicitTypeVars` for now
-  swap c.dest, dest
-  c.dest.add callNode
-  c.dest.add fn.n
-  c.dest.add m.args
+  var m: seq[Match] = @[]
+  if fn.n.exprKind in {OchoiceX, CchoiceX}:
+    var f = fn.n
+    inc f
+    while f.kind != ParRi:
+      if f.kind == Symbol:
+        let s = semSymUse(c, f.symId)
+        var candidate = Item(n: f, typ: c.types.autoType)
+        fetchType c, candidate, s
+        m.add createMatch()
+        sigmatch(m[^1], candidate, args, emptyNode())
+      else:
+        buildErr c, fn.n.info, "`choice` node does not contain `symbol`"
+      inc f
+  else:
+    m.add createMatch()
+    sigmatch(m[^1], fn, args, emptyNode())
+  let idx = pickBestMatch(c, m)
+  if idx >= 0:
+    swap c.dest, dest
+    c.dest.add callNode
+    c.dest.add fn.n
+    c.dest.add m[idx].args
+  else:
+    buildErr c, callNode.info, "call does not match"
   wantParRi c, it.n
 
 proc sameIdent(sym: SymId; str: StrId): bool =
@@ -885,24 +964,6 @@ proc semPragmas(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; ki
     wantParRi c, n
   else:
     buildErr c, n.info, "expected '.' or 'pragmas'"
-
-proc semSymUse(c: var SemContext; s: SymId): Sym =
-  # yyy find a better solution
-  var name = pool.syms[s]
-  extractBasename name
-  let identifier = pool.strings.getOrIncl(name)
-  var it {.cursor.} = c.currentScope
-  while it != nil:
-    for sym in it.tab.getOrDefault(identifier):
-      if sym.name == s:
-        return sym
-    it = it.up
-
-  let res = tryLoadSym(s)
-  if res.status == LacksNothing:
-    result = Sym(kind: symKind(res.decl), name: s, pos: ImportedPos)
-  else:
-    result = Sym(kind: NoSym, name: s, pos: InvalidPos)
 
 proc semIdentImpl(c: var SemContext; n: var Cursor; ident: StrId): Sym =
   let insertPos = c.dest.len
