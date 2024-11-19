@@ -935,6 +935,7 @@ proc semPragma(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; kin
       wantParRi c, n
     else:
       buildErr c, n.info, "expected pragma"
+      inc n
   of Magic:
     takeToken c, n
     if n.kind in {StringLit, Ident}:
@@ -1375,6 +1376,11 @@ proc semTypeSection(c: var SemContext; n: var Cursor) =
   let beforeExportMarker = c.dest.len
   wantExportMarker c, n # 1
 
+  var crucial = default CrucialPragma
+  semPragmas c, n, crucial, TypeY # 2
+  if crucial.magic.len > 0:
+    exportMarkerBecomesNifTag c, beforeExportMarker, crucial
+
   var isGeneric: bool
   if n.kind == DotToken:
     takeToken c, n
@@ -1383,11 +1389,6 @@ proc semTypeSection(c: var SemContext; n: var Cursor) =
     openScope c
     semGenericParams c, n
     isGeneric = true
-
-  var crucial = default CrucialPragma
-  semPragmas c, n, crucial, TypeY # 2
-  if crucial.magic.len > 0:
-    exportMarkerBecomesNifTag c, beforeExportMarker, crucial
 
   if n.kind == DotToken:
     takeToken c, n
