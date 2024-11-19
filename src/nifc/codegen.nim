@@ -61,6 +61,10 @@ type
     IncludeKeyword = "#include "
     LineDirKeyword = "#line "
     DiscardToken = "(void) "
+    TryKeyword = "try "
+    CatchKeyword = "catch ("
+    ThrowKeyword = "throw"
+    ErrToken = "Err_"
 
 proc fillTokenTable(tab: var BiTable[Token, string]) =
   for e in EmptyToken..high(PredefinedToken):
@@ -82,6 +86,8 @@ type
     headerFile: seq[Token]
     generatedTypes: IntSet
     requestedSyms: HashSet[string]
+    labels: int
+    hasError: bool
 
 proc initGeneratedCode*(m: sink Module): GeneratedCode =
   result = GeneratedCode(m: m, code: @[], tokens: initBiTable[Token, string](), fileIds: initPackedSet[FileId]())
@@ -178,6 +184,13 @@ proc genStrLit(c: var GeneratedCode; litId: StrId): Token =
   let cstr = makeCString(c.m.lits.strings[litId])
   result = c.tokens.getOrIncl cstr
 
+proc inclHeader(c: var GeneratedCode, name: string) =
+  let header = c.tokens.getOrIncl(name)
+  if not c.includedHeaders.containsOrIncl(int header):
+    c.includes.add Token(IncludeKeyword)
+    c.includes.add header
+    c.includes.add Token NewLine
+
 include selectany
 
 type
@@ -273,6 +286,13 @@ proc genCLineDir(c: var GeneratedCode; t: Tree; info: PackedLineInfo) =
 
       c.fileIds.incl id
 
+template moveToDataSection(body: untyped) =
+  let oldLen = c.code.len
+  body
+  for i in oldLen ..< c.code.len:
+    c.data.add c.code[i]
+  setLen c.code, oldLen
+
 include genexprs
 
 type
@@ -302,13 +322,6 @@ proc genVarDecl(c: var GeneratedCode; t: Tree; n: NodePos; vk: VarKind; toExtern
     c.add Semicolon
   else:
     error c.m, "expected SymbolDef but got: ", t, n
-
-template moveToDataSection(body: untyped) =
-  let oldLen = c.code.len
-  body
-  for i in oldLen ..< c.code.len:
-    c.data.add c.code[i]
-  setLen c.code, oldLen
 
 include genstmts
 

@@ -61,6 +61,50 @@ proc genWhile(c: var GeneratedCode; t: Tree; n: NodePos) =
   c.genStmt t, body
   c.add CurlyRi
 
+proc getExceptionTemp(c: var GeneratedCode): string =
+  inc c.labels
+  result = "E" & $c.labels & "_"
+
+proc genTryCpp(c: var GeneratedCode; t: Tree; n: NodePos) =
+  let (actions, onerr, final) = sons3(t, n)
+
+  inclHeader(c, "<exception>")
+
+  let errorName = getExceptionTemp(c)
+  c.add "std::exception_ptr " & errorName
+  c.add Semicolon
+  c.add TryKeyword
+  c.add CurlyLe
+  c.genStmt(t, actions)
+  c.add CurlyRi
+
+  if t[onerr].kind == Empty or t[final].kind != Empty:
+    c.add CatchKeyword
+    c.add "..."
+    c.add ParRi
+    c.add Space
+    c.add CurlyLe
+    c.add errorName
+    c.add AsgnOpr
+    c.add "std::current_exception()"
+    c.add Semicolon
+    c.add CurlyRi
+
+  if t[final].kind != Empty:
+    c.add CurlyLe
+    c.genStmt(t, final)
+
+    c.add IfKeyword
+    c.add errorName
+    c.add ParRi
+    c.add Space
+    c.add "std::rethrow_exception("
+    c.add errorName
+    c.add ParRi
+    c.add Semicolon
+
+    c.add CurlyRi
+
 proc genScope(c: var GeneratedCode; t: Tree; n: NodePos) =
   c.add CurlyLe
   for ch in sons(t, n):
@@ -211,6 +255,14 @@ proc genStmt(c: var GeneratedCode; t: Tree; n: NodePos) =
   of DiscardC:
     c.add DiscardToken
     c.genx t, n.firstSon
+    c.add Semicolon
+  of TryC:
+    genTryCpp(c, t, n)
+  of RaiseC:
+    c.add ThrowKeyword
+    if t[n.firstSon].kind != Empty:
+      c.add Space
+      c.genx t, n.firstSon
     c.add Semicolon
   else:
     error c.m, "expected statement but got: ", t, n

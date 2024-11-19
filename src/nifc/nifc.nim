@@ -10,7 +10,7 @@
 ## NIFC driver program.
 
 import std / [parseopt, strutils, os, osproc, tables, assertions, syncio]
-import codegen, noptions, mangler
+import codegen, noptions, mangler, cprelude
 import preasm / genpreasm
 
 when defined(windows):
@@ -74,6 +74,7 @@ proc handleCmdLine() =
     s.config.cCompiler = ccCLang
   else:
     s.config.cCompiler = ccGcc
+
   for kind, key, val in getopt():
     case kind
     of cmdArgument:
@@ -168,6 +169,10 @@ proc handleCmdLine() =
       of atNone:
         quit "targets are not specified"
 
+    # var exc = open(s.config.nifcacheDir / "nifc_exc.c", fmWrite)
+    # exc.write Prelude
+    # exc.writeLine "NB8 Err_;"
+    # actionTable[atC] = @["nifc_exc.nif"]
     if s.selects.len > 0:
       var h = open(s.config.nifcacheDir / "select_any.h", fmWrite)
       for x in s.selects:
