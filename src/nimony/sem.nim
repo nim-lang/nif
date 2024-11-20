@@ -1268,6 +1268,7 @@ proc semParams(c: var SemContext; n: var Cursor) =
     buildErr c, n.info, "expected '.' or 'params'"
 
 proc semProc(c: var SemContext; it: var Item; kind: SymKind) =
+  takeToken c, it.n
   declareOverloadableSym c, it, kind
   let beforeExportMarker = c.dest.len
   wantExportMarker c, it.n
@@ -1297,6 +1298,7 @@ proc semProc(c: var SemContext; it: var Item; kind: SymKind) =
     c.closeScope() # close parameter scope
   finally:
     c.routine = c.routine.parent
+  wantParRi c, it.n
 
 proc semStmts(c: var SemContext; it: var Item) =
   takeToken c, it.n
@@ -1349,11 +1351,14 @@ proc semEmit(c: var SemContext; it: var Item) =
 
 proc semDiscard(c: var SemContext; it: var Item) =
   takeToken c, it.n
-  var a = Item(n: it.n, typ: c.types.autoType)
-  semExpr c, a
-  it.n = a.n
-  if classifyType(c, it.typ) == VoidT:
-    buildErr c, it.n.info, "expression of type `" & typeToString(c, it.typ) & "` must not be discarded"
+  if it.n.kind == DotToken:
+    takeToken c, it.n
+  else:
+    var a = Item(n: it.n, typ: c.types.autoType)
+    semExpr c, a
+    it.n = a.n
+    if classifyType(c, it.typ) == VoidT:
+      buildErr c, it.n.info, "expression of type `" & typeToString(c, it.typ) & "` must not be discarded"
   wantParRi c, it.n
   combineType it.typ, c.types.voidType
 
