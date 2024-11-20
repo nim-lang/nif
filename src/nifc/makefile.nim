@@ -43,6 +43,11 @@ program:"""
   var programBody = ""
   var objectBody = ""
 
+  let finalAction = if atCpp in actionTable: atCpp else: atC
+  let excActionTable = @[genExcModule(s, finalAction)]
+  generateMakefileForFiles(s, excActionTable, finalAction,
+        makefileContent, programBody, objectBody)
+
   for action in actionTable.keys:
     generateMakefileForFiles(s, actionTable[action], action,
         makefileContent, programBody, objectBody)

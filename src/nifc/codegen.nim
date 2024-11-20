@@ -493,7 +493,7 @@ proc writeLineDir(f: var CppFile, c: var GeneratedCode) =
     write f, def
     write f, "\n"
 
-proc generateCode*(s: var State, inp, outp: string; intmSize: int) =
+proc generateCode*(s: var State, inp, outp: string) =
   var m = load(inp)
   m.config = s.config
   var c = initGeneratedCode(m)
@@ -506,7 +506,7 @@ proc generateCode*(s: var State, inp, outp: string; intmSize: int) =
 
   traverseCode c, c.m.code, StartPos
   var f = CppFile(f: open(outp, fmWrite))
-  f.write "#define NIM_INTBITS " & $intmSize & "\n"
+  f.write "#define NIM_INTBITS " & $s.bits & "\n"
   f.write Prelude
   writeTokenSeq f, c.includes, c
   if optLineDir in c.m.config.options:

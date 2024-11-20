@@ -1,0 +1,44 @@
+(.nif24)
+(stmts
+  (incl "<assert.h>")
+  (incl "<stdio.h>")
+
+
+
+  (proc :main.c . (i +32) .
+    (stmts
+
+    (call assert.c (eq +2 +2))
+
+    (asgn (err) (true))
+    (call assert.c (err))
+
+      (try
+        (stmts
+          (call printf.c "call: try\0A")
+        )
+        .
+        (call printf.c "call: finally\0A")
+      )
+
+
+      (try
+        (stmts
+          (call printf.c "call: try\0A")
+          (raise +12)
+          (raise .)
+        )
+        .
+        .
+      )
+
+      (try
+        (stmts
+          (call printf.c "call: try\0A")
+        )
+        (call printf.c "call: except\0A")
+        .
+      )
+
+
+)))

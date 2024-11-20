@@ -50,7 +50,7 @@ proc genMakeCmd(config: ConfigRef, makefilePath: string): string =
   else:
     result = "make -f " & makefilePath
 
-proc generateBackend(s: var State; action: Action; files: seq[string]; bits: int) =
+proc generateBackend(s: var State; action: Action; files: seq[string]) =
   assert action in {atC, atCpp}
   if files.len == 0:
     quit "command takes a filename"
@@ -59,17 +59,16 @@ proc generateBackend(s: var State; action: Action; files: seq[string]; bits: int
   for i in 0..<files.len:
     let inp = files[i]
     let outp = s.config.nifcacheDir / splitFile(inp).name.mangleFileName & destExt
-    generateCode s, inp, outp, bits
+    generateCode s, inp, outp
 
 proc handleCmdLine() =
   var args: seq[string] = @[]
-  var bits = sizeof(int)*8
   var toRun = false
   var currentAction = atNone
 
   var actionTable = initActionTable()
 
-  var s = State(config: ConfigRef())
+  var s = State(config: ConfigRef(), bits: sizeof(int)*8)
   when defined(macos): # TODO: switches to default config for platforms
     s.config.cCompiler = ccCLang
   else:
@@ -97,7 +96,7 @@ proc handleCmdLine() =
         else:
           for inp in items args:
             let outp = changeFileExt(inp, ".preasm")
-            generatePreAsm inp, outp, bits
+            generatePreAsm inp, outp, s.bits
       else:
         case currentAction
         of atC:
@@ -112,9 +111,9 @@ proc handleCmdLine() =
       case normalize(key)
       of "bits":
         case val
-        of "64": bits = 64
-        of "32": bits = 32
-        of "16": bits = 16
+        of "64": s.bits = 64
+        of "32": s.bits = 32
+        of "16": s.bits = 16
         else: quit "invalid value for --bits"
       of "help", "h": writeHelp()
       of "version", "v": writeVersion()
@@ -154,7 +153,7 @@ proc handleCmdLine() =
     for action in actionTable.keys:
       case action
       of atC, atCpp:
-        generateBackend(s, action, actionTable[action], bits)
+        generateBackend(s, action, actionTable[action])
       of atNative:
         let args = actionTable[action]
         if args.len == 0:
@@ -169,10 +168,6 @@ proc handleCmdLine() =
       of atNone:
         quit "targets are not specified"
 
-    # var exc = open(s.config.nifcacheDir / "nifc_exc.c", fmWrite)
-    # exc.write Prelude
-    # exc.writeLine "NB8 Err_;"
-    # actionTable[atC] = @["nifc_exc.nif"]
     if s.selects.len > 0:
       var h = open(s.config.nifcacheDir / "select_any.h", fmWrite)
       for x in s.selects:

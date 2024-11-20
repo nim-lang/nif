@@ -1,4 +1,5 @@
-import std/tables
+import std/[tables, assertions, syncio, os]
+import cprelude
 
 type
   Backend* = enum
@@ -28,6 +29,7 @@ type
   State* = object
     selects*: seq[string] # names of modules with functions with selectany pragmas
     config*: ConfigRef
+    bits*: int
 
   ActionTable* = OrderedTable[Action, seq[string]]
 
@@ -53,3 +55,13 @@ template getCompilerConfig*(config: ConfigRef): (string, string) =
     quit "unreachable"
 
 const ExtAction*: array[Action, string] = ["", ".c", ".cpp", ".S"]
+
+proc genExcModule*(s: State, action: Action): string =
+  assert action in {atC, atCpp}
+  let suffix = ExtAction[action]
+  result = "nifc_exc" & suffix
+  var exc = open(s.config.nifcacheDir / result, fmWrite)
+  exc.write "#define NIM_INTBITS " & $s.bits & "\n"
+  exc.write Prelude
+  exc.write "NB8 Err_;"
+  exc.close()
