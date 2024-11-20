@@ -41,10 +41,6 @@ SET "c_flags={optimizeLevelFlag}"
 
   var links = ""
 
-  let finalAction = if atCpp in actionTable: atCpp else: atC
-  let excActionTable = @[genExcModule(s, finalAction)]
-  makefileContent.add generateMakefileForFiles(s, excActionTable, finalAction, links)
-
   for action in actionTable.keys:
     makefileContent.add generateMakefileForFiles(s, actionTable[action], action, links)
 

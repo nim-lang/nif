@@ -64,7 +64,7 @@ type
     TryKeyword = "try "
     CatchKeyword = "catch ("
     ThrowKeyword = "throw"
-    ErrToken = "Err_"
+    ErrToken = "err"
 
 proc fillTokenTable(tab: var BiTable[Token, string]) =
   for e in EmptyToken..high(PredefinedToken):
@@ -87,7 +87,6 @@ type
     generatedTypes: IntSet
     requestedSyms: HashSet[string]
     labels: int
-    hasError: bool
 
 proc initGeneratedCode*(m: sink Module): GeneratedCode =
   result = GeneratedCode(m: m, code: @[], tokens: initBiTable[Token, string](), fileIds: initPackedSet[FileId]())

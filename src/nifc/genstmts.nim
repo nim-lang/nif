@@ -74,7 +74,6 @@ proc genTryCpp(c: var GeneratedCode; t: Tree; n: NodePos) =
   c.add ParRi
   c.add Space
   c.add CurlyLe
-
   if t[onerr].kind != Empty:
     c.genStmt(t, onerr)
   c.add CurlyRi

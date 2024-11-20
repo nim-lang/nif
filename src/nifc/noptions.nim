@@ -1,5 +1,4 @@
-import std/[tables, assertions, syncio, os]
-import cprelude
+import std/[tables]
 
 type
   Backend* = enum
@@ -56,12 +55,3 @@ template getCompilerConfig*(config: ConfigRef): (string, string) =
 
 const ExtAction*: array[Action, string] = ["", ".c", ".cpp", ".S"]
 
-proc genExcModule*(s: State, action: Action): string =
-  assert action in {atC, atCpp}
-  let suffix = ExtAction[action]
-  result = "nifc_exc" & suffix
-  var exc = open(s.config.nifcacheDir / result, fmWrite)
-  exc.write "#define NIM_INTBITS " & $s.bits & "\n"
-  exc.write Prelude
-  exc.write "NB8 Err_;"
-  exc.close()

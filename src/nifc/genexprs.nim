@@ -95,13 +95,6 @@ proc genLvalue(c: var GeneratedCode; t: Tree; n: NodePos) =
     c.add Dot
     genx c, t, fld
   of ErrC:
-    if not c.hasError:
-      moveToDataSection:
-        c.add ExternKeyword
-        c.add "NB8 "
-        c.add ErrToken
-        c.add Semicolon
-        c.hasError = true
     c.add ErrToken
   else:
     error c.m, "expected expression but got: ", t, n

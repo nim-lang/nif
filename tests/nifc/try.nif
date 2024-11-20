@@ -3,15 +3,17 @@
   (incl "<assert.h>")
   (incl "<stdio.h>")
 
+  (proc :foo.c (params (param :err.c . (bool))) . .
+    (asgn (err) (true))
+    (call assert.c (err))
+  )
 
 
   (proc :main.c . (i +32) .
     (stmts
 
     (call assert.c (eq +2 +2))
-
-    (asgn (err) (true))
-    (call assert.c (err))
+    (call foo.c (false))
 
       (try
         (stmts
