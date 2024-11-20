@@ -180,7 +180,7 @@ proc decodeFilename*(t: Token): string =
         inc p, 2
       else:
         result.add ^p
-      inc p
+        inc p
   else:
     result = newString(t.filename.len)
     copyMem(addr result[0], t.filename.p, t.filename.len)
