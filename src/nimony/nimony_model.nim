@@ -210,6 +210,8 @@ declareMatcher parsePragmaKind, PragmaKind
 proc pragmaKind*(c: Cursor): PragmaKind {.inline.} =
   if c.kind == ParLe:
     result = parsePragmaKind pool.tags[tag(c)]
+  elif c.kind == Ident:
+    result = parsePragmaKind pool.strings[c.litId]
   else:
     result = NoPragma
 
@@ -226,6 +228,8 @@ declareMatcher parseTypeKind, TypeKind
 proc typeKind*(c: Cursor): TypeKind {.inline.} =
   if c.kind == ParLe:
     result = parseTypeKind pool.tags[tag(c)]
+  elif c.kind == DotToken:
+    result = VoidT
   else:
     result = NoType
 
@@ -234,6 +238,8 @@ declareMatcher parseCallConvKind, CallConv
 proc callConvKind*(c: Cursor): CallConv {.inline.} =
   if c.kind == ParLe:
     result = parseCallConvKind pool.tags[tag(c)]
+  elif c.kind == Ident:
+    result = parseCallConvKind pool.strings[c.litId]
   else:
     result = NoCallConv
 
