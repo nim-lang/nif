@@ -9,11 +9,11 @@ import nifstreams, bitabs, lineinfos
 
 type
   MsgKind* = enum
-    Info = "[Info] ",
-    Warning = "[Warning] ",
-    Error = "[Error] "
-    Trace = "[Trace] "
-    Debug = "[Debug] "
+    Info = "Info: ",
+    Warning = "Warning: ",
+    Error = "Error: "
+    Trace = "Trace: "
+    Debug = "Debug: "
 
   Reporter* = object
     verbosity*: int
@@ -23,8 +23,8 @@ type
     errors*: int
 
 proc writeMessage(c: var Reporter; category: string; p, arg: string) =
-  var msg = category
-  if p.len > 0: msg.add "(" & p & ") "
+  var msg = p
+  msg.add ' '
   msg.add arg
   stdout.writeLine msg
 
@@ -42,7 +42,7 @@ proc writeMessage(c: var Reporter; k: MsgKind; p, arg: string) =
       of Info: (fgGreen, styleBright)
       of Warning: (fgYellow, styleBright)
       of Error: (fgRed, styleBright)
-    stdout.styledWriteLine(color, style, $k, resetStyle, fgCyan, "(", p, ")", resetStyle, " ", arg)
+    stdout.styledWriteLine(fgCyan, p, " ", resetStyle, color, style, $k, resetStyle, arg)
 
 proc message(c: var Reporter; k: MsgKind; p, arg: string) =
   ## collects messages or prints them out immediately
