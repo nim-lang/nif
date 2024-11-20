@@ -228,6 +228,8 @@ declareMatcher parseTypeKind, TypeKind
 proc typeKind*(c: Cursor): TypeKind {.inline.} =
   if c.kind == ParLe:
     result = parseTypeKind pool.tags[tag(c)]
+  elif c.kind == DotToken:
+    result = VoidT
   else:
     result = NoType
 

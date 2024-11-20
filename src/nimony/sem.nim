@@ -249,6 +249,10 @@ proc pushErrorContext(c: var SemContext; info: PackedLineInfo) = c.instantiatedF
 proc popErrorContext(c: var SemContext) = discard c.instantiatedFrom.pop
 
 proc buildErr*(c: var SemContext; info: PackedLineInfo; msg: string) =
+  when defined(debug):
+    writeStackTrace()
+    echo infoToStr(info) & " Error: " & msg
+    quit msg
   c.dest.buildTree ErrT, info:
     for instFrom in items(c.instantiatedFrom):
       c.dest.add toToken(UnknownToken, 0'u32, instFrom)
@@ -1167,16 +1171,21 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
       var ignored = default CrucialPragma
       semPragmas c, n, ignored, ProcY
       wantParRi c, n
+  of DotToken:
+    if context == InReturnTypeDecl:
+      takeToken c, n
+    else:
+      c.buildErr info, "not a type"
   else:
     c.buildErr info, "not a type"
 
-proc semLocalType(c: var SemContext; n: var Cursor): TypeCursor =
+proc semLocalType(c: var SemContext; n: var Cursor; context = InLocalDecl): TypeCursor =
   let insertPos = c.dest.len
-  semLocalTypeImpl c, n, InLocalDecl
+  semLocalTypeImpl c, n, context
   result = typeToCursor(c, insertPos)
 
 proc semReturnType(c: var SemContext; n: var Cursor): TypeCursor =
-  result = semLocalType(c, n)
+  result = semLocalType(c, n, InReturnTypeDecl)
 
 proc exportMarkerBecomesNifTag(c: var SemContext; insertPos: int; crucial: CrucialPragma) =
   assert crucial.magic.len > 0
@@ -1299,6 +1308,7 @@ proc semProc(c: var SemContext; it: var Item; kind: SymKind) =
   finally:
     c.routine = c.routine.parent
   wantParRi c, it.n
+  combineType it.typ, c.types.voidType
 
 proc semStmts(c: var SemContext; it: var Item) =
   takeToken c, it.n
