@@ -211,25 +211,6 @@ proc addParRi*(dest: var TokenBuf) =
 proc addDotToken*(dest: var TokenBuf) =
   dest.add toToken(DotToken, 0'u32, NoLineInfo)
 
-proc insert*(dest: var TokenBuf; src: openArray[PackedToken]; pos: int) =
-  var j = len(dest) - 1
-  var i = j + len(src)
-  dest.grow(i + 1)
-
-  # Move items after `pos` to the end of the sequence.
-  while j >= pos:
-    dest[i] = dest[j]
-    dec i
-    dec j
-  # Insert items from `dest` into `dest` at `pos`
-  inc j
-  for item in src:
-    dest[j] = item
-    inc j
-
-proc toString*(b: TokenBuf): string =
-  result = nifstreams.toString(toOpenArray(b.data, 0, b.len-1))
-
 proc span*(c: Cursor): int =
   result = 0
   var c = c
@@ -246,9 +227,56 @@ proc span*(c: Cursor): int =
     inc c
     inc result
 
+proc insert*(dest: var TokenBuf; src: openArray[PackedToken]; pos: int) =
+  var j = len(dest) - 1
+  var i = j + len(src)
+  dest.grow(i + 1)
+
+  # Move items after `pos` to the end of the sequence.
+  while j >= pos:
+    dest[i] = dest[j]
+    dec i
+    dec j
+  # Insert items from `dest` into `dest` at `pos`
+  inc j
+  for item in src:
+    dest[j] = item
+    inc j
+
+proc insert*(dest: var TokenBuf; src: Cursor; pos: int) =
+  insert dest, toOpenArray(cast[ptr  UncheckedArray[PackedToken]](src.p), 0, span(src)-1), pos
+
+proc replace*(dest: var TokenBuf; by: Cursor; pos: int) =
+  let len = span(Cursor(p: addr dest.data[pos], rem: dest.len-pos))
+  let actualLen = min(len, dest.len - pos)
+  let byLen = span(by)
+  let oldLen = dest.len
+  let newLen = oldLen + byLen - actualLen
+  if byLen > actualLen:
+    # Need to make room for additional elements
+    dest.grow(newLen)
+    # Move existing elements to the right
+    for i in countdown(oldLen - 1, pos + actualLen):
+      dest[i + byLen - actualLen] = dest[i]
+  elif byLen < actualLen:
+    # Need to remove elements
+    for i in pos + byLen ..< dest.len - (actualLen - byLen):
+      dest[i] = dest[i + actualLen - byLen]
+    dest.shrink(newLen)
+  # Copy new elements
+  var by = by
+  for i in 0 ..< byLen:
+    dest[pos + i] = by.load
+    inc by
+
+proc toString*(b: TokenBuf): string =
+  result = nifstreams.toString(toOpenArray(b.data, 0, b.len-1))
+
 proc toString*(b: Cursor): string =
   let counter = span(b)
   result = nifstreams.toString(toOpenArray(cast[ptr UncheckedArray[PackedToken]](b.p), 0, counter-1))
+
+proc `$`*(c: Cursor): string = toString(c)
 
 proc addToken[L](tree: var TokenBuf; kind: TokenKind; id: L; info: PackedLineInfo) =
   tree.add toToken(kind, id, info)
@@ -263,6 +291,10 @@ template copyIntoUnchecked*(dest: var TokenBuf; tag: string; info: PackedLineInf
   body
   dest.addToken ParRi, 0'u32, info
 
-proc parse*(r: var Reader; dest: var TokenBuf;
+proc parse*(r: var Stream; dest: var TokenBuf;
             parentInfo: PackedLineInfo): bool =
-  nifstreams.parseImpl()
+  r.parents[0] = parentInfo
+  while true:
+    let tok = r.next()
+    dest.add tok
+    if tok.kind == EofToken: break

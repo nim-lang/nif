@@ -59,7 +59,7 @@ proc typeImpl(s: SymId): Cursor =
   for i in 1..4:
     skip(result) # name, export marker, pragmas, generic parameter
 
-proc objtypeImpl(s: SymId): Cursor =
+proc objtypeImpl*(s: SymId): Cursor =
   result = typeImpl(s)
   let k = typeKind result
   if k in {RefT, PtrT}:
@@ -162,7 +162,7 @@ proc linearMatch(m: var Match; f, a: var Cursor) =
 const
   TypeModifiers = {MutT, OutT, LentT, SinkT, StaticT}
 
-proc skipModifier(a: Cursor): Cursor =
+proc skipModifier*(a: Cursor): Cursor =
   result = a
   if result.kind == ParLe and result.typeKind in TypeModifiers:
     inc result
@@ -410,6 +410,26 @@ proc matchesBool*(m: var Match; t: Cursor) =
     inc a
     if a.kind == ParRi: return
   m.error concat("expected: 'bool' but got: ", toString(t))
+
+type
+  DisambiguationResult* = enum
+    NobodyWins,
+    FirstWins,
+    SecondWins
+
+proc cmpMatches*(a, b: Match): DisambiguationResult =
+  assert not a.err
+  assert not b.err
+  if a.inheritanceCosts < b.inheritanceCosts:
+    result = FirstWins
+  elif a.inheritanceCosts > b.inheritanceCosts:
+    result = SecondWins
+  elif a.intCosts < b.intCosts:
+    result = FirstWins
+  elif a.intCosts > b.intCosts:
+    result = SecondWins
+  else:
+    result = NobodyWins
 
 # How to implement named parameters: In a preprocessing step
 # The signature is matched against the named parameters. The
