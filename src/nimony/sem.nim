@@ -935,7 +935,7 @@ proc semPragma(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; kin
       wantParRi c, n
     else:
       buildErr c, n.info, "expected pragma"
-      inc n
+      skip n
   of Magic:
     takeToken c, n
     if n.kind in {StringLit, Ident}:
@@ -1543,8 +1543,8 @@ proc semcheck*(infile, outfile: string; config: sink NifConfig) =
   c.currentScope = Scope(tab: initTable[StrId, seq[Sym]](), up: nil, kind: ToplevelScope)
 
   semStmt c, n
-  if n.kind != EofToken:
-    quit "Internal error: file not processed completely"
+  #if n.kind != EofToken:
+  #  quit "Internal error: file not processed completely"
   # fix point: generic instantiations:
   when false:
     var i = 0

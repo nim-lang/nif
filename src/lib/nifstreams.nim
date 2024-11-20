@@ -105,7 +105,7 @@ template copyIntoUnchecked*(dest: var seq[PackedToken]; tag: string; info: Packe
 type
   Stream* = object
     r*: Reader
-    parents: seq[PackedLineInfo]
+    parents*: seq[PackedLineInfo]
 
 proc open*(filename: string): Stream =
   result = Stream(r: nifreader.open(filename))
@@ -130,11 +130,15 @@ proc rawNext(s: var Stream; t: Token): PackedToken =
     currentInfo = pack(pool.man, fileId, t.pos.line, t.pos.col)
 
   case t.tk
-  of ParRi, EofToken, UnknownToken, DotToken:
+  of ParRi:
+    result = toToken(t.tk, 0'u32, currentInfo)
+    discard s.parents.pop()
+  of EofToken, UnknownToken, DotToken:
     result = toToken(t.tk, 0'u32, currentInfo)
   of ParLe:
     let ka = pool.tags.getOrInclFromView(t.s)
     result = toToken(ParLe, ka, currentInfo)
+    s.parents.add currentInfo
   of Ident, StringLit:
     result = toToken(t.tk, pool.strings.getOrIncl(decodeStr t), currentInfo)
   of Symbol, SymbolDef:
@@ -163,56 +167,6 @@ proc skip*(s: var Stream; current: PackedToken): PackedToken =
         if nested == 0: break
         dec nested
   result = next(s)
-
-template parseImpl*() {.dirty.} =
-  let t = next(r)
-  var currentInfo = parentInfo
-  if t.filename.len == 0:
-    # relative file position
-    if t.pos.line != 0 or t.pos.col != 0:
-      let (file, line, col) = unpack(pool.man, parentInfo)
-      currentInfo = pack(pool.man, file, line+t.pos.line, col+t.pos.col)
-  else:
-    # absolute file position:
-    let fileId = pool.files.getOrIncl(decodeFilename t)
-    currentInfo = pack(pool.man, fileId, t.pos.line, t.pos.col)
-
-  result = true
-  case t.tk
-  of ParRi:
-    result = false
-  of EofToken:
-    result = false
-  of ParLe:
-    let ka = pool.tags.getOrInclFromView(t.s)
-    copyInto(dest, ka, currentInfo):
-      while true:
-        let progress = parse(r, dest, currentInfo)
-        if not progress: break
-
-  of UnknownToken:
-    copyIntoUnchecked dest, "errtok", currentInfo:
-      dest.addToken StringLit, pool.strings.getOrIncl(decodeStr t), currentInfo
-  of DotToken:
-    dest.addToken DotToken, 0'u32, currentInfo
-  of Ident:
-    dest.addToken Ident, pool.strings.getOrIncl(decodeStr t), currentInfo
-  of Symbol, SymbolDef:
-    dest.addToken t.tk, pool.syms.getOrIncl(decodeStr t), currentInfo
-  of CharLit:
-    dest.addToken CharLit, uint32 decodeChar(t), currentInfo
-  of StringLit:
-    dest.addToken StringLit, pool.strings.getOrIncl(decodeStr t), currentInfo
-  of IntLit:
-    dest.addToken IntLit, pool.integers.getOrIncl(decodeInt t), currentInfo
-  of UIntLit:
-    dest.addToken UIntLit, pool.uintegers.getOrIncl(decodeUInt t), currentInfo
-  of FloatLit:
-    dest.addToken FloatLit, pool.floats.getOrIncl(decodeFloat t), currentInfo
-
-proc parse*(r: var Reader; dest: var seq[PackedToken];
-            parentInfo: PackedLineInfo): bool =
-  parseImpl()
 
 proc litId*(n: PackedToken): StrId {.inline.} =
   assert n.kind in {Ident, StringLit}

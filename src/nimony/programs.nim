@@ -91,7 +91,7 @@ proc tryLoadSym*(s: SymId): LoadResult =
       else:
         m.stream.r.jumpTo entry.offset
         var buf = createTokenBuf(30)
-        discard nifcursors.parse(m.stream.r, buf, entry.info)
+        discard nifcursors.parse(m.stream, buf, entry.info)
         let decl = cursorAt(buf, 0)
         prog.mem[s] = ensureMove(buf)
         result = LoadResult(status: LacksNothing, decl: decl)
@@ -116,5 +116,6 @@ proc setupProgram*(infile: string): Cursor =
   prog.main = file
 
   var m = newNifModule(infile)
+  echo "INPUT IS ", toString(m.buf)
   result = beginRead(m.buf)
   prog.mods[prog.main] = m

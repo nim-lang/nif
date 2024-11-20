@@ -276,6 +276,8 @@ proc toString*(b: Cursor): string =
   let counter = span(b)
   result = nifstreams.toString(toOpenArray(cast[ptr UncheckedArray[PackedToken]](b.p), 0, counter-1))
 
+proc `$`*(c: Cursor): string = toString(c)
+
 proc addToken[L](tree: var TokenBuf; kind: TokenKind; id: L; info: PackedLineInfo) =
   tree.add toToken(kind, id, info)
 
@@ -289,6 +291,10 @@ template copyIntoUnchecked*(dest: var TokenBuf; tag: string; info: PackedLineInf
   body
   dest.addToken ParRi, 0'u32, info
 
-proc parse*(r: var Reader; dest: var TokenBuf;
+proc parse*(r: var Stream; dest: var TokenBuf;
             parentInfo: PackedLineInfo): bool =
-  nifstreams.parseImpl()
+  r.parents[0] = parentInfo
+  while true:
+    let tok = r.next()
+    dest.add tok
+    if tok.kind == EofToken: break
