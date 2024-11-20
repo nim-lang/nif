@@ -124,6 +124,8 @@ proc rawNext(s: var Stream; t: Token): PackedToken =
     if t.pos.line != 0 or t.pos.col != 0:
       let (file, line, col) = unpack(pool.man, s.parents[^1])
       currentInfo = pack(pool.man, file, line+t.pos.line, col+t.pos.col)
+    else:
+      currentInfo = s.parents[^1]
   else:
     # absolute file position:
     let fileId = pool.files.getOrIncl(decodeFilename t)
@@ -132,7 +134,8 @@ proc rawNext(s: var Stream; t: Token): PackedToken =
   case t.tk
   of ParRi:
     result = toToken(t.tk, 0'u32, currentInfo)
-    discard s.parents.pop()
+    if s.parents.len > 1:
+      discard s.parents.pop()
   of EofToken, UnknownToken, DotToken:
     result = toToken(t.tk, 0'u32, currentInfo)
   of ParLe:
