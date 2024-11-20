@@ -116,5 +116,6 @@ proc setupProgram*(infile: string): Cursor =
   prog.main = file
 
   var m = newNifModule(infile)
+  #echo "INPUT IS ", toString(m.buf)
   result = beginRead(m.buf)
   prog.mods[prog.main] = m

@@ -944,10 +944,8 @@ type
     bits: int
 
 proc semPragma(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; kind: SymKind) =
-  var nested = 0
   if n.kind == ParLe and pool.tags[n.tagId] == "kv":
     inc n
-    inc nested
   let pk = pragmaKind(n)
   case pk
   of NoPragma:
@@ -989,8 +987,6 @@ proc semPragma(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; kin
   of Nodecl, Selectany, Threadvar, Globalvar:
     c.dest.add toToken(ParLe, pool.tags.getOrIncl($pk), n.info)
     inc n
-  if nested > 0:
-    skipParRi c, n
 
 proc semPragmas(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; kind: SymKind) =
   if n.kind == DotToken:
