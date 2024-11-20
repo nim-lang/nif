@@ -713,6 +713,22 @@ proc semBoolExpr(c: var SemContext; it: var Item) =
   if classifyType(c, it.typ) != BoolT:
     buildErr c, it.n.info, "expected `bool` but got: " & typeToString(c, it.typ)
 
+proc semConstStrExpr(c: var SemContext; n: var Cursor) =
+  # XXX check for constant
+  var it = Item(n: n, typ: c.types.autoType)
+  semExpr c, it
+  n = it.n
+  if classifyType(c, it.typ) != StringT:
+    buildErr c, it.n.info, "expected `string` but got: " & typeToString(c, it.typ)
+
+proc semConstIntExpr(c: var SemContext; n: var Cursor) =
+  # XXX check for constant
+  var it = Item(n: n, typ: c.types.autoType)
+  semExpr c, it
+  n = it.n
+  if classifyType(c, it.typ) != IntT:
+    buildErr c, it.n.info, "expected `int` but got: " & typeToString(c, it.typ)
+
 proc semProcBody(c: var SemContext; itB: var Item) =
   #let beforeBodyPos = c.dest.len
   var it = Item(n: itB.n, typ: c.types.autoType)
@@ -928,16 +944,25 @@ type
     bits: int
 
 proc semPragma(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; kind: SymKind) =
-  case pragmaKind(n)
+  var nested = 0
+  if n.kind == ParLe and pool.tags[n.tagId] == "kv":
+    inc n
+    inc nested
+  let pk = pragmaKind(n)
+  case pk
   of NoPragma:
-    if kind.isRoutine and callConvKind(n) != NoCallConv:
-      takeToken c, n
+    if kind.isRoutine and (let cc = callConvKind(n); cc != NoCallConv):
+      c.dest.add toToken(ParLe, pool.tags.getOrIncl($cc), n.info)
+      inc n
       wantParRi c, n
     else:
       buildErr c, n.info, "expected pragma"
-      skip n
+      inc n
+      wantParRi c, n
+      #skip n
   of Magic:
-    takeToken c, n
+    c.dest.add toToken(ParLe, pool.tags.getOrIncl($pk), n.info)
+    inc n
     if n.kind in {StringLit, Ident}:
       let m = parseMagic(pool.strings[n.litId])
       if m == mNone:
@@ -950,10 +975,22 @@ proc semPragma(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; kin
     else:
       buildErr c, n.info, "`magic` pragma takes a string literal"
     wantParRi c, n
-  of ImportC, ImportCpp, ExportC, Nodecl, Header, Align, Bits, Selectany,
-     Threadvar, Globalvar:
-    # XXX More checking here
-    copyTree c, n
+  of ImportC, ImportCpp, ExportC, Header:
+    c.dest.add toToken(ParLe, pool.tags.getOrIncl($pk), n.info)
+    inc n
+    if n.kind != ParRi:
+      semConstStrExpr c, n
+    wantParRi c, n
+  of Align, Bits:
+    c.dest.add toToken(ParLe, pool.tags.getOrIncl($pk), n.info)
+    inc n
+    semConstIntExpr c, n
+    wantParRi c, n
+  of Nodecl, Selectany, Threadvar, Globalvar:
+    c.dest.add toToken(ParLe, pool.tags.getOrIncl($pk), n.info)
+    inc n
+  if nested > 0:
+    skipParRi c, n
 
 proc semPragmas(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; kind: SymKind) =
   if n.kind == DotToken:
