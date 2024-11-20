@@ -86,7 +86,6 @@ type
     headerFile: seq[Token]
     generatedTypes: IntSet
     requestedSyms: HashSet[string]
-    labels: int
 
 proc initGeneratedCode*(m: sink Module): GeneratedCode =
   result = GeneratedCode(m: m, code: @[], tokens: initBiTable[Token, string](), fileIds: initPackedSet[FileId]())
