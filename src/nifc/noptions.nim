@@ -1,4 +1,4 @@
-import std/tables
+import std/[tables]
 
 type
   Backend* = enum
@@ -28,6 +28,7 @@ type
   State* = object
     selects*: seq[string] # names of modules with functions with selectany pragmas
     config*: ConfigRef
+    bits*: int
 
   ActionTable* = OrderedTable[Action, seq[string]]
 
@@ -53,3 +54,4 @@ template getCompilerConfig*(config: ConfigRef): (string, string) =
     quit "unreachable"
 
 const ExtAction*: array[Action, string] = ["", ".c", ".cpp", ".S"]
+

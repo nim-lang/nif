@@ -84,8 +84,11 @@ Lvalue ::= Symbol | (deref Expr) |
              (at Expr Expr) | # array indexing
              (dot Expr Symbol Number) | # field access
              (pat Expr Expr) | # pointer indexing
+             (err)
 
-Call ::= (call Expr+ )
+Call ::= (call Expr+)
+CallCanRaise ::= (onerr Stmt Expr+)
+
 Expr ::= Number | CharLiteral | StringLiteral |
          Lvalue |
          (par Expr) | # wraps the expression in parentheses
@@ -118,7 +121,8 @@ Expr ::= Number | CharLiteral | StringLiteral |
          (lt Expr Expr) |
          (cast Type Expr) |
          (conv Type Expr) |
-         Call
+         Call |
+         CallCanRaise
 
 BranchValue ::= Number | CharLiteral | Symbol | (true) | (false)
 BranchRange ::= BranchValue | (range BranchValue BranchValue)
@@ -131,11 +135,16 @@ VarDecl ::= (var VarDeclCommon) | # local variable
 
 ConstDecl ::= (const SymbolDef VarPragmas Type Expr)
 EmitStmt ::= (emit Expr+)
+TryStmt ::= (try StmtList StmtList StmtList)
+RaiseStmt ::= (raise [Empty | Expr])
 
 Stmt ::= Call |
+         CallCanRaise |
          VarDecl |
          ConstDecl |
          EmitStmt |
+         TryStmt |
+         RaiseStmt |
          (asgn Lvalue Expr) |
          (if (elif Expr StmtList)+ (else StmtList)? ) |
          (while Expr StmtList) |
@@ -146,6 +155,7 @@ Stmt ::= Call |
          (scope StmtList) |
          (ret [Empty | Expr]) | # return statement
          (discard Expr)
+
 
 StmtList ::= (stmts SCOPE Stmt*)
 
@@ -184,8 +194,9 @@ CallingConvention ::= (cdecl) | (stdcall) | (safecall) | (syscall)  |
                       (fastcall) | (thiscall) | (noconv) | (member)
 
 Attribute ::= (attr StringLiteral)
-ProcPragma ::= (inline) | (noinline) | CallingConvention | (varargs) | (was Identifier) |
-               (selectany) | Attribute
+ProcPragma ::= (inline) | (noinline) | CallingConvention | (varargs) | (was Identifier) | (selectany) | Attribute |
+            | (raises) | (errs)
+
 ProcTypePragma ::= CallingConvention | (varargs) | Attribute
 
 ProcTypePragmas ::= Empty | (pragmas ProcTypePragma+)
@@ -288,3 +299,14 @@ Declaration order
 -----------------
 
 NIFC allows for an arbitrary order of declarations without the need for forward declarations.
+
+Exceptions
+----------
+
+NIFC supports two kinds of exception handling primitives.
+
+- `try` and `raise` Constructs: These must be used in C++ mode and are translated into their C++ equivalents. It is the NIFC caller’s responsibility to ensure they are not emitted when C++ support is disabled. The `try` construct follows the format `(try <actions> <onerr> <finally>)`. The `raise` construct can generate a C++ `throw` statement.
+
+- `err` and `onerr` Constructs: These have to be used when C++ code is not generated. Calls that may raise an exception must be wrapped in `(onerr)`. The format is `(onerr <action> <f> <args>)`, where action is typically a `jmp` instruction. In C++ exception handling mode, action should always be a dot `.`. The special variable `(err)` of type `bool` can be set using `(asgn)` and queried like other locations, e.g., `(asgn (err) (true)) # set the error bit`.
+
+Functions can and must be annotated with a `(raises)` pragma to indicate that they can raise a C++ exception. Likewise, they need to use the `errs` pragma if they use the `(err)` mechanism. A function can use both annotations at the same time. That would be a C++ function that uses both `(raise)` and `(err)`.

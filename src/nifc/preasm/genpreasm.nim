@@ -197,6 +197,8 @@ proc genProcPragmas(c: var GeneratedCode; t: Tree; n: NodePos;
           # Ignore for PreASM
           discard " __attribute__((noinline))"
         of WasC: genWas(c, t, ch)
+        of RaiseC, ErrsC:
+          discard
         else:
           error c.m, "invalid proc pragma: ", t, ch
   else:

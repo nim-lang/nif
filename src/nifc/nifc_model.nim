@@ -121,6 +121,12 @@ type
     NegInfC = "neginf"
     NanC = "nan"
     DiscardC = "discard"
+    TryC = "try"
+    RaiseC = "raise"
+    ErrC = "err"
+    OnErrC = "onerr"
+    RaisesC = "raises"
+    ErrsC = "errs"
 
 
 const

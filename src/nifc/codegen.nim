@@ -61,6 +61,10 @@ type
     IncludeKeyword = "#include "
     LineDirKeyword = "#line "
     DiscardToken = "(void) "
+    TryKeyword = "try "
+    CatchKeyword = "catch ("
+    ThrowKeyword = "throw"
+    ErrToken = "err"
 
 proc fillTokenTable(tab: var BiTable[Token, string]) =
   for e in EmptyToken..high(PredefinedToken):
@@ -178,6 +182,13 @@ proc genStrLit(c: var GeneratedCode; litId: StrId): Token =
   let cstr = makeCString(c.m.lits.strings[litId])
   result = c.tokens.getOrIncl cstr
 
+proc inclHeader(c: var GeneratedCode, name: string) =
+  let header = c.tokens.getOrIncl(name)
+  if not c.includedHeaders.containsOrIncl(int header):
+    c.includes.add Token(IncludeKeyword)
+    c.includes.add header
+    c.includes.add Token NewLine
+
 include selectany
 
 type
@@ -187,7 +198,7 @@ type
 proc genProcPragmas(c: var GeneratedCode; t: Tree; n: NodePos;
                     flags: var set[ProcFlag]) =
   # ProcPragma ::= (inline) | (noinline) | CallingConvention | (varargs) | (was Identifier) |
-  #               (selectany) | Attribute
+  #               (selectany) | Attribute | (raises) | (errs)
   if t[n].kind == Empty:
     discard
   elif t[n].kind == PragmasC:
@@ -203,6 +214,8 @@ proc genProcPragmas(c: var GeneratedCode; t: Tree; n: NodePos;
         c.add " __attribute__((" & c.m.lits.strings[t[ch.firstSon].litId] & "))"
       of WasC:
         c.add "/* " & toString(t, ch.firstSon, c.m) & " */"
+      of ErrsC, RaisesC:
+        discard
       else:
         error c.m, "invalid proc pragma: ", t, ch
   else:
@@ -273,6 +286,13 @@ proc genCLineDir(c: var GeneratedCode; t: Tree; info: PackedLineInfo) =
 
       c.fileIds.incl id
 
+template moveToDataSection(body: untyped) =
+  let oldLen = c.code.len
+  body
+  for i in oldLen ..< c.code.len:
+    c.data.add c.code[i]
+  setLen c.code, oldLen
+
 include genexprs
 
 type
@@ -302,13 +322,6 @@ proc genVarDecl(c: var GeneratedCode; t: Tree; n: NodePos; vk: VarKind; toExtern
     c.add Semicolon
   else:
     error c.m, "expected SymbolDef but got: ", t, n
-
-template moveToDataSection(body: untyped) =
-  let oldLen = c.code.len
-  body
-  for i in oldLen ..< c.code.len:
-    c.data.add c.code[i]
-  setLen c.code, oldLen
 
 include genstmts
 
@@ -480,7 +493,7 @@ proc writeLineDir(f: var CppFile, c: var GeneratedCode) =
     write f, def
     write f, "\n"
 
-proc generateCode*(s: var State, inp, outp: string; intmSize: int) =
+proc generateCode*(s: var State, inp, outp: string) =
   var m = load(inp)
   m.config = s.config
   var c = initGeneratedCode(m)
@@ -493,7 +506,7 @@ proc generateCode*(s: var State, inp, outp: string; intmSize: int) =
 
   traverseCode c, c.m.code, StartPos
   var f = CppFile(f: open(outp, fmWrite))
-  f.write "#define NIM_INTBITS " & $intmSize & "\n"
+  f.write "#define NIM_INTBITS " & $s.bits & "\n"
   f.write Prelude
   writeTokenSeq f, c.includes, c
   if optLineDir in c.m.config.options:

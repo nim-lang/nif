@@ -61,6 +61,28 @@ proc genWhile(c: var GeneratedCode; t: Tree; n: NodePos) =
   c.genStmt t, body
   c.add CurlyRi
 
+proc genTryCpp(c: var GeneratedCode; t: Tree; n: NodePos) =
+  let (actions, onerr, final) = sons3(t, n)
+
+  c.add TryKeyword
+  c.add CurlyLe
+  c.genStmt(t, actions)
+  c.add CurlyRi
+
+  c.add CatchKeyword
+  c.add "..."
+  c.add ParRi
+  c.add Space
+  c.add CurlyLe
+  if t[onerr].kind != Empty:
+    c.genStmt(t, onerr)
+  c.add CurlyRi
+
+  if t[final].kind != Empty:
+    c.add CurlyLe
+    c.genStmt(t, final)
+    c.add CurlyRi
+
 proc genScope(c: var GeneratedCode; t: Tree; n: NodePos) =
   c.add CurlyLe
   for ch in sons(t, n):
@@ -171,6 +193,15 @@ proc genVar(c: var GeneratedCode; t: Tree; n: NodePos; toExtern = false) =
   else:
     quit "unreachable"
 
+proc genOnError(c: var GeneratedCode; t: Tree; n: NodePos) =
+  c.add IfKeyword
+  c.add ErrToken
+  c.add ParRi
+  c.add Space
+  c.add CurlyLe
+  c.genStmt(t, n)
+  c.add CurlyRi
+
 proc genStmt(c: var GeneratedCode; t: Tree; n: NodePos) =
   case t[n].kind
   of Empty:
@@ -185,6 +216,10 @@ proc genStmt(c: var GeneratedCode; t: Tree; n: NodePos) =
     c.add Semicolon
   of VarC, GvarC, TvarC, ConstC:
     genVar c, t, n
+    let value = ithSon(t, n, 3)
+    if t[value].kind == OnErrC and
+        t[value.firstSon].kind != Empty:
+      genOnError(c, t, value.firstSon)
   of EmitC:
     genEmitStmt c, t, n
   of AsgnC:
@@ -212,5 +247,18 @@ proc genStmt(c: var GeneratedCode; t: Tree; n: NodePos) =
     c.add DiscardToken
     c.genx t, n.firstSon
     c.add Semicolon
+  of TryC:
+    genTryCpp(c, t, n)
+  of RaiseC:
+    c.add ThrowKeyword
+    if t[n.firstSon].kind != Empty:
+      c.add Space
+      c.genx t, n.firstSon
+    c.add Semicolon
+  of OnErrC:
+    genCallCanRaise c, t, n
+    c.add Semicolon
+    if t[n.firstSon].kind != Empty:
+      genOnError(c, t, n.firstSon)
   else:
     error c.m, "expected statement but got: ", t, n

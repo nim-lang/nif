@@ -64,17 +64,10 @@ proc addHeadFile(c: var GeneratedCode; s: string) {.inline.} =
 proc addHeadFile(c: var GeneratedCode; t: PredefinedToken) {.inline.} =
   c.headerFile.add Token(t)
 
-proc inclHeader(c: var GeneratedCode) =
-  let header = c.tokens.getOrIncl("\"select_any.h\"")
-  if not c.includedHeaders.containsOrIncl(int header):
-    c.includes.add Token(IncludeKeyword)
-    c.includes.add header
-    c.includes.add Token NewLine
-
 proc genRoutineGuardBegin(c: var GeneratedCode; name: string) =
   let guardName = name & "__" & mangle(c.m.filename.splitFile.name.mangleFileName)
 
-  inclHeader(c)
+  inclHeader(c, "\"select_any.h\"")
 
   c.addHeadFile """#ifndef """
   c.addHeadFile name

@@ -107,7 +107,7 @@ proc allocRegsForProc(c: var GeneratedCode; t: Tree; n: NodePos; weights: Table[
      IntC, UIntC, FloatC, CharC, BoolC, VoidC, PtrC, ArrayC, FlexarrayC,
      APtrC, TypeC, CdeclC, StdcallC, SafecallC, SyscallC, FastcallC, ThiscallC,
      NoconvC, MemberC, AttrC, InlineC, NoinlineC, VarargsC, WasC, SelectanyC,
-     PragmasC, AlignC, BitsC, VectorC, ImpC, NodeclC, InclC, SufC:
+     PragmasC, AlignC, BitsC, VectorC, ImpC, NodeclC, InclC, SufC, RaisesC, ErrsC:
     discard "do not traverse these"
 
 proc allocateVars*(c: var GeneratedCode; t: Tree; n: NodePos) =

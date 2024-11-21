@@ -101,7 +101,7 @@ proc getType*(m: var Module; t: Tree; n: NodePos): TypeDesc =
   of FloatLit, InfC, NegInfC, NanC: result = createIntegralType(m.lits, FloatC, "64")
   of CharLit: result = createIntegralType(m.lits, CharC, "8")
   of StrLit: result = makePtrType(m, createIntegralType(m.lits, CharC, "8"))
-  of TrueC, FalseC, AndC, OrC, NotC, EqC, NeqC, LeC, LtC:
+  of TrueC, FalseC, AndC, OrC, NotC, EqC, NeqC, LeC, LtC, ErrC:
     result = createIntegralType(m.lits, BoolC, "8")
   of CallC:
     let procType = getType(m, t, n.firstSon)
@@ -156,5 +156,6 @@ proc getType*(m: var Module; t: Tree; n: NodePos): TypeDesc =
      VoidC, PtrC, ArrayC, FlexarrayC, APtrC, TypeC, CdeclC,
      StdcallC, SafecallC, SyscallC, FastcallC, ThiscallC, NoconvC, MemberC,
      AttrC, InlineC, NoinlineC, VarargsC, WasC, SelectanyC,
-     PragmasC, AlignC, BitsC, VectorC, ImpC, NodeclC, InclC, ScopeC, DiscardC:
+     PragmasC, AlignC, BitsC, VectorC, ImpC, NodeclC, InclC, ScopeC, DiscardC,
+     TryC, RaiseC, OnErrC, RaisesC, ErrsC:
     result = errorType()
