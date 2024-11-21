@@ -9,7 +9,7 @@
   )
 
 
-  (proc :main.c . (i +32) .
+  (proc :main.c . (i +32) (pragmas (raises))
     (stmts
 
     (call assert.c (eq +2 +2))

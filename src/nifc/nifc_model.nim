@@ -125,6 +125,8 @@ type
     RaiseC = "raise"
     ErrC = "err"
     OnErrC = "onerr"
+    RaisesC = "raises"
+    ErrsC = "errs"
 
 
 const

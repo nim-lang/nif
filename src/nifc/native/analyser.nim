@@ -156,7 +156,7 @@ proc analyseVarUsages(c: var Context; t: Tree; n: NodePos) =
      IntC, UIntC, FloatC, CharC, BoolC, VoidC, PtrC, ArrayC, FlexarrayC,
      APtrC, TypeC, CdeclC, StdcallC, SafecallC, SyscallC, FastcallC, ThiscallC,
      NoconvC, MemberC, AttrC, InlineC, NoinlineC, VarargsC, WasC, SelectanyC,
-     PragmasC, AlignC, BitsC, VectorC, ImpC, NodeclC, InclC, SufC:
+     PragmasC, AlignC, BitsC, VectorC, ImpC, NodeclC, InclC, SufC, RaiseC, ErrsC:
     discard "do not traverse these"
 
 proc analyseVarUsages*(t: Tree; n: NodePos): ProcBodyProps =

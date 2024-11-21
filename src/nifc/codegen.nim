@@ -198,7 +198,7 @@ type
 proc genProcPragmas(c: var GeneratedCode; t: Tree; n: NodePos;
                     flags: var set[ProcFlag]) =
   # ProcPragma ::= (inline) | (noinline) | CallingConvention | (varargs) | (was Identifier) |
-  #               (selectany) | Attribute
+  #               (selectany) | Attribute | (raises) | (errs)
   if t[n].kind == Empty:
     discard
   elif t[n].kind == PragmasC:
@@ -214,6 +214,8 @@ proc genProcPragmas(c: var GeneratedCode; t: Tree; n: NodePos;
         c.add " __attribute__((" & c.m.lits.strings[t[ch.firstSon].litId] & "))"
       of WasC:
         c.add "/* " & toString(t, ch.firstSon, c.m) & " */"
+      of ErrsC, RaisesC:
+        discard
       else:
         error c.m, "invalid proc pragma: ", t, ch
   else:

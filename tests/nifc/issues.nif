@@ -199,13 +199,13 @@
 
   (var :err.c . (bool) (false))
 
-  (proc :foo.error.stmts (params (param :err.c . (bool))) . . (stmts
+  (proc :foo.error.stmts (params (param :err.c . (bool))) . (pragmas (errs)) (stmts
     (call assert.c (err))
     (asgn (err) (false))
   )
   )
 
-  (proc :foo.error.exprs . (i +32) . (stmts
+  (proc :foo.error.exprs . (i +32) (pragmas (errs)) (stmts
     (asgn (err) (true))
     (call assert.c (err))
     (asgn (err) (false))
@@ -213,7 +213,7 @@
   )
   )
 
-  (proc :main.c . (i +32) . (stmts
+  (proc :main.c . (i +32) (pragmas (errs)) (stmts
     1,1,hello.nim(var :x1.m . (i +32) +12)
     1,2,hello.nim(var :z2.m . (ptr (c +8)) (cast (ptr (c +8)) (suf "hello" "r")))
     1,3,hello.nim(var :z3.m . (ptr (c +8)) (cast (ptr (c +8)) (suf "hello" "r")))
@@ -258,11 +258,11 @@
     (emit "(void)" x.c ";")
 
 
-    (onerr (jmp L1.c) foo.error.stmts (true))
+    (onerr (stmts (jmp L1.c)) foo.error.stmts (true))
     (call printf.c "success!\0A")
     (lab :L1.c)
 
-    (var :s.cpp . (i +32) (onerr (jmp L2.c) foo.error.exprs))
+    (var :s.cpp . (i +32) (onerr (stmts (jmp L2.c)) foo.error.exprs))
     (call printf.c "success!\0A")
     (lab :L2.c)
     (call assert.c (eq s.cpp +3))
