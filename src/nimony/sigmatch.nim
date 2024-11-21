@@ -250,6 +250,7 @@ proc matchIntegralType(m: var Match; f: var Cursor; arg: Item) =
   else:
     m.error expected(f, a)
     return
+  let forig = f
   inc f
   let cmp = cmpTypeBits(f, a)
   if cmp == 0:
@@ -257,13 +258,14 @@ proc matchIntegralType(m: var Match; f: var Cursor; arg: Item) =
   elif cmp > 0:
     # f has more bits than a, great!
     if m.skippedMod in {MutT, OutT}:
-      m.error "implicit conversion to " & toString(f) & " is not mutable"
+      m.error "implicit conversion to " & toString(forig) & " is not mutable"
     else:
       m.args.addParLe HconvX, m.argInfo
       inc m.intCosts
       inc m.opened
   else:
     m.error expected(f, a)
+  inc f
 
 proc expectParRi(m: var Match; f: var Cursor) =
   if f.kind == ParRi:

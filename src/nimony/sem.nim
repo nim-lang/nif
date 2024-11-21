@@ -816,7 +816,7 @@ proc pickBestMatch(c: var SemContext; m: openArray[Match]): int =
 
 proc semCall(c: var SemContext; it: var Item) =
   let callNode = it.n
-  takeToken c, it.n
+  inc it.n
   var dest = createTokenBuf(16)
   swap c.dest, dest
   var fn = Item(n: it.n, typ: c.types.autoType)
