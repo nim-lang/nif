@@ -1212,10 +1212,10 @@ proc exportMarkerBecomesNifTag(c: var SemContext; insertPos: int; crucial: Cruci
   if crucial.bits != 0:
     let arr = [toToken(IntLit, pool.integers.getOrIncl(crucial.bits), info),
                toToken(ParRi, 0'u32, info)]
-    c.dest.insert arr, insertPos
+    c.dest.insert arr, insertPos+1
   else:
     let arr = [toToken(ParRi, 0'u32, info)]
-    c.dest.insert arr, insertPos
+    c.dest.insert arr, insertPos+1
 
 proc semLocal(c: var SemContext; n: var Cursor; kind: SymKind) =
   let declStart = c.dest.len
