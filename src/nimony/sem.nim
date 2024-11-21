@@ -765,7 +765,7 @@ proc semProcBody(c: var SemContext; itB: var Item) =
 proc semStmt(c: var SemContext; n: var Cursor) =
   var it = Item(n: n, typ: c.types.autoType)
   semExpr c, it
-  if classifyType(c, it.typ) in {NoType, VoidT}:
+  if classifyType(c, it.typ) in {NoType, VoidT, AutoT}:
     discard "ok"
   else:
     buildErr c, n.info, "expression of type `" & typeToString(c, it.typ) & "` must be discarded"
@@ -816,6 +816,7 @@ proc pickBestMatch(c: var SemContext; m: openArray[Match]): int =
 
 proc semCall(c: var SemContext; it: var Item) =
   let callNode = it.n
+  inc it.n
   var dest = createTokenBuf(16)
   swap c.dest, dest
   var fn = Item(n: it.n, typ: c.types.autoType)
@@ -847,13 +848,16 @@ proc semCall(c: var SemContext; it: var Item) =
     m.add createMatch()
     sigmatch(m[^1], fn, args, emptyNode())
   let idx = pickBestMatch(c, m)
+  swap c.dest, dest
+  c.dest.add callNode
   if idx >= 0:
-    swap c.dest, dest
-    c.dest.add callNode
     c.dest.add fn.n
     c.dest.add m[idx].args
+    combineType it.typ, m[idx].returnType
   else:
-    buildErr c, callNode.info, "call does not match"
+    #buildErr c, callNode.info, m[0].args
+    #"call does not match"
+    c.dest.add m[0].args
   wantParRi c, it.n
 
 proc sameIdent(sym: SymId; str: StrId): bool =
@@ -966,7 +970,7 @@ type
     bits: int
 
 proc semPragma(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; kind: SymKind) =
-  if n.kind == ParLe and pool.tags[n.tagId] == "kv":
+  if n == "kv":
     inc n
   let pk = pragmaKind(n)
   case pk
@@ -1013,7 +1017,7 @@ proc semPragma(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; kin
 proc semPragmas(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; kind: SymKind) =
   if n.kind == DotToken:
     takeToken c, n
-  elif n.kind == ParLe and pool.tags[n.tagId] == "pragmas":
+  elif n == "pragmas":
     takeToken c, n
     while n.kind != ParRi:
       semPragma c, n, crucial, kind
@@ -1262,7 +1266,7 @@ proc semLocal(c: var SemContext; it: var Item; kind: SymKind) =
   combineType it.typ, c.types.voidType
 
 proc semGenericParam(c: var SemContext; n: var Cursor) =
-  if n.kind == ParLe and pool.tags[n.tagId] == "typevar":
+  if n == "typevar":
     semLocal c, n, TypevarY
   else:
     buildErr c, n.info, "expected 'typevar'"
@@ -1270,7 +1274,7 @@ proc semGenericParam(c: var SemContext; n: var Cursor) =
 proc semGenericParams(c: var SemContext; n: var Cursor) =
   if n.kind == DotToken:
     takeToken c, n
-  elif n.kind == ParLe and pool.tags[n.tagId] == "typevars":
+  elif n == "typevars":
     inc c.routine.inGeneric
     takeToken c, n
     while n.kind != ParRi:
@@ -1280,7 +1284,7 @@ proc semGenericParams(c: var SemContext; n: var Cursor) =
     buildErr c, n.info, "expected '.' or 'typevars'"
 
 proc semParam(c: var SemContext; n: var Cursor) =
-  if n.kind == ParLe and pool.tags[n.tagId] == "param":
+  if n == "param":
     semLocal c, n, ParamY
   else:
     buildErr c, n.info, "expected 'param'"
@@ -1288,7 +1292,7 @@ proc semParam(c: var SemContext; n: var Cursor) =
 proc semParams(c: var SemContext; n: var Cursor) =
   if n.kind == DotToken:
     takeToken c, n
-  elif n.kind == ParLe and pool.tags[n.tagId] == "params":
+  elif n == "params":
     inc c.routine.inGeneric
     takeToken c, n
     while n.kind != ParRi:
@@ -1357,7 +1361,11 @@ proc semExprSym(c: var SemContext; it: var Item; s: Sym) =
         skip n # skip export marker
         skip n # skip pragmas
       elif s.kind.isRoutine:
-        discard "nothing to skip"
+        inc n # skip ParLe
+        skip n # skip name
+        skip n # skip export marker
+        skip n # skip pattern
+        skip n # skip generics
       else:
         # XXX enum field, object field?
         assert false, "not implemented"
@@ -1528,7 +1536,7 @@ proc semExpr(c: var SemContext; it: var Item) =
       of ConstS: semLocal c, it, ConstY
       of StmtsS: semStmts c, it
       of BreakS: semBreak c, it
-      of CallS: semCall c, it
+      of CallS, CmdS: semCall c, it
       of IncludeS: semInclude c, it
       of ImportS: semImport c, it
       of AsgnS: semAsgn c, it
@@ -1564,7 +1572,7 @@ proc semExpr(c: var SemContext; it: var Item) =
       takeToken c, it.n
       semExpr c, it
       wantParRi c, it.n
-    of CallX:
+    of CallX, CmdX, CallStrLitX, InfixX, PrefixX:
       semCall c, it
     of DotX:
       semDot c, it, AlsoTryDotCall

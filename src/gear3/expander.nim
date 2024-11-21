@@ -584,6 +584,11 @@ proc traverseStmt(e: var EContext; c: var Cursor; mode = TraverseAll) =
       traverseLocal e, c, (if e.nestedIn[^1][0] == StmtsS and mode in {TraverseTopLevel, TraverseSig}: "gvar" else: "var"), mode
     of ConstS:
       traverseLocal e, c, "const", mode
+    of CmdS:
+      e.dest.add tagToken("call", c.info)
+      inc c
+      e.loop c:
+        traverseExpr e, c
     of EmitS, AsgnS, RetS, CallS, DiscardS:
       e.dest.add c
       inc c

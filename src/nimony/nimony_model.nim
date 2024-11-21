@@ -36,6 +36,7 @@ type
     TemplateS = "template"
     TypeS = "type"
     CallS = "call"
+    CmdS = "cmd"
     DiscardS = "discard"
     IncludeS = "include"
     ImportS = "import"
@@ -108,6 +109,10 @@ type
     OconvX = "oconv" # object conversion
     HconvX = "hconv" # hidden basic type conversion
     CallX = "call"
+    CallStrLitX = "callstrlit"
+    InfixX = "infix"
+    PrefixX = "prefix"
+    CmdX = "cmd"
     InfX = "inf"
     NegInfX = "neginf"
     NanX = "nan"
@@ -258,3 +263,5 @@ proc symKind*(c: Cursor): SymKind {.inline.} =
     result = parseSymKind pool.tags[tag(c)]
   else:
     result = NoSym
+
+template `==`*(n: Cursor; s: string): bool = n.kind == ParLe and pool.tags[n.tagId] == s

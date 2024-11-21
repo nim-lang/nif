@@ -32,14 +32,14 @@ type
     argInfo: PackedLineInfo
     pos, opened: int
     inheritanceCosts, intCosts: int
+    returnType*: Cursor
 
 proc createMatch*(): Match = Match()
 
 proc error(m: var Match; msg: string) =
   if m.err: return # first error is the important one
   m.args.addParLe ErrT, m.argInfo
-  m.args.addStrLit "[" & $m.pos & "] " # at position [x]
-  m.args.addStrLit msg
+  m.args.addStrLit "[" & $m.pos & "] " & msg # at position [x]
   m.args.addParRi()
   m.err = true
 
@@ -251,6 +251,7 @@ proc matchIntegralType(m: var Match; f: var Cursor; arg: Item) =
   else:
     m.error expected(f, a)
     return
+  let forig = f
   inc f
   let cmp = cmpTypeBits(f, a)
   if cmp == 0:
@@ -258,13 +259,14 @@ proc matchIntegralType(m: var Match; f: var Cursor; arg: Item) =
   elif cmp > 0:
     # f has more bits than a, great!
     if m.skippedMod in {MutT, OutT}:
-      m.error "implicit conversion to " & toString(f) & " is not mutable"
+      m.error "implicit conversion to " & toString(forig) & " is not mutable"
     else:
       m.args.addParLe HconvX, m.argInfo
       inc m.intCosts
       inc m.opened
   else:
     m.error expected(f, a)
+  inc f
 
 proc expectParRi(m: var Match; f: var Cursor) =
   if f.kind == ParRi:
@@ -334,7 +336,13 @@ proc sigmatchLoop(m: var Match; f: var Cursor; args: openArray[Item]) =
   while i < args.len and f.kind != ParRi:
     m.skippedMod = NoType
     m.argInfo = args[i].n.info
-    singleArg m, f, args[i]
+
+    assert f.symKind == ParamY
+    let param = asLocal(f)
+    var ftyp = param.typ
+    skip f
+
+    singleArg m, ftyp, args[i]
     if m.err: break
     inc m.pos
     inc i
@@ -381,6 +389,8 @@ proc sigmatch*(m: var Match; fn: Item; args: openArray[Item];
       return
 
   var f = fn.typ
+  assert f == "params"
+  inc f # "params"
   sigmatchLoop m, f, args
 
   if m.pos < args.len:
@@ -394,6 +404,10 @@ proc sigmatch*(m: var Match; fn: Item; args: openArray[Item];
     sigmatchLoop m, f, moreArgs
     if f.kind != ParRi:
       m.error "too many parameters"
+
+  if f.kind == ParRi:
+    inc f
+    m.returnType = f # return type follows the parameters in the token stream
 
   # check all type vars have a value:
   if not m.err and fn.n.kind == Symbol:
