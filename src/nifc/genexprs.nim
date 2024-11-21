@@ -59,6 +59,17 @@ proc genCall(c: var GeneratedCode; t: Tree; n: NodePos) =
     inc i
   c.add ParRi
 
+proc genCallCanRaise(c: var GeneratedCode; t: Tree; n: NodePos) =
+  genCLineDir(c, t, info(t, n))
+  genx c, t, ithSon(t, n, 1)
+  c.add ParLe
+  var i = 0
+  for ch in sonsFromX(t, n, 2):
+    if i > 0: c.add Comma
+    genx c, t, ch
+    inc i
+  c.add ParRi
+
 proc genLvalue(c: var GeneratedCode; t: Tree; n: NodePos) =
   case t[n].kind
   of Sym:
@@ -255,5 +266,7 @@ proc genx(c: var GeneratedCode; t: Tree; n: NodePos) =
       genx c, t, value
     else:
       suffixConv(c, t, value, suffix)
+  of OnErrC:
+    genCallCanRaise c, t, n
   else:
     genLvalue c, t, n

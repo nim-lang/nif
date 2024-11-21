@@ -124,6 +124,7 @@ type
     TryC = "try"
     RaiseC = "raise"
     ErrC = "err"
+    OnErrC = "onerr"
 
 
 const

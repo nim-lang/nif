@@ -193,6 +193,15 @@ proc genVar(c: var GeneratedCode; t: Tree; n: NodePos; toExtern = false) =
   else:
     quit "unreachable"
 
+proc genOnError(c: var GeneratedCode; t: Tree; n: NodePos) =
+  c.add IfKeyword
+  c.add ErrToken
+  c.add ParRi
+  c.add Space
+  c.add CurlyLe
+  c.genStmt(t, n)
+  c.add CurlyRi
+
 proc genStmt(c: var GeneratedCode; t: Tree; n: NodePos) =
   case t[n].kind
   of Empty:
@@ -207,6 +216,10 @@ proc genStmt(c: var GeneratedCode; t: Tree; n: NodePos) =
     c.add Semicolon
   of VarC, GvarC, TvarC, ConstC:
     genVar c, t, n
+    let value = ithSon(t, n, 3)
+    if t[value].kind == OnErrC and
+        t[value.firstSon].kind != Empty:
+      genOnError(c, t, value.firstSon)
   of EmitC:
     genEmitStmt c, t, n
   of AsgnC:
@@ -242,5 +255,10 @@ proc genStmt(c: var GeneratedCode; t: Tree; n: NodePos) =
       c.add Space
       c.genx t, n.firstSon
     c.add Semicolon
+  of OnErrC:
+    genCallCanRaise c, t, n
+    c.add Semicolon
+    if t[n.firstSon].kind != Empty:
+      genOnError(c, t, n.firstSon)
   else:
     error c.m, "expected statement but got: ", t, n
