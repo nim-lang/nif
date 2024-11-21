@@ -280,7 +280,8 @@ proc singleArg(m: var Match; f: var Cursor; arg: Item) =
     matchSymbol m, f, arg
     inc f
   of ParLe:
-    case f.typeKind
+    let fk = f.typeKind
+    case fk
     of MutT:
       var a = arg.typ
       if a.typeKind in {MutT, OutT, LentT}:
@@ -295,10 +296,11 @@ proc singleArg(m: var Match; f: var Cursor; arg: Item) =
     of IntT, UIntT, FloatT, CharT:
       matchIntegralType m, f, arg
       expectParRi m, f
-    of BoolT:
+    of BoolT, StringT:
       var a = skipModifier(arg.typ)
-      if a.typeKind != BoolT:
+      if a.typeKind != fk:
         m.error expected(f, a)
+      inc f
       expectParRi m, f
     of InvokeT:
       # Keep in mind that (invok GenericHead Type1 Type2 ...)
