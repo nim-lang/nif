@@ -85,7 +85,9 @@ Lvalue ::= Symbol | (deref Expr) |
              (dot Expr Symbol Number) | # field access
              (pat Expr Expr) | # pointer indexing
 
-Call ::= (call Expr+ )
+Call ::= (call Expr+)
+CallCanRaise ::= (onerr StmtList Expr+)
+
 Expr ::= Number | CharLiteral | StringLiteral |
          Lvalue |
          (par Expr) | # wraps the expression in parentheses
@@ -118,7 +120,8 @@ Expr ::= Number | CharLiteral | StringLiteral |
          (lt Expr Expr) |
          (cast Type Expr) |
          (conv Type Expr) |
-         Call
+         Call |
+         CallCanRaise
 
 BranchValue ::= Number | CharLiteral | Symbol | (true) | (false)
 BranchRange ::= BranchValue | (range BranchValue BranchValue)
@@ -131,8 +134,11 @@ VarDecl ::= (var VarDeclCommon) | # local variable
 
 ConstDecl ::= (const SymbolDef VarPragmas Type Expr)
 EmitStmt ::= (emit Expr+)
+TryStmt ::= (try StmtList StmtList StmtList)
+RaiseStmt ::= (raise [Empty | Expr])
 
 Stmt ::= Call |
+         CallCanRaise |
          VarDecl |
          ConstDecl |
          EmitStmt |
@@ -145,7 +151,9 @@ Stmt ::= Call |
          (jmp Symbol) |
          (scope StmtList) |
          (ret [Empty | Expr]) | # return statement
-         (discard Expr)
+         (discard Expr) |
+         TryStmt | RaiseStmt
+
 
 StmtList ::= (stmts SCOPE Stmt*)
 
@@ -184,8 +192,9 @@ CallingConvention ::= (cdecl) | (stdcall) | (safecall) | (syscall)  |
                       (fastcall) | (thiscall) | (noconv) | (member)
 
 Attribute ::= (attr StringLiteral)
-ProcPragma ::= (inline) | (noinline) | CallingConvention | (varargs) | (was Identifier) |
-               (selectany) | Attribute
+ProcPragma ::= (inline) | (noinline) | CallingConvention | (varargs) | (was Identifier) | (selectany) | Attribute |
+            | (raises) | (errs)
+
 ProcTypePragma ::= CallingConvention | (varargs) | Attribute
 
 ProcTypePragmas ::= Empty | (pragmas ProcTypePragma+)
