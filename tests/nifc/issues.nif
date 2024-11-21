@@ -258,11 +258,11 @@
     (emit "(void)" x.c ";")
 
 
-    (onerr (stmts (jmp L1.c)) foo.error.stmts (true))
+    (onerr (jmp L1.c) foo.error.stmts (true))
     (call printf.c "success!\0A")
     (lab :L1.c)
 
-    (var :s.cpp . (i +32) (onerr (stmts (jmp L2.c)) foo.error.exprs))
+    (var :s.cpp . (i +32) (onerr (jmp L2.c) foo.error.exprs))
     (call printf.c "success!\0A")
     (lab :L2.c)
     (call assert.c (eq s.cpp +3))

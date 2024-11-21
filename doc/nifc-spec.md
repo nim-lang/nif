@@ -87,7 +87,7 @@ Lvalue ::= Symbol | (deref Expr) |
              (err)
 
 Call ::= (call Expr+)
-CallCanRaise ::= (onerr StmtList Expr+)
+CallCanRaise ::= (onerr Stmt Expr+)
 
 Expr ::= Number | CharLiteral | StringLiteral |
          Lvalue |

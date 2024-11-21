@@ -11,7 +11,7 @@
              ))
 
 (RULE :Call (call (ONE_OR_MANY Expr)))
-(RULE :CallCanRaise (onerr StmtList (ONE_OR_MANY Expr)))
+(RULE :CallCanRaise (onerr Stmt (ONE_OR_MANY Expr)))
 (RULE :Expr (OR INTLIT UINTLIT FLOATLIT CHARLITERAL STRINGLITERAL
          Lvalue
          (par Expr)
