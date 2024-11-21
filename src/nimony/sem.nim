@@ -818,6 +818,7 @@ proc pickBestMatch(c: var SemContext; m: openArray[Match]): int =
 
 proc semCall(c: var SemContext; it: var Item) =
   let callNode = it.n
+  takeToken c, it.n
   var dest = createTokenBuf(16)
   swap c.dest, dest
   var fn = Item(n: it.n, typ: c.types.autoType)
@@ -1530,7 +1531,7 @@ proc semExpr(c: var SemContext; it: var Item) =
       of ConstS: semLocal c, it, ConstY
       of StmtsS: semStmts c, it
       of BreakS: semBreak c, it
-      of CallS: semCall c, it
+      of CallS, CmdS: semCall c, it
       of IncludeS: semInclude c, it
       of ImportS: semImport c, it
       of AsgnS: semAsgn c, it
@@ -1566,7 +1567,7 @@ proc semExpr(c: var SemContext; it: var Item) =
       takeToken c, it.n
       semExpr c, it
       wantParRi c, it.n
-    of CallX:
+    of CallX, CmdX, CallStrLitX, InfixX, PrefixX:
       semCall c, it
     of DotX:
       semDot c, it, AlsoTryDotCall
