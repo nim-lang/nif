@@ -305,8 +305,8 @@ Exceptions
 
 NIFC supports two kinds of exception handling primitives.
 
-- `try` and `raise` constructs must be used in the C++ mode, which are translated into C++'s equivalents. It is the job of the NIFC caller not to emit them when C++ support is disabled. The format of the `try` construct is `(try <actions> <onerr> <finally)`. The `raise` construct can be used to produce C++'s `throw` statement.
+- `try` and `raise` Constructs: These must be used in C++ mode and are translated into their C++ equivalents. It is the NIFC caller’s responsibility to ensure they are not emitted when C++ support is disabled. The `try` construct follows the format `(try <actions> <onerr> <finally>)`. The `raise` construct can generate a C++ `throw` statement.
 
-- The new `err` and `onerr` constructs have to be used when C++ code is not generated. Calls that can potentially raise an exception must be called with `(onerr)`. The format is `(onerr <action> <f> <args>)`. Typically, `action` is a `jmp` instruction. When C++'s exception handling mode is used, `action` must always be the dot `.`. `(err)` is a special magic variable of type `bool` that can be set via `(asgn)` and queried like other locations: `(asgn (err) (true)) # set the error bit`.
+- `err` and `onerr` Constructs: These are used when C++ code is not generated. Calls that may raise an exception must be wrapped in `(onerr)`. The format is `(onerr <action> <f> <args>)`, where action is typically a `jmp` instruction. In C++ exception handling mode, action should always be a dot `.`. The special variable `(err)` of type `bool` can be set using `(asgn)` and queried like other locations, e.g., `(asgn (err) (true)) # set the error bit`.
 
-Functions can and must be annotated with a `(raises)` pragma to indicate that they can raise a C++ exception. Likewise they need to use the `errs` pragma if they use the `(err)` mechanism. A function can use both annotations at the same time. That would be a C++ function that uses both `(raise)` and `(err)`.
+Functions can and must be annotated with a `(raises)` pragma to indicate that they can raise a C++ exception. Likewise, they need to use the `errs` pragma if they use the `(err)` mechanism. A function can use both annotations at the same time. That would be a C++ function that uses both `(raise)` and `(err)`.
