@@ -1301,6 +1301,7 @@ proc semProc(c: var SemContext; it: var Item; kind: SymKind) =
   let declStart = c.dest.len
   takeToken c, it.n
   let symId = declareOverloadableSym(c, it, kind)
+
   let beforeExportMarker = c.dest.len
   wantExportMarker c, it.n
   if it.n.kind == DotToken:
