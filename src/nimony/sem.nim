@@ -378,24 +378,28 @@ proc declareSym(c: var SemContext; it: var Item; kind: SymKind): SymStatus =
     c.buildErr info, "identifier expected"
     result = ErrNoIdent
 
-proc declareOverloadableSym(c: var SemContext; it: var Item; kind: SymKind) =
+proc declareOverloadableSym(c: var SemContext; it: var Item; kind: SymKind): SymId =
   let info = it.n.info
   if it.n.kind == Ident:
     let lit = it.n.litId
-    let s = Sym(kind: kind, name: identToSym(c, lit, kind),
+    result = identToSym(c, lit, kind)
+    let s = Sym(kind: kind, name: result,
                 pos: c.dest.len)
     addOverloadable(c.currentScope, lit, s)
     c.dest.add toToken(SymbolDef, s.name, info)
     inc it.n
   elif it.n.kind == SymbolDef:
+    result = it.n.symId
     c.dest.add it.n
     inc it.n
   else:
     let lit = getIdent(c, it.n)
     if lit == StrId(0):
       c.buildErr info, "identifier expected"
+      result = SymId(0)
     else:
-      let s = Sym(kind: kind, name: identToSym(c, lit, kind),
+      result = identToSym(c, lit, kind)
+      let s = Sym(kind: kind, name: result,
                   pos: c.dest.len)
       addOverloadable(c.currentScope, lit, s)
       c.dest.add toToken(SymbolDef, s.name, info)
@@ -435,6 +439,20 @@ proc addSym(c: var SemContext; s: DelayedSym) =
   if s.status == OkNew:
     if addNonOverloadable(c.currentScope, s.lit, s.s) == Conflict:
       c.buildErr s.info, "attempt to redeclare: " & pool.strings[s.lit]
+
+proc publish(c: var SemContext; s: SymId; start: int) =
+  var buf = createTokenBuf(c.dest.len - start + 1)
+  for i in start..<c.dest.len:
+    buf.add c.dest[i]
+  programs.publish s, buf
+
+proc publishSignature(c: var SemContext; s: SymId; start: int) =
+  var buf = createTokenBuf(c.dest.len - start + 3)
+  for i in start..<c.dest.len:
+    buf.add c.dest[i]
+  buf.addDotToken() # body is empty for a signature
+  buf.addParRi()
+  programs.publish s, buf
 
 # -------------------------------------------------------------------------------------------------
 
@@ -1031,6 +1049,7 @@ proc maybeInlineMagic(c: var SemContext; res: LoadResult) =
       if n.kind == ParLe:
         # ^ export marker position has a `(`? If so, it is a magic!
         c.dest[c.dest.len-1] = n.load
+        inc n
         while true:
           c.dest.add n
           if n.kind == ParRi: break
@@ -1194,12 +1213,13 @@ proc exportMarkerBecomesNifTag(c: var SemContext; insertPos: int; crucial: Cruci
   if crucial.bits != 0:
     let arr = [toToken(IntLit, pool.integers.getOrIncl(crucial.bits), info),
                toToken(ParRi, 0'u32, info)]
-    c.dest.insert arr, insertPos
+    c.dest.insert arr, insertPos+1
   else:
     let arr = [toToken(ParRi, 0'u32, info)]
-    c.dest.insert arr, insertPos
+    c.dest.insert arr, insertPos+1
 
 proc semLocal(c: var SemContext; n: var Cursor; kind: SymKind) =
+  let declStart = c.dest.len
   takeToken c, n
   let delayed = handleSymDef(c, n, kind) # 0
   let beforeExportMarker = c.dest.len
@@ -1235,6 +1255,7 @@ proc semLocal(c: var SemContext; n: var Cursor; kind: SymKind) =
     assert false, "bug"
   c.addSym delayed
   wantParRi c, n
+  publish c, delayed.s.name, declStart
 
 proc semLocal(c: var SemContext; it: var Item; kind: SymKind) =
   semLocal c, it.n, kind
@@ -1277,8 +1298,10 @@ proc semParams(c: var SemContext; n: var Cursor) =
     buildErr c, n.info, "expected '.' or 'params'"
 
 proc semProc(c: var SemContext; it: var Item; kind: SymKind) =
+  let declStart = c.dest.len
   takeToken c, it.n
-  declareOverloadableSym c, it, kind
+  let symId = declareOverloadableSym(c, it, kind)
+
   let beforeExportMarker = c.dest.len
   wantExportMarker c, it.n
   if it.n.kind == DotToken:
@@ -1301,6 +1324,7 @@ proc semProc(c: var SemContext; it: var Item; kind: SymKind) =
     semPragmas c, it.n, crucial, kind
     if crucial.magic.len > 0:
       exportMarkerBecomesNifTag c, beforeExportMarker, crucial
+    publishSignature c, symId, declStart
     c.openScope() # open body scope
     semProcBody c, it
     c.closeScope() # close body scope
@@ -1309,6 +1333,7 @@ proc semProc(c: var SemContext; it: var Item; kind: SymKind) =
     c.routine = c.routine.parent
   wantParRi c, it.n
   combineType it.typ, c.types.voidType
+  publish c, symId, declStart
 
 proc semStmts(c: var SemContext; it: var Item) =
   takeToken c, it.n
@@ -1418,6 +1443,7 @@ proc semYield(c: var SemContext; it: var Item) =
   combineType it.typ, c.types.voidType
 
 proc semTypeSection(c: var SemContext; n: var Cursor) =
+  let declStart = c.dest.len
   takeToken c, n
   # name, export marker, generic params, pragmas, body
   let delayed = handleSymDef(c, n, TypeY) # 0
@@ -1447,6 +1473,7 @@ proc semTypeSection(c: var SemContext; n: var Cursor) =
     closeScope c
   c.addSym delayed
   wantParRi c, n
+  publish c, delayed.s.name, declStart
 
 proc semExpr(c: var SemContext; it: var Item) =
   case it.n.kind
