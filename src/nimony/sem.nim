@@ -446,6 +446,14 @@ proc publish(c: var SemContext; s: SymId; start: int) =
     buf.add c.dest[i]
   programs.publish s, buf
 
+proc publishSignature(c: var SemContext; s: SymId; start: int) =
+  var buf = createTokenBuf(c.dest.len - start + 3)
+  for i in start..<c.dest.len:
+    buf.add c.dest[i]
+  buf.addDotToken() # body is empty for a signature
+  buf.addParRi()
+  programs.publish s, buf
+
 # -------------------------------------------------------------------------------------------------
 
 proc copyTree(c: var SemContext; n: var Cursor) =
@@ -1314,6 +1322,7 @@ proc semProc(c: var SemContext; it: var Item; kind: SymKind) =
     semPragmas c, it.n, crucial, kind
     if crucial.magic.len > 0:
       exportMarkerBecomesNifTag c, beforeExportMarker, crucial
+    publishSignature c, symId, declStart
     c.openScope() # open body scope
     semProcBody c, it
     c.closeScope() # close body scope
