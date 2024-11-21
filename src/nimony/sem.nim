@@ -1048,11 +1048,9 @@ proc maybeInlineMagic(c: var SemContext; res: LoadResult) =
       inc n # skip the SymbolDef
       if n.kind == ParLe:
         # ^ export marker position has a `(`? If so, it is a magic!
-        echo "inlining ", n
         c.dest[c.dest.len-1] = n.load
         inc n
         while true:
-          echo "inlining ", n
           c.dest.add n
           if n.kind == ParRi: break
           inc n
