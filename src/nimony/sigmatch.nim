@@ -38,8 +38,7 @@ proc createMatch*(): Match = Match()
 proc error(m: var Match; msg: string) =
   if m.err: return # first error is the important one
   m.args.addParLe ErrT, m.argInfo
-  m.args.addStrLit "[" & $m.pos & "] " # at position [x]
-  m.args.addStrLit msg
+  m.args.addStrLit "[" & $m.pos & "] " & msg # at position [x]
   m.args.addParRi()
   m.err = true
 
@@ -334,7 +333,13 @@ proc sigmatchLoop(m: var Match; f: var Cursor; args: openArray[Item]) =
   while i < args.len and f.kind != ParRi:
     m.skippedMod = NoType
     m.argInfo = args[i].n.info
-    singleArg m, f, args[i]
+
+    assert f.symKind == ParamY
+    let param = asLocal(f)
+    var ftyp = param.typ
+    skip f
+
+    singleArg m, ftyp, args[i]
     if m.err: break
     inc m.pos
     inc i
@@ -381,6 +386,8 @@ proc sigmatch*(m: var Match; fn: Item; args: openArray[Item];
       return
 
   var f = fn.typ
+  assert f == "params"
+  inc f # "params"
   sigmatchLoop m, f, args
 
   if m.pos < args.len:

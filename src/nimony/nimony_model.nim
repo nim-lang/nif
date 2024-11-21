@@ -263,3 +263,5 @@ proc symKind*(c: Cursor): SymKind {.inline.} =
     result = parseSymKind pool.tags[tag(c)]
   else:
     result = NoSym
+
+template `==`*(n: Cursor; s: string): bool = n.kind == ParLe and pool.tags[n.tagId] == s

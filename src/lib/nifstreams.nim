@@ -199,9 +199,6 @@ proc tag*(n: PackedToken): TagId {.inline.} =
   if n.kind == ParLe: result = n.tagId
   else: result = ErrT
 
-proc `is`*(n: PackedToken; val: string): bool {.inline.} =
-  n.kind == ParLe and pool.tags[n.tagId] == val
-
 proc typebits*(n: PackedToken): int =
   if n.kind == IntLit:
     result = pool.integers[n.intId]
