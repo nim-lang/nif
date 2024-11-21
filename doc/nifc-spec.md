@@ -303,10 +303,10 @@ NIFC allows for an arbitrary order of declarations without the need for forward 
 Exceptions
 ----------
 
-NIFC supports two types of exception handling primitives.
+NIFC supports two kinds of exception handling primitives.
 
 - `try` and `raise` constructs must be used in the C++ mode, which are translated into C++'s equivalents. It is the job of the NIFC caller not to emit them when C++ support is disabled. The format of the `try` construct is `(try <actions> <onerr> <finally)`. The `raise` construct can be used to produce C++'s `throw` statement.
 
-- The new `err` and `onerr` constructs have to be used when C++ code is not generated. Calls that can potentially raise an exception must be called with `(onerr)`. The format is `(onerr <action> <f> <args>)`. Typically `action` is a `jmp` instruction. When C++'s exception handling mode is used, `action` must always be the dot `.`. `(err)` is a special magic variable of type `bool` that can be set via `(asgn)` and queried like other locations: `(asgn (err) (true)) # set the error bit`.
+- The new `err` and `onerr` constructs have to be used when C++ code is not generated. Calls that can potentially raise an exception must be called with `(onerr)`. The format is `(onerr <action> <f> <args>)`. Typically, `action` is a `jmp` instruction. When C++'s exception handling mode is used, `action` must always be the dot `.`. `(err)` is a special magic variable of type `bool` that can be set via `(asgn)` and queried like other locations: `(asgn (err) (true)) # set the error bit`.
 
 Functions can and must be annotated with a `(raises)` pragma to indicate that they can raise a C++ exception. Likewise they need to use the `errs` pragma if they use the `(err)` mechanism. A function can use both annotations at the same time. That would be a C++ function that uses both `(raise)` and `(err)`.
