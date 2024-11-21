@@ -126,6 +126,8 @@ template buildTree*(dest: var TokenBuf; kind: StmtKind|ExprKind|TypeKind;
   body
   dest.addParRi()
 
+template `is`(n: Cursor; s: string): bool = n.kind == ParLe and pool.tags[n.tagId] == s
+
 proc considerImportedSymbols(c: var SemContext; name: StrId; info: PackedLineInfo): int =
   result = 0
   let candidates = c.importTab.getOrDefault(name)
@@ -966,7 +968,7 @@ type
     bits: int
 
 proc semPragma(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; kind: SymKind) =
-  if n.kind == ParLe and pool.tags[n.tagId] == "kv":
+  if n is "kv":
     inc n
   let pk = pragmaKind(n)
   case pk
@@ -1013,7 +1015,7 @@ proc semPragma(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; kin
 proc semPragmas(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; kind: SymKind) =
   if n.kind == DotToken:
     takeToken c, n
-  elif n.kind == ParLe and pool.tags[n.tagId] == "pragmas":
+  elif n is "pragmas":
     takeToken c, n
     while n.kind != ParRi:
       semPragma c, n, crucial, kind
@@ -1262,7 +1264,7 @@ proc semLocal(c: var SemContext; it: var Item; kind: SymKind) =
   combineType it.typ, c.types.voidType
 
 proc semGenericParam(c: var SemContext; n: var Cursor) =
-  if n.kind == ParLe and pool.tags[n.tagId] == "typevar":
+  if n is "typevar":
     semLocal c, n, TypevarY
   else:
     buildErr c, n.info, "expected 'typevar'"
@@ -1270,7 +1272,7 @@ proc semGenericParam(c: var SemContext; n: var Cursor) =
 proc semGenericParams(c: var SemContext; n: var Cursor) =
   if n.kind == DotToken:
     takeToken c, n
-  elif n.kind == ParLe and pool.tags[n.tagId] == "typevars":
+  elif n is "typevars":
     inc c.routine.inGeneric
     takeToken c, n
     while n.kind != ParRi:
@@ -1280,7 +1282,7 @@ proc semGenericParams(c: var SemContext; n: var Cursor) =
     buildErr c, n.info, "expected '.' or 'typevars'"
 
 proc semParam(c: var SemContext; n: var Cursor) =
-  if n.kind == ParLe and pool.tags[n.tagId] == "param":
+  if n is "param":
     semLocal c, n, ParamY
   else:
     buildErr c, n.info, "expected 'param'"
@@ -1288,7 +1290,7 @@ proc semParam(c: var SemContext; n: var Cursor) =
 proc semParams(c: var SemContext; n: var Cursor) =
   if n.kind == DotToken:
     takeToken c, n
-  elif n.kind == ParLe and pool.tags[n.tagId] == "params":
+  elif n is "params":
     inc c.routine.inGeneric
     takeToken c, n
     while n.kind != ParRi:
