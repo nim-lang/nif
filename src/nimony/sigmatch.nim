@@ -32,6 +32,7 @@ type
     argInfo: PackedLineInfo
     pos, opened: int
     inheritanceCosts, intCosts: int
+    returnType*: Cursor
 
 proc createMatch*(): Match = Match()
 
@@ -403,6 +404,10 @@ proc sigmatch*(m: var Match; fn: Item; args: openArray[Item];
     sigmatchLoop m, f, moreArgs
     if f.kind != ParRi:
       m.error "too many parameters"
+
+  if f.kind == ParRi:
+    inc f
+    m.returnType = f # return type follows the parameters in the token stream
 
   # check all type vars have a value:
   if not m.err and fn.n.kind == Symbol:

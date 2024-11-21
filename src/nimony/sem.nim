@@ -853,6 +853,7 @@ proc semCall(c: var SemContext; it: var Item) =
   if idx >= 0:
     c.dest.add fn.n
     c.dest.add m[idx].args
+    combineType it.typ, m[idx].returnType
   else:
     #buildErr c, callNode.info, m[0].args
     #"call does not match"
