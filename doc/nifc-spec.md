@@ -84,6 +84,7 @@ Lvalue ::= Symbol | (deref Expr) |
              (at Expr Expr) | # array indexing
              (dot Expr Symbol Number) | # field access
              (pat Expr Expr) | # pointer indexing
+             (err)
 
 Call ::= (call Expr+)
 CallCanRaise ::= (onerr StmtList Expr+)
@@ -142,6 +143,8 @@ Stmt ::= Call |
          VarDecl |
          ConstDecl |
          EmitStmt |
+         TryStmt |
+         RaiseStmt |
          (asgn Lvalue Expr) |
          (if (elif Expr StmtList)+ (else StmtList)? ) |
          (while Expr StmtList) |
@@ -151,8 +154,7 @@ Stmt ::= Call |
          (jmp Symbol) |
          (scope StmtList) |
          (ret [Empty | Expr]) | # return statement
-         (discard Expr) |
-         TryStmt | RaiseStmt
+         (discard Expr)
 
 
 StmtList ::= (stmts SCOPE Stmt*)

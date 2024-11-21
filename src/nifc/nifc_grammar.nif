@@ -6,9 +6,12 @@
              (deref Expr)
              (at Expr Expr)
              (dot Expr SYMBOL INTLIT)
-             (pat Expr Expr)))
+             (pat Expr Expr)
+             (err)
+             ))
 
 (RULE :Call (call (ONE_OR_MANY Expr)))
+(RULE :CallCanRaise (onerr StmtList (ONE_OR_MANY Expr)))
 (RULE :Expr (OR INTLIT UINTLIT FLOATLIT CHARLITERAL STRINGLITERAL
          Lvalue
          (par Expr)
@@ -42,6 +45,7 @@
          (cast Type Expr)
          (conv Type Expr)
          Call
+         CallCanRaise
 ))
 
 (RULE :BranchValue (OR INTLIT UINTLIT CHARLITERAL SYMBOL (false) (true)))
@@ -55,11 +59,16 @@
 
 (RULE :ConstDecl (const SYMBOLDEF VarPragmas Type Expr))
 (RULE :EmitStmt (emit (ONE_OR_MANY Expr)))
+(RULE :TryStmt (try StmtList StmtList StmtList))
+(RULE :RaiseStmt (raise (OR . Expr)))
 
 (RULE :Stmt (OR Call
+         CallCanRaise
          VarDecl
          ConstDecl
          EmitStmt
+         TryStmt
+         RaiseStmt
          (asgn Lvalue Expr)
          (if (ONE_OR_MANY (elif Expr StmtList)) (ZERO_OR_ONE (else StmtList)))
          (while Expr StmtList)
@@ -111,7 +120,7 @@
 (RULE :Attribute (attr STRINGLITERAL))
 (RULE :Identifier (OR SYMBOL IDENT))
 (RULE :ProcPragma (OR (inline) (noinline) CallingConvention (varargs) (was Identifier)
-               (selectany) Attribute))
+               (selectany) (raises) (errs) Attribute))
 (RULE :ProcTypePragma (OR CallingConvention (varargs) Attribute))
 
 (RULE :ProcTypePragmas (OR . (pragmas (ONE_OR_MANY ProcTypePragma))))
