@@ -64,7 +64,8 @@ type
     TryKeyword = "try "
     CatchKeyword = "catch ("
     ThrowKeyword = "throw"
-    ErrToken = "err"
+    ErrToken = "NIFC_ERR_"
+    ThreadVarToken = "NIM_THREADVAR "
 
 proc fillTokenTable(tab: var BiTable[Token, string]) =
   for e in EmptyToken..high(PredefinedToken):
@@ -72,6 +73,10 @@ proc fillTokenTable(tab: var BiTable[Token, string]) =
     assert id == Token(e), $(id, " ", ord(e))
 
 type
+  GenFlags* = enum
+    gfMainModule # isMainModule
+    gfHasError   # already generated the error variable
+
   GeneratedCode* = object
     m: Module
     includes: seq[Token]
@@ -86,9 +91,13 @@ type
     headerFile: seq[Token]
     generatedTypes: IntSet
     requestedSyms: HashSet[string]
+    flags: set[GenFlags]
 
-proc initGeneratedCode*(m: sink Module): GeneratedCode =
-  result = GeneratedCode(m: m, code: @[], tokens: initBiTable[Token, string](), fileIds: initPackedSet[FileId]())
+proc initGeneratedCode*(m: sink Module, isMain: bool): GeneratedCode =
+  result = GeneratedCode(m: m, code: @[], tokens: initBiTable[Token, string](),
+      fileIds: initPackedSet[FileId]())
+  if isMain:
+    result.flags.incl gfMainModule
   fillTokenTable(result.tokens)
 
 proc add*(c: var GeneratedCode; t: PredefinedToken) {.inline.} =
@@ -493,10 +502,10 @@ proc writeLineDir(f: var CppFile, c: var GeneratedCode) =
     write f, def
     write f, "\n"
 
-proc generateCode*(s: var State, inp, outp: string) =
+proc generateCode*(s: var State, inp, outp: string; isMain: bool) =
   var m = load(inp)
   m.config = s.config
-  var c = initGeneratedCode(m)
+  var c = initGeneratedCode(m, isMain)
 
   var co = TypeOrder()
   traverseTypes(c.m, co)
@@ -508,6 +517,9 @@ proc generateCode*(s: var State, inp, outp: string) =
   var f = CppFile(f: open(outp, fmWrite))
   f.write "#define NIM_INTBITS " & $s.bits & "\n"
   f.write Prelude
+  if isMain:
+    f.write $ThreadVarToken & "NB8 " & $ErrToken & $Semicolon & "\n"
+
   writeTokenSeq f, c.includes, c
   if optLineDir in c.m.config.options:
     writeLineDir f, c

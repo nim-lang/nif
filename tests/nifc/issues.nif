@@ -197,9 +197,8 @@
     )
   ))
 
-  (var :err.c . (bool) (false))
-
-  (proc :foo.error.stmts (params (param :err.c . (bool))) . (pragmas (errs)) (stmts
+  (proc :foo.error.stmts . . (pragmas (errs)) (stmts
+    (asgn (err) (true))
     (call assert.c (err))
     (asgn (err) (false))
   )
@@ -258,7 +257,7 @@
     (emit "(void)" x.c ";")
 
 
-    (onerr (jmp L1.c) foo.error.stmts (true))
+    (onerr (jmp L1.c) foo.error.stmts)
     (call printf.c "success!\0A")
     (lab :L1.c)
 
