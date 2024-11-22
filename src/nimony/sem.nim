@@ -136,6 +136,9 @@ proc considerImportedSymbols(c: var SemContext; name: StrId; info: PackedLineInf
 proc addSymUse(dest: var TokenBuf; s: Sym; info: PackedLineInfo) =
   dest.add toToken(Symbol, s.name, info)
 
+proc addSymUse(dest: var TokenBuf; s: SymId; info: PackedLineInfo) =
+  dest.add toToken(Symbol, s, info)
+
 proc buildSymChoiceForDot(c: var SemContext; identifier: StrId; info: PackedLineInfo) =
   var count = 0
   let oldLen = c.dest.len
@@ -702,12 +705,34 @@ proc semImport(c: var SemContext; it: var Item) =
 
   combineType it.typ, c.types.voidType
 
-# -------------------- sem checking -----------------------------
-
-proc semExpr(c: var SemContext; it: var Item)
+# -------------------- declare `result` -------------------------
 
 proc classifyType(c: var SemContext; n: Cursor): TypeKind =
   result = typeKind(n)
+
+proc declareResult(c: var SemContext; info: PackedLineInfo): SymId =
+  if c.routine.kind in {ProcY, FuncY, ConverterY, MethodY, MacroY} and 
+      classifyType(c, c.routine.returnType) != VoidT:
+    let name = pool.strings.getOrIncl("result")
+    result = identToSym(c, name, ResultY)
+    let s = Sym(kind: ResultY, name: result,
+                pos: c.dest.len)
+    discard c.currentScope.addNonOverloadable(name, s)
+
+    copyIntoUnchecked c.dest, "result", info:
+      c.dest.add toToken(SymbolDef, result, info) # name
+      c.dest.addDotToken() # export marker
+      c.dest.addDotToken() # pragmas
+      # XXX ^ pragma should be `.noinit` if the proc decl has it
+      var ret = c.routine.returnType
+      c.copyTree(ret) # type
+      c.dest.addDotToken() # value
+  else:
+    result = SymId(0)
+
+# -------------------- sem checking -----------------------------
+
+proc semExpr(c: var SemContext; it: var Item)
 
 proc semSymUse(c: var SemContext; s: SymId): Sym =
   # yyy find a better solution
@@ -1298,6 +1323,15 @@ proc semParams(c: var SemContext; n: var Cursor) =
   else:
     buildErr c, n.info, "expected '.' or 'params'"
 
+proc addReturnResult(c: var SemContext; resId: SymId; info: PackedLineInfo) =
+  if resId != SymId(0):
+    assert c.dest[c.dest.len-1].kind == ParRi
+    c.dest.shrink c.dest.len-1 # remove the ParRi
+    # maybe add `return result`:
+    copyIntoUnchecked(c.dest, "ret", info):
+      c.dest.addSymUse resId, info
+    c.dest.addParRi() # add it back
+
 proc semProc(c: var SemContext; it: var Item; kind: SymKind) =
   let declStart = c.dest.len
   takeToken c, it.n
@@ -1327,9 +1361,11 @@ proc semProc(c: var SemContext; it: var Item; kind: SymKind) =
       exportMarkerBecomesNifTag c, beforeExportMarker, crucial
     publishSignature c, symId, declStart
     c.openScope() # open body scope
+    let resId = declareResult(c, it.n.info)
     semProcBody c, it
     c.closeScope() # close body scope
     c.closeScope() # close parameter scope
+    addReturnResult c, resId, it.n.info
   finally:
     c.routine = c.routine.parent
   wantParRi c, it.n
