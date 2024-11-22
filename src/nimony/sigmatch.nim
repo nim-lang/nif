@@ -68,6 +68,11 @@ proc objtypeImpl*(s: SymId): Cursor =
   if k in {RefT, PtrT}:
     inc result
 
+proc getTypeSection*(s: SymId): TypeDecl =
+  let res = tryLoadSym(s)
+  assert res.status == LacksNothing
+  result = asTypeDecl(res.decl)
+
 proc isObjectType(s: SymId): bool =
   let impl = objtypeImpl(s)
   result = impl.typeKind == ObjectT
@@ -313,7 +318,7 @@ proc singleArg(m: var Match; f: var Cursor; arg: Item) =
       # This means a Symbol can match an InvokT.
       var a = skipModifier(arg.typ)
       if a.kind == Symbol:
-        var t = asTypeDecl(a)
+        var t = getTypeSection(a.symId)
         if t.typevars.typeKind == InvokeT:
           linearMatch m, f, t.typevars
         else:

@@ -35,7 +35,8 @@ type
     origin*: SymId
     targetSym*: SymId
     targetType*: TypeCursor
-    typeParams*: seq[TypeCursor]
+    #typeParams*: seq[TypeCursor]
+    inferred*: Table[SymId, Cursor]
     requestFrom*: seq[PackedLineInfo]
 
   ProgramContext = ref object # shared for every `SemContext`
@@ -459,13 +460,13 @@ proc publishSignature(c: var SemContext; s: SymId; start: int) =
 
 # -------------------------------------------------------------------------------------------------
 
-proc copyTree(c: var SemContext; n: var Cursor) =
+proc takeTree(dest: var TokenBuf; n: var Cursor) =
   if n.kind != ParLe:
-    c.dest.add n
+    dest.add n
   else:
     var nested = 0
     while true:
-      c.dest.add n
+      dest.add n
       case n.kind
       of ParLe: inc nested
       of ParRi:
@@ -478,6 +479,13 @@ proc copyTree(c: var SemContext; n: var Cursor) =
         break
       else: discard
       inc n
+
+proc takeTree(c: var SemContext; n: var Cursor) =
+  takeTree c.dest, n
+
+proc copyTree(dest: var TokenBuf; n: Cursor) =
+  var n = n
+  takeTree dest, n
 
 # -------------------------------------------------------------
 
@@ -634,7 +642,7 @@ proc semInclude(c: var SemContext; it: var Item) =
   var hasError = false
   let info = it.n.info
   var x = it.n
-  copyTree c, it.n
+  takeTree c, it.n
   inc x # skip the `include`
   filenameVal(x, files, hasError)
 
@@ -679,7 +687,7 @@ proc cyclicImport(c: var SemContext; x: var Cursor) =
 proc semImport(c: var SemContext; it: var Item) =
   let info = it.n.info
   var x = it.n
-  copyTree c, it.n
+  takeTree c, it.n
   inc x # skip the `import`
 
   if x.kind == ParLe and pool.tags[x.tagId] == "pragmax":
@@ -710,7 +718,7 @@ proc classifyType(c: var SemContext; n: Cursor): TypeKind =
   result = typeKind(n)
 
 proc declareResult(c: var SemContext; info: PackedLineInfo): SymId =
-  if c.routine.kind in {ProcY, FuncY, ConverterY, MethodY, MacroY} and 
+  if c.routine.kind in {ProcY, FuncY, ConverterY, MethodY, MacroY} and
       classifyType(c, c.routine.returnType) != VoidT:
     let name = pool.strings.getOrIncl("result")
     result = identToSym(c, name, ResultY)
@@ -723,11 +731,82 @@ proc declareResult(c: var SemContext; info: PackedLineInfo): SymId =
       c.dest.addDotToken() # export marker
       c.dest.addDotToken() # pragmas
       # XXX ^ pragma should be `.noinit` if the proc decl has it
-      var ret = c.routine.returnType
-      c.copyTree(ret) # type
+      c.dest.copyTree(c.routine.returnType) # type
       c.dest.addDotToken() # value
   else:
     result = SymId(0)
+
+# -------------------- generics ---------------------------------
+
+type
+  SubsContext = object
+    newVars: Table[SymId, SymId]
+    params: ptr Table[SymId, Cursor]
+
+proc subs(c: var SemContext; dest: var TokenBuf; sc: var SubsContext; body: Cursor) =
+  var nested = 0
+  var n = body
+  while true:
+    case n.kind
+    of UnknownToken, EofToken, DotToken, Ident, StringLit, CharLit, IntLit, UIntLit, FloatLit:
+      dest.add n
+    of Symbol:
+      let s = n.symId
+      let arg = sc.params[].getOrDefault(s)
+      if arg != default(Cursor):
+        dest.addSubtree arg
+      else:
+        let nv = sc.newVars.getOrDefault(s)
+        if nv != SymId(0):
+          dest.add toToken(Symbol, nv, n.info)
+        else:
+          dest.add n # keep Symbol as it was
+    of SymbolDef:
+      let s = n.symId
+      var isGlobal = false
+      var name = extractBasename(pool.syms[s], isGlobal)
+      if isGlobal:
+        c.makeGlobalSym(name)
+      else:
+        c.makeLocalSym(name)
+      let newDef = pool.syms.getOrIncl(name)
+      sc.newVars[s] = newDef
+      dest.add toToken(SymbolDef, newDef, n.info)
+    of ParLe:
+      dest.add n
+      inc nested
+    of ParRi:
+      dest.add n
+      dec nested
+      if nested == 0: break
+    inc n
+
+proc instantiateGenericType(c: var SemContext; dest: var TokenBuf; req: InstRequest) =
+  #[
+  What we need to do is rather simple: A generic instantiation is
+  the typical (type :Name ex generic_params pragmas body) tuple but
+  this time the generic_params list the used `Invoke` construct for the
+  instantiation.
+  ]#
+  let info = req.requestFrom[^1]
+  let decl = getTypeSection(req.origin)
+  dest.buildTree TypeS, info:
+    dest.add toToken(SymbolDef, req.targetSym, info)
+    dest.addDotToken() # export
+    dest.buildTree InvokeT, info:
+      dest.add toToken(Symbol, req.origin, info)
+      var typeVars = decl.typevars
+      if typeVars.substructureKind == TypevarsS:
+        while typeVars.kind != ParRi:
+          if typeVars.symKind == TypeVarY:
+            var tv = typeVars
+            inc tv
+            dest.copyTree req.inferred[tv.symId]
+          skip typeVars
+    # take the pragmas from the origin:
+    dest.copyTree decl.pragmas
+    var sc = SubsContext(params: addr req.inferred)
+    subs(c, dest, sc, decl.body)
 
 # -------------------- sem checking -----------------------------
 
@@ -973,7 +1052,7 @@ proc wantExportMarker(c: var SemContext; n: var Cursor) =
     inc n
   elif n.kind == ParLe:
     # export marker could have been turned into a NIF tag
-    copyTree c, n
+    takeTree c, n
   else:
     buildErr c, n.info, "expected '.' or 'x' for an export marker"
 
@@ -1119,7 +1198,7 @@ proc semEnumType(c: var SemContext; n: var Cursor) =
 
 proc semConceptType(c: var SemContext; n: var Cursor) =
   # XXX implement me
-  copyTree c, n
+  takeTree c, n
 
 proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext) =
   let info = n.info
@@ -1144,7 +1223,7 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
       else:
         c.buildErr info, "not a type"
     of IntT, FloatT, CharT, BoolT, UIntT, VoidT, StringT, NilT, AutoT, SymKindT:
-      copyTree c, n
+      takeTree c, n
     of PtrT, RefT, MutT, OutT, LentT, SinkT, NotT, UncheckedArrayT, SetT, StaticT:
       takeToken c, n
       semLocalTypeImpl c, n, context
