@@ -467,7 +467,7 @@ proc copyTree(c: var SemContext; n: var Cursor) =
     while true:
       c.dest.add n
       case n.kind
-      of Parle: inc nested
+      of ParLe: inc nested
       of ParRi:
         dec nested
         if nested == 0:
@@ -718,7 +718,7 @@ proc declareResult(c: var SemContext; info: PackedLineInfo): SymId =
                 pos: c.dest.len)
     discard c.currentScope.addNonOverloadable(name, s)
 
-    copyIntoUnchecked c.dest, "result", info:
+    buildTree c.dest, ResultS, info:
       c.dest.add toToken(SymbolDef, result, info) # name
       c.dest.addDotToken() # export marker
       c.dest.addDotToken() # pragmas
@@ -1327,7 +1327,7 @@ proc addReturnResult(c: var SemContext; resId: SymId; info: PackedLineInfo) =
     assert c.dest[c.dest.len-1].kind == ParRi
     c.dest.shrink c.dest.len-1 # remove the ParRi
     # maybe add `return result`:
-    copyIntoUnchecked(c.dest, "ret", info):
+    buildTree(c.dest, RetS, info):
       c.dest.addSymUse resId, info
     c.dest.addParRi() # add it back
 

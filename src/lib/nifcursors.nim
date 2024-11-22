@@ -287,7 +287,7 @@ template copyInto*(dest: var TokenBuf; tag: TagId; info: PackedLineInfo; body: u
   dest.addToken ParRi, 0'u32, info
 
 template copyIntoUnchecked*(dest: var TokenBuf; tag: string; info: PackedLineInfo; body: untyped) =
-  dest.addToken ParLe, pool.strings.getOrIncl(tag), info
+  dest.addToken ParLe, pool.tags.getOrIncl(tag), info
   body
   dest.addToken ParRi, 0'u32, info
 
