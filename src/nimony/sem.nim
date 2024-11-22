@@ -460,20 +460,19 @@ proc publishSignature(c: var SemContext; s: SymId; start: int) =
 # -------------------------------------------------------------------------------------------------
 
 proc copyTree(c: var SemContext; n: var Cursor) =
-  var nested = 0
   if n.kind != ParLe:
     c.dest.add n
   else:
+    var nested = 0
     while true:
       c.dest.add n
       case n.kind
       of Parle: inc nested
       of ParRi:
-        c.dest.add n
+        dec nested
         if nested == 0:
           inc n
           break
-        dec nested
       of EofToken:
         error "expected ')', but EOF reached"
         break
