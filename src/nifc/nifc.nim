@@ -50,16 +50,19 @@ proc genMakeCmd(config: ConfigRef, makefilePath: string): string =
   else:
     result = "make -f " & makefilePath
 
-proc generateBackend(s: var State; action: Action; files: seq[string]) =
+proc generateBackend(s: var State; action: Action; files: seq[string]; isLastAction: bool) =
   assert action in {atC, atCpp}
   if files.len == 0:
     quit "command takes a filename"
   s.config.backend = if action == atC: backendC else: backendCpp
   let destExt = if action == atC: ".c" else: ".cpp"
-  for i in 0..<files.len:
+  for i in 0..<files.len-1:
     let inp = files[i]
     let outp = s.config.nifcacheDir / splitFile(inp).name.mangleFileName & destExt
-    generateCode s, inp, outp
+    generateCode s, inp, outp, false
+  let inp = files[^1]
+  let outp = s.config.nifcacheDir / splitFile(inp).name.mangleFileName & destExt
+  generateCode s, inp, outp, isLastAction
 
 proc handleCmdLine() =
   var args: seq[string] = @[]
@@ -153,7 +156,7 @@ proc handleCmdLine() =
     for action in actionTable.keys:
       case action
       of atC, atCpp:
-        generateBackend(s, action, actionTable[action])
+        generateBackend(s, action, actionTable[action], currentAction == action)
       of atNative:
         let args = actionTable[action]
         if args.len == 0:
