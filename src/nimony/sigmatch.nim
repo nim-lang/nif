@@ -47,8 +47,11 @@ proc concat(a: varargs[string]): string =
   result = a[0]
   for i in 1..high(a): result.add a[i]
 
+proc typeToString*(n: Cursor): string =
+  result = toString(n, false)
+
 proc expected(f, a: Cursor): string =
-  concat("expected: ", toString(f), " but got: ", toString(a))
+  concat("expected: ", typeToString(f), " but got: ", typeToString(a))
 
 proc typeImpl(s: SymId): Cursor =
   let res = tryLoadSym(s)
@@ -135,7 +138,7 @@ proc linearMatch(m: var Match; f, a: var Cursor) =
       elif matchesConstraint(m, fs, a):
         m.inferred[fs] = a # NOTICE: Can introduce modifiers for a type var!
       else:
-        m.error concat(toString(a), " does not match constraint ", toString(f))
+        m.error concat(typeToString(a), " does not match constraint ", typeToString(f))
         break
     elif f.kind == a.kind:
       case f.kind
@@ -175,11 +178,11 @@ proc typevarRematch(m: var Match; typeVar: SymId; f, a: Cursor) =
   let com = commonType(f, a)
   if com.kind == ParLe and com.tagId == ErrT:
     m.error concat("could not match again: ", pool.syms[typeVar], "; expected ",
-      toString(f), " but got ", toString(a))
+      typeToString(f), " but got ", typeToString(a))
   elif matchesConstraint(m, typeVar, com):
     m.inferred[typeVar] = skipModifier(com)
   else:
-    m.error concat(toString(a), " does not match constraint ", toString(typeImpl typeVar))
+    m.error concat(typeToString(a), " does not match constraint ", typeToString(typeImpl typeVar))
 
 proc useArg(m: var Match; arg: Item) =
   var usedDeref = false
@@ -202,7 +205,7 @@ proc matchSymbol(m: var Match; f: Cursor; arg: Item) =
     elif matchesConstraint(m, fs, a):
       m.inferred[fs] = a
     else:
-      m.error concat(toString(a), " does not match constraint ", toString(f))
+      m.error concat(typeToString(a), " does not match constraint ", typeToString(f))
   elif isObjectType(fs):
     if a.kind != Symbol:
       m.error expected(f, a)
@@ -259,7 +262,7 @@ proc matchIntegralType(m: var Match; f: var Cursor; arg: Item) =
   elif cmp > 0:
     # f has more bits than a, great!
     if m.skippedMod in {MutT, OutT}:
-      m.error "implicit conversion to " & toString(forig) & " is not mutable"
+      m.error "implicit conversion to " & typeToString(forig) & " is not mutable"
     else:
       m.args.addParLe HconvX, m.argInfo
       inc m.intCosts
@@ -425,7 +428,7 @@ proc matchesBool*(m: var Match; t: Cursor) =
   if a.typeKind == BoolT:
     inc a
     if a.kind == ParRi: return
-  m.error concat("expected: 'bool' but got: ", toString(t))
+  m.error concat("expected: 'bool' but got: ", typeToString(t))
 
 type
   DisambiguationResult* = enum

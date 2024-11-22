@@ -479,9 +479,6 @@ proc copyTree(c: var SemContext; n: var Cursor) =
 
 # -------------------------------------------------------------
 
-proc typeToString(c: var SemContext; n: Cursor): string =
-  result = toString(n)
-
 proc wantParRi(c: var SemContext; n: var Cursor) =
   if n.kind == ParRi:
     c.dest.add n
@@ -733,7 +730,7 @@ proc semSymUse(c: var SemContext; s: SymId): Sym =
 proc semBoolExpr(c: var SemContext; it: var Item) =
   semExpr c, it
   if classifyType(c, it.typ) != BoolT:
-    buildErr c, it.n.info, "expected `bool` but got: " & typeToString(c, it.typ)
+    buildErr c, it.n.info, "expected `bool` but got: " & typeToString(it.typ)
 
 proc semConstStrExpr(c: var SemContext; n: var Cursor) =
   # XXX check for constant
@@ -741,7 +738,7 @@ proc semConstStrExpr(c: var SemContext; n: var Cursor) =
   semExpr c, it
   n = it.n
   if classifyType(c, it.typ) != StringT:
-    buildErr c, it.n.info, "expected `string` but got: " & typeToString(c, it.typ)
+    buildErr c, it.n.info, "expected `string` but got: " & typeToString(it.typ)
 
 proc semConstIntExpr(c: var SemContext; n: var Cursor) =
   # XXX check for constant
@@ -749,7 +746,7 @@ proc semConstIntExpr(c: var SemContext; n: var Cursor) =
   semExpr c, it
   n = it.n
   if classifyType(c, it.typ) != IntT:
-    buildErr c, it.n.info, "expected `int` but got: " & typeToString(c, it.typ)
+    buildErr c, it.n.info, "expected `int` but got: " & typeToString(it.typ)
 
 proc semProcBody(c: var SemContext; itB: var Item) =
   #let beforeBodyPos = c.dest.len
@@ -768,7 +765,7 @@ proc semStmt(c: var SemContext; n: var Cursor) =
   if classifyType(c, it.typ) in {NoType, VoidT, AutoT}:
     discard "ok"
   else:
-    buildErr c, n.info, "expression of type `" & typeToString(c, it.typ) & "` must be discarded"
+    buildErr c, n.info, "expression of type `" & typeToString(it.typ) & "` must be discarded"
   n = it.n
 
 template emptyNode(): Cursor =
@@ -1401,7 +1398,7 @@ proc semDiscard(c: var SemContext; it: var Item) =
     semExpr c, a
     it.n = a.n
     if classifyType(c, it.typ) == VoidT:
-      buildErr c, it.n.info, "expression of type `" & typeToString(c, it.typ) & "` must not be discarded"
+      buildErr c, it.n.info, "expression of type `" & typeToString(it.typ) & "` must not be discarded"
   wantParRi c, it.n
   combineType it.typ, c.types.voidType
 
