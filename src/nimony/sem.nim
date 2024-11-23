@@ -868,7 +868,11 @@ proc instantiateGenerics(c: var SemContext) =
 
 # -------------------- sem checking -----------------------------
 
-proc semExpr(c: var SemContext; it: var Item)
+type
+  SemFlag = enum
+    KeepMagics
+
+proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {})
 
 proc semSymUse(c: var SemContext; s: SymId): Sym =
   # yyy find a better solution
@@ -985,7 +989,7 @@ proc semCall(c: var SemContext; it: var Item) =
   var dest = createTokenBuf(16)
   swap c.dest, dest
   var fn = Item(n: it.n, typ: c.types.autoType)
-  semExpr(c, fn)
+  semExpr(c, fn, {KeepMagics})
   it.n = fn.n
   var args: seq[Item] = @[]
   var argIndexes: seq[int] = @[]
@@ -1533,13 +1537,14 @@ proc semStmts(c: var SemContext; it: var Item) =
   wantParRi c, it.n
   combineType it.typ, c.types.voidType
 
-proc semExprSym(c: var SemContext; it: var Item; s: Sym) =
+proc semExprSym(c: var SemContext; it: var Item; s: Sym; flags: set[SemFlag]) =
   if s.kind == NoSym:
     c.buildErr it.n.info, "undeclared identifier"
     it.typ = c.types.autoType
   else:
     let res = declToCursor(c, s)
-    maybeInlineMagic c, res
+    if KeepMagics notin flags:
+      maybeInlineMagic c, res
     if res.status == LacksNothing:
       var n = res.decl
       if s.kind.isLocal:
@@ -1670,7 +1675,7 @@ proc semTypeSection(c: var SemContext; n: var Cursor) =
   wantParRi c, n
   publish c, delayed.s.name, declStart
 
-proc semExpr(c: var SemContext; it: var Item) =
+proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
   case it.n.kind
   of IntLit:
     combineType it.typ, c.types.intType
@@ -1689,16 +1694,16 @@ proc semExpr(c: var SemContext; it: var Item) =
     takeToken c, it.n
   of Ident:
     let s = semIdent(c, it.n)
-    semExprSym c, it, s
+    semExprSym c, it, s, flags
   of Symbol:
     let s = semSymUse(c, it.n.symId)
     inc it.n
-    semExprSym c, it, s
+    semExprSym c, it, s, flags
   of ParLe:
     case exprKind(it.n)
     of QuotedX:
       let s = semQuoted(c, it.n)
-      semExprSym c, it, s
+      semExprSym c, it, s, flags
     of NoExpr:
       case stmtKind(it.n)
       of NoStmt:
