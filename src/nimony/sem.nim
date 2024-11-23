@@ -52,6 +52,7 @@ type
     routine: SemRoutine
     currentScope: Scope
     g: ProgramContext
+    typeRequests, procRequests: seq[InstRequest]
     includeStack: seq[string]
     #importedModules: seq[ImportedModule]
     instantiatedFrom: seq[PackedLineInfo]
@@ -794,7 +795,7 @@ proc produceInvoke(c: var SemContext; dest: var TokenBuf; req: InstRequest;
           dest.copyTree req.inferred[tv.symId]
         skip typeVars
 
-proc instantiateGenericType(c: var SemContext; dest: var TokenBuf; req: InstRequest) =
+proc subsGenericType(c: var SemContext; dest: var TokenBuf; req: InstRequest) =
   #[
   What we need to do is rather simple: A generic instantiation is
   the typical (type :Name ex generic_params pragmas body) tuple but
@@ -812,7 +813,7 @@ proc instantiateGenericType(c: var SemContext; dest: var TokenBuf; req: InstRequ
     var sc = SubsContext(params: addr req.inferred)
     subs(c, dest, sc, decl.body)
 
-proc instantiateGenericProc(c: var SemContext; dest: var TokenBuf; req: InstRequest) =
+proc subsGenericProc(c: var SemContext; dest: var TokenBuf; req: InstRequest) =
   let info = req.requestFrom[^1]
   let decl = getProcDecl(req.origin)
   dest.buildTree decl.kind, info:
@@ -831,6 +832,30 @@ proc instantiateGenericProc(c: var SemContext; dest: var TokenBuf; req: InstRequ
     subs(c, dest, sc, decl.effects)
     subs(c, dest, sc, decl.pragmas)
     subs(c, dest, sc, decl.body)
+
+proc semTypeSection(c: var SemContext; n: var Cursor)
+proc instantiateGenericType(c: var SemContext; req: InstRequest) =
+  var dest = createTokenBuf(30)
+  subsGenericType c, dest, req
+  var n = beginRead(dest)
+  semTypeSection c, n
+
+proc semProc(c: var SemContext; it: var Item; kind: SymKind)
+proc instantiateGenericProc(c: var SemContext; req: InstRequest) =
+  var dest = createTokenBuf(40)
+  subsGenericProc c, dest, req
+  var it = Item(n: beginRead(dest), typ: c.types.autoType)
+  semProc c, it, it.n.symKind
+
+proc instantiateGenerics(c: var SemContext) =
+  while c.typeRequests.len + c.procRequests.len > 0:
+    # This way with `move` ensures it is safe even though
+    # the semchecking of generics can add to `c.typeRequests`
+    # or to `c.procRequests`. This is subtle!
+    let typeReqs = move(c.typeRequests)
+    for t in typeReqs: instantiateGenericType c, t
+    let procReqs = move(c.procRequests)
+    for p in procReqs: instantiateGenericProc c, p
 
 # -------------------- sem checking -----------------------------
 
@@ -1763,13 +1788,6 @@ proc semcheck*(infile, outfile: string; config: sink NifConfig) =
   semStmt c, n
   #if n.kind != EofToken:
   #  quit "Internal error: file not processed completely"
-  # fix point: generic instantiations:
-  when false:
-    var i = 0
-    while i < c.requires.len:
-      let r = c.requires[i]
-      if not c.declared.contains(imp):
-        importSymbol(c, imp)
-      inc i
+  instantiateGenerics c
   if reportErrors(c) == 0:
     writeOutput c, outfile
