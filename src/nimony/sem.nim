@@ -1026,7 +1026,7 @@ proc semCall(c: var SemContext; it: var Item) =
 
   c.dest.add callNode
   if idx >= 0:
-    c.dest.add m[idx].fn.n
+    c.dest.addSubtree m[idx].fn.n
     c.dest.add m[idx].args
     combineType it.typ, m[idx].returnType
   else:

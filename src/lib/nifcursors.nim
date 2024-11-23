@@ -144,8 +144,8 @@ proc addSubtree*(result: var TokenBuf; c: Cursor) =
       let item = c.load
       result.add item
       if item.kind == ParRi:
-        if nested == 0: break
         dec nested
+        if nested == 0: break
       elif item.kind == ParLe: inc nested
       inc c
 
