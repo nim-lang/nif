@@ -57,7 +57,6 @@ type
     #importedModules: seq[ImportedModule]
     instantiatedFrom: seq[PackedLineInfo]
     importTab: Iface
-    inType, inCallFn: int
     globals, locals: Table[string, int]
     types: BuiltinTypes
     typeMem: Table[string, TokenBuf]
@@ -833,19 +832,28 @@ proc subsGenericProc(c: var SemContext; dest: var TokenBuf; req: InstRequest) =
     subs(c, dest, sc, decl.pragmas)
     subs(c, dest, sc, decl.body)
 
+template withFromInfo(req: InstRequest; body: untyped) =
+  let oldLen = c.instantiatedFrom.len
+  for jnfo in items(req.requestFrom):
+    pushErrorContext c, jnfo
+  body
+  shrink c.instantiatedFrom, oldLen
+
 proc semTypeSection(c: var SemContext; n: var Cursor)
 proc instantiateGenericType(c: var SemContext; req: InstRequest) =
   var dest = createTokenBuf(30)
-  subsGenericType c, dest, req
-  var n = beginRead(dest)
-  semTypeSection c, n
+  withFromInfo req:
+    subsGenericType c, dest, req
+    var n = beginRead(dest)
+    semTypeSection c, n
 
 proc semProc(c: var SemContext; it: var Item; kind: SymKind)
 proc instantiateGenericProc(c: var SemContext; req: InstRequest) =
   var dest = createTokenBuf(40)
-  subsGenericProc c, dest, req
-  var it = Item(n: beginRead(dest), typ: c.types.autoType)
-  semProc c, it, it.n.symKind
+  withFromInfo req:
+    subsGenericProc c, dest, req
+    var it = Item(n: beginRead(dest), typ: c.types.autoType)
+    semProc c, it, it.n.symKind
 
 proc instantiateGenerics(c: var SemContext) =
   while c.typeRequests.len + c.procRequests.len > 0:
