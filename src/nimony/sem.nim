@@ -70,6 +70,8 @@ proc unquote(c: var Cursor): StrId =
   var r = ""
   while true:
     case c.kind
+    of ParLe:
+      inc c
     of ParRi:
       inc c
       break
@@ -92,7 +94,7 @@ proc unquote(c: var Cursor): StrId =
     of FloatLit:
       r.addFloat pool.floats[c.floatId]
       inc c
-    else:
+    of UnknownToken, DotToken, Symbol, SymbolDef:
       r.add "<unexpected token>: " & $c.kind
       inc c
   assert r.len > 0
