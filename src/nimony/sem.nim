@@ -972,22 +972,35 @@ proc pickBestMatch(c: var SemContext; m: openArray[Match]): int =
         of SecondWins:
           result = i
 
+when false:
+  proc semExpr2(c: var SemContext; it: var Item): TokenBuf =
+    result = createTokenBuf(20)
+    swap c.dest, result
+    semExpr c, it
+    swap c.dest, result
+
 proc semCall(c: var SemContext; it: var Item) =
   let callNode = it.n
   inc it.n
   var dest = createTokenBuf(16)
   swap c.dest, dest
   var fn = Item(n: it.n, typ: c.types.autoType)
-  semExpr c, fn
+  semExpr(c, fn)
   it.n = fn.n
   var args: seq[Item] = @[]
+  var argIndexes: seq[int] = @[]
   while it.n.kind != ParRi:
     var arg = Item(n: it.n, typ: c.types.autoType)
+    argIndexes.add c.dest.len
     semExpr c, arg
-    let next = arg.n
-    arg.n = it.n
-    it.n = next
+    it.n = arg.n
     args.add arg
+  assert args.len == argIndexes.len
+  swap c.dest, dest
+  fn.n = beginRead(dest)
+  for i in 0 ..< args.len:
+    args[i].n = cursorAt(dest, argIndexes[i])
+
   var m: seq[Match] = @[]
   if fn.n.exprKind in {OchoiceX, CchoiceX}:
     var f = fn.n
@@ -1006,10 +1019,10 @@ proc semCall(c: var SemContext; it: var Item) =
     m.add createMatch()
     sigmatch(m[^1], fn, args, emptyNode())
   let idx = pickBestMatch(c, m)
-  swap c.dest, dest
+
   c.dest.add callNode
   if idx >= 0:
-    c.dest.add fn.n
+    c.dest.add m[idx].fn.n
     c.dest.add m[idx].args
     combineType it.typ, m[idx].returnType
   else:

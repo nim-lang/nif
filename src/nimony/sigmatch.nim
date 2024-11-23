@@ -26,6 +26,7 @@ type
   Match* = object
     inferred: Table[SymId, Cursor]
     tvars: HashSet[SymId]
+    fn*: Item
     args*, typeArgs*: TokenBuf
     err*: bool
     skippedMod: TypeKind
@@ -389,6 +390,7 @@ proc collectDefaultValues(f: var Cursor): seq[Item] =
 proc sigmatch*(m: var Match; fn: Item; args: openArray[Item];
                explicitTypeVars: Cursor) =
   m.tvars = initHashSet[SymId]()
+  m.fn = fn
   if fn.n.kind == Symbol:
     var e = explicitTypeVars
     for v in typeVars(fn.n.symId):
