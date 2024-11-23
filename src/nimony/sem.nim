@@ -121,7 +121,7 @@ proc getIdent(c: var SemContext; n: var Cursor): StrId =
     if n.kind == ParRi: dec nested
     inc n
 
-template buildTree*(dest: var TokenBuf; kind: StmtKind|ExprKind|TypeKind;
+template buildTree*(dest: var TokenBuf; kind: StmtKind|ExprKind|TypeKind|SymKind;
                     info: PackedLineInfo; body: untyped) =
   dest.add toToken(ParLe, pool.tags.getOrIncl($kind), info)
   body
@@ -781,6 +781,19 @@ proc subs(c: var SemContext; dest: var TokenBuf; sc: var SubsContext; body: Curs
       if nested == 0: break
     inc n
 
+proc produceInvoke(c: var SemContext; dest: var TokenBuf; req: InstRequest;
+                   typeVars: Cursor; info: PackedLineInfo) =
+  dest.buildTree InvokeT, info:
+    dest.add toToken(Symbol, req.origin, info)
+    var typeVars = typeVars
+    if typeVars.substructureKind == TypevarsS:
+      while typeVars.kind != ParRi:
+        if typeVars.symKind == TypeVarY:
+          var tv = typeVars
+          inc tv
+          dest.copyTree req.inferred[tv.symId]
+        skip typeVars
+
 proc instantiateGenericType(c: var SemContext; dest: var TokenBuf; req: InstRequest) =
   #[
   What we need to do is rather simple: A generic instantiation is
@@ -793,19 +806,30 @@ proc instantiateGenericType(c: var SemContext; dest: var TokenBuf; req: InstRequ
   dest.buildTree TypeS, info:
     dest.add toToken(SymbolDef, req.targetSym, info)
     dest.addDotToken() # export
-    dest.buildTree InvokeT, info:
-      dest.add toToken(Symbol, req.origin, info)
-      var typeVars = decl.typevars
-      if typeVars.substructureKind == TypevarsS:
-        while typeVars.kind != ParRi:
-          if typeVars.symKind == TypeVarY:
-            var tv = typeVars
-            inc tv
-            dest.copyTree req.inferred[tv.symId]
-          skip typeVars
+    produceInvoke c, dest, req, decl.typevars, info
     # take the pragmas from the origin:
     dest.copyTree decl.pragmas
     var sc = SubsContext(params: addr req.inferred)
+    subs(c, dest, sc, decl.body)
+
+proc instantiateGenericProc(c: var SemContext; dest: var TokenBuf; req: InstRequest) =
+  let info = req.requestFrom[^1]
+  let decl = getProcDecl(req.origin)
+  dest.buildTree decl.kind, info:
+    dest.add toToken(SymbolDef, req.targetSym, info)
+    if decl.exported.kind == ParLe:
+      # magic?
+      dest.copyTree decl.exported
+    else:
+      dest.addDotToken()
+    dest.copyTree decl.pattern
+    produceInvoke c, dest, req, decl.typevars, info
+
+    var sc = SubsContext(params: addr req.inferred)
+    subs(c, dest, sc, decl.params)
+    subs(c, dest, sc, decl.retType)
+    subs(c, dest, sc, decl.effects)
+    subs(c, dest, sc, decl.pragmas)
     subs(c, dest, sc, decl.body)
 
 # -------------------- sem checking -----------------------------

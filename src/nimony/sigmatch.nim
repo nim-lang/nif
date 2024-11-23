@@ -73,6 +73,11 @@ proc getTypeSection*(s: SymId): TypeDecl =
   assert res.status == LacksNothing
   result = asTypeDecl(res.decl)
 
+proc getProcDecl*(s: SymId): Routine =
+  let res = tryLoadSym(s)
+  assert res.status == LacksNothing
+  result = asRoutine(res.decl)
+
 proc isObjectType(s: SymId): bool =
   let impl = objtypeImpl(s)
   result = impl.typeKind == ObjectT
