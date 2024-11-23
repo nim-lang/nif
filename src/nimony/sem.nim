@@ -1495,12 +1495,16 @@ proc semProc(c: var SemContext; it: var Item; kind: SymKind) =
       skip it.n
 
     publishSignature c, symId, declStart
-    c.openScope() # open body scope
-    let resId = declareResult(c, it.n.info)
-    semProcBody c, it
-    c.closeScope() # close body scope
-    c.closeScope() # close parameter scope
-    addReturnResult c, resId, it.n.info
+    if it.n.kind != DotToken:
+      c.openScope() # open body scope
+      let resId = declareResult(c, it.n.info)
+      semProcBody c, it
+      c.closeScope() # close body scope
+      c.closeScope() # close parameter scope
+      addReturnResult c, resId, it.n.info
+    else:
+      takeToken c, it.n
+      c.closeScope() # close parameter scope
   finally:
     c.routine = c.routine.parent
   wantParRi c, it.n
