@@ -48,8 +48,8 @@ type
     typevars*: Cursor # generic parameters
     params*: Cursor
     retType*: Cursor
-    effects*: Cursor
     pragmas*: Cursor
+    effects*: Cursor
     body*: Cursor
 
 proc isGeneric*(r: Routine): bool {.inline.} =
@@ -73,9 +73,9 @@ proc asRoutine*(c: Cursor): Routine =
     skip c
     result.retType = c
     skip c
-    result.effects = c
-    skip c
     result.pragmas = c
+    skip c
+    result.effects = c
     skip c
     result.body = c
 

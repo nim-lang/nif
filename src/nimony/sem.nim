@@ -407,7 +407,6 @@ proc declareOverloadableSym(c: var SemContext; it: var Item; kind: SymKind): Sym
                   pos: c.dest.len)
       addOverloadable(c.currentScope, lit, s)
       c.dest.add toToken(SymbolDef, s.name, info)
-      inc it.n
 
 proc success(s: SymStatus): bool {.inline.} = s in {OkNew, OkExisting}
 proc success(s: DelayedSym): bool {.inline.} = success s.status
@@ -690,7 +689,7 @@ proc semImport(c: var SemContext; it: var Item) =
   takeTree c, it.n
   inc x # skip the `import`
 
-  if x.kind == ParLe and pool.tags[x.tagId] == "pragmax":
+  if x.kind == ParLe and x == "pragmax":
     inc x
     var y = x
     skip y
@@ -1485,15 +1484,16 @@ proc semProc(c: var SemContext; it: var Item; kind: SymKind) =
     semGenericParams c, it.n
     semParams c, it.n
     c.routine.returnType = semReturnType(c, it.n)
-    if it.n.kind == DotToken:
-      takeToken c, it.n
-    else:
-      buildErr c, it.n.info, "`effects` must be empyt"
-      skip it.n
     var crucial = default CrucialPragma
     semPragmas c, it.n, crucial, kind
     if crucial.magic.len > 0:
       exportMarkerBecomesNifTag c, beforeExportMarker, crucial
+    if it.n.kind == DotToken:
+      takeToken c, it.n
+    else:
+      buildErr c, it.n.info, "`effects` must be empty"
+      skip it.n
+
     publishSignature c, symId, declStart
     c.openScope() # open body scope
     let resId = declareResult(c, it.n.info)
