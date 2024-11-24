@@ -995,6 +995,29 @@ when false:
     semExpr c, it
     swap c.dest, result
 
+proc addFn(c: var SemContext; fn: Cursor; args: openArray[Item]) =
+  var inlinedMagic = false
+  if fn.kind == Symbol:
+    let res = tryLoadSym(fn.symId)
+    if res.status == LacksNothing:
+      var n = res.decl
+      inc n # skip the symbol kind
+      if n.kind == SymbolDef:
+        inc n # skip the SymbolDef
+        if n.kind == ParLe:
+          inlinedMagic = true
+          # ^ export marker position has a `(`? If so, it is a magic!
+          c.dest[c.dest.len-1] = n.load # overwrite the `(call` node with the magic itself
+          inc n
+          if n.kind == IntLit:
+            if pool.integers[n.intId] == TypedMagic:
+              c.dest.addSubtree args[0].typ
+            inc n
+          if n.kind != ParRi:
+            error "broken `magic`: expected ')', but got: ", n
+  if not inlinedMagic:
+    c.dest.addSubtree fn
+
 proc semCall(c: var SemContext; it: var Item) =
   let callNode = it.n
   inc it.n
@@ -1038,7 +1061,7 @@ proc semCall(c: var SemContext; it: var Item) =
 
   c.dest.add callNode
   if idx >= 0:
-    c.dest.addSubtree m[idx].fn.n
+    c.addFn m[idx].fn.n, args
     c.dest.add m[idx].args
     combineType it.typ, m[idx].returnType
   elif idx == -2:
