@@ -54,7 +54,7 @@ proc loadInterface*(suffix: string; importTab: var Iface) =
 proc error*(msg: string; c: Cursor) =
   write stdout, "[Error] "
   write stdout, msg
-  writeLine stdout, toString(c)
+  writeLine stdout, toString(c, false)
   when defined(debug):
     echo getStackTrace()
   quit 1

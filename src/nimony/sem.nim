@@ -1042,8 +1042,10 @@ proc sameIdent(sym: SymId; str: StrId): bool =
   result = pool.strings.getOrIncl(name) == str
 
 proc findObjField(t: Cursor; name: StrId; level = 0): ObjField =
-  let baseType = t
+  assert t == "object"
   var n = t
+  inc n # skip `(object` token
+  let baseType = n
   skip n # skip basetype
   while n.kind == ParLe and n.substructureKind == FldS:
     inc n # skip FldS
@@ -1052,7 +1054,7 @@ proc findObjField(t: Cursor; name: StrId; level = 0): ObjField =
       inc n # skip name
       skip n # export marker
       skip n # pragmas
-      return ObjField(sym: n.symId, level: level, typ: n)
+      return ObjField(sym: symId, level: level, typ: n)
     skip n # skip name
     skip n # export marker
     skip n # pragmas
