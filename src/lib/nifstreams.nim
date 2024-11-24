@@ -212,7 +212,8 @@ proc toString*(tree: openArray[PackedToken]; produceLineInfo = true): string =
   var stack: seq[PackedLineInfo] = @[]
   for n in 0 ..< tree.len:
     let info = tree[n].info
-    if produceLineInfo and info.isValid:
+    let k = tree[n].kind
+    if produceLineInfo and info.isValid and k != ParRi:
       var (file, line, col) = unpack(pool.man, info)
       var fileAsStr = ""
       if stack.len > 0:
@@ -224,7 +225,7 @@ proc toString*(tree: openArray[PackedToken]; produceLineInfo = true): string =
         fileAsStr = pool.files[file]
       b.addLineInfo(col, line, fileAsStr)
 
-    case tree[n].kind
+    case k
     of DotToken:
       b.addEmpty()
     of Ident:

@@ -108,10 +108,12 @@ proc getIdent(c: var SemContext; n: var Cursor): StrId =
   case n.kind
   of Ident:
     result = n.litId
+    inc n
   of Symbol, SymbolDef:
     let sym = pool.syms[n.symId]
     var isGlobal = false
     result = pool.strings.getOrIncl(extractBasename(sym, isGlobal))
+    inc n
   of ParLe:
     if exprKind(n) == QuotedX:
       result = unquote(n)
@@ -937,6 +939,19 @@ template emptyNode(): Cursor =
   # XXX find a better solution for this
   c.types.voidType
 
+template skipToLocalType(n) =
+  inc n # skip ParLe
+  inc n # skip name
+  skip n # skip export marker
+  skip n # skip pragmas
+
+template skipToParams(n) =
+  inc n # skip ParLe
+  skip n # skip name
+  skip n # skip export marker
+  skip n # skip pattern
+  skip n # skip generics
+
 proc fetchType(c: var SemContext; it: var Item; s: Sym) =
   if s.kind == NoSym:
     c.buildErr it.n.info, "undeclared identifier"
@@ -946,12 +961,9 @@ proc fetchType(c: var SemContext; it: var Item; s: Sym) =
     if res.status == LacksNothing:
       var n = res.decl
       if s.kind.isLocal:
-        inc n # skip ParLe
-        inc n # skip name
-        skip n # skip export marker
-        skip n # skip pragmas
+        skipToLocalType n
       elif s.kind.isRoutine:
-        discard "nothing to skip"
+        skipToParams n
       else:
         # XXX enum field, object field?
         assert false, "not implemented"
@@ -969,7 +981,7 @@ proc pickBestMatch(c: var SemContext; m: openArray[Match]): int =
       else:
         case cmpMatches(m[result], m[i])
         of NobodyWins:
-          result = -1 # ambiguous
+          result = -2 # ambiguous
           break
         of FirstWins:
           discard "result remains the same"
@@ -982,6 +994,29 @@ when false:
     swap c.dest, result
     semExpr c, it
     swap c.dest, result
+
+proc addFn(c: var SemContext; fn: Cursor; args: openArray[Item]) =
+  var inlinedMagic = false
+  if fn.kind == Symbol:
+    let res = tryLoadSym(fn.symId)
+    if res.status == LacksNothing:
+      var n = res.decl
+      inc n # skip the symbol kind
+      if n.kind == SymbolDef:
+        inc n # skip the SymbolDef
+        if n.kind == ParLe:
+          inlinedMagic = true
+          # ^ export marker position has a `(`? If so, it is a magic!
+          c.dest[c.dest.len-1] = n.load # overwrite the `(call` node with the magic itself
+          inc n
+          if n.kind == IntLit:
+            if pool.integers[n.intId] == TypedMagic:
+              c.dest.addSubtree args[0].typ
+            inc n
+          if n.kind != ParRi:
+            error "broken `magic`: expected ')', but got: ", n
+  if not inlinedMagic:
+    c.dest.addSubtree fn
 
 proc semCall(c: var SemContext; it: var Item) =
   let callNode = it.n
@@ -1026,13 +1061,17 @@ proc semCall(c: var SemContext; it: var Item) =
 
   c.dest.add callNode
   if idx >= 0:
-    c.dest.addSubtree m[idx].fn.n
+    c.addFn m[idx].fn.n, args
     c.dest.add m[idx].args
     combineType it.typ, m[idx].returnType
-  else:
-    #buildErr c, callNode.info, m[0].args
-    #"call does not match"
+  elif idx == -2:
+    buildErr c, callNode.info, "ambiguous call"
+  elif m.len > 0:
+    # use the first error for now
+    # XXX Improve error messages here
     c.dest.add m[0].args
+  else:
+    buildErr c, callNode.info, "undeclared identifier"
   wantParRi c, it.n
 
 proc sameIdent(sym: SymId; str: StrId): bool =
@@ -1042,8 +1081,10 @@ proc sameIdent(sym: SymId; str: StrId): bool =
   result = pool.strings.getOrIncl(name) == str
 
 proc findObjField(t: Cursor; name: StrId; level = 0): ObjField =
-  let baseType = t
+  assert t == "object"
   var n = t
+  inc n # skip `(object` token
+  let baseType = n
   skip n # skip basetype
   while n.kind == ParLe and n.substructureKind == FldS:
     inc n # skip FldS
@@ -1052,7 +1093,7 @@ proc findObjField(t: Cursor; name: StrId; level = 0): ObjField =
       inc n # skip name
       skip n # export marker
       skip n # pragmas
-      return ObjField(sym: n.symId, level: level, typ: n)
+      return ObjField(sym: symId, level: level, typ: n)
     skip n # skip name
     skip n # export marker
     skip n # pragmas
@@ -1094,6 +1135,9 @@ proc semDot(c: var SemContext; it: var Item; mode: DotExprMode) =
         c.buildErr it.n.info, "object type exptected"
     else:
       c.buildErr it.n.info, "object type exptected"
+  # skip optional inheritance depth:
+  if it.n.kind == IntLit:
+    inc it.n
   wantParRi c, it.n
 
 proc semWhile(c: var SemContext; it: var Item) =
@@ -1203,13 +1247,14 @@ proc semPragmas(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; ki
 proc semIdentImpl(c: var SemContext; n: var Cursor; ident: StrId): Sym =
   let insertPos = c.dest.len
   let info = n.info
-  if buildSymChoice(c, ident, info, InnerMost) == 1:
+  let count = buildSymChoice(c, ident, info, InnerMost)
+  if count == 1:
     let sym = c.dest[insertPos+1].symId
     c.dest.shrink insertPos
     c.dest.add toToken(Symbol, sym, info)
     result = semSymUse(c, sym)
   else:
-    result = Sym(kind: NoSym)
+    result = Sym(kind: if count == 0: NoSym else: CchoiceY)
 
 proc semIdent(c: var SemContext; n: var Cursor): Sym =
   result = semIdentImpl(c, n, n.litId)
@@ -1541,6 +1586,10 @@ proc semExprSym(c: var SemContext; it: var Item; s: Sym; flags: set[SemFlag]) =
   if s.kind == NoSym:
     c.buildErr it.n.info, "undeclared identifier"
     it.typ = c.types.autoType
+  elif s.kind == CchoiceY:
+    if KeepMagics notin flags:
+      c.buildErr it.n.info, "ambiguous identifier"
+    it.typ = c.types.autoType
   else:
     let res = declToCursor(c, s)
     if KeepMagics notin flags:
@@ -1548,18 +1597,11 @@ proc semExprSym(c: var SemContext; it: var Item; s: Sym; flags: set[SemFlag]) =
     if res.status == LacksNothing:
       var n = res.decl
       if s.kind.isLocal:
-        inc n # skip ParLe
-        inc n # skip name
-        skip n # skip export marker
-        skip n # skip pragmas
+        skipToLocalType n
       elif s.kind.isRoutine:
-        inc n # skip ParLe
-        skip n # skip name
-        skip n # skip export marker
-        skip n # skip pattern
-        skip n # skip generics
+        skipToParams n
       else:
-        # XXX enum field, object field?
+        # XXX enum field?
         assert false, "not implemented"
       it.typ = n
     else:
@@ -1807,7 +1849,11 @@ proc writeOutput(c: var SemContext; outfile: string) =
   #b.close()
   writeFile outfile, "(.nif42)\n" & toString(c.dest)
 
-proc semcheck*(infile, outfile: string; config: sink NifConfig) =
+type
+  ModuleFlag* = enum
+    IsSystem, IsMain, SkipSystem
+
+proc semcheck*(infile, outfile: string; config: sink NifConfig; moduleFlags: set[ModuleFlag]) =
   var n = setupProgram(infile)
   var c = SemContext(
     dest: createTokenBuf(),

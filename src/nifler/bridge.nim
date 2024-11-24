@@ -514,11 +514,18 @@ proc toNif*(n, parent: PNode; c: var TranslationContext) =
     c.section = "fld"
     relLineInfo(n, parent, c)
     c.b.addTree(nodeKindTranslation(n.kind))
-
-    c.b.addEmpty # objectTagPos
-
-    for i in 0..<n.len:
+    for i in 0..<n.len-2:
       toNif(n[i], n, c)
+    # n.len-2: pragmas: must be empty (it is deprecated anyway)
+    if n[n.len-2].kind != nkEmpty:
+      c.b.addTree "err"
+      c.b.endTree()
+    let last {.cursor.} = n[n.len-1]
+    if last.kind == nkRecList:
+      for child in last:
+        toNif(child, n, c)
+    else:
+      toNif(last, n, c)
     c.b.endTree()
   else:
     relLineInfo(n, parent, c)

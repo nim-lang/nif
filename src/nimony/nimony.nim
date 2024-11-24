@@ -28,6 +28,9 @@ Options:
   -f, --forcebuild          force a rebuild
   --noenv                   do not read configuration from `NIM_*`
                             environment variables
+  --isSystem                passed module is a `system.nim` module
+  --isMain                  passed module is the main module of a project
+  --noSystem                do not auto-import `system.nim`
   --version                 show the version
   --help                    show this help
 """
@@ -47,7 +50,7 @@ proc requiresTool(tool, src: string; forceRebuild: bool) =
     nimexec("c -d:release " & src)
     moveFile src.changeFileExt(ExeExt), t
 
-proc processSingleModule(nimFile: string; config: sink NifConfig) =
+proc processSingleModule(nimFile: string; config: sink NifConfig; moduleFlags: set[ModuleFlag]) =
   let nifler = findTool("nifler")
   let name = nimFile.splitFile.name
   let src = "nifcache" / name & ".1.nif"
@@ -55,7 +58,7 @@ proc processSingleModule(nimFile: string; config: sink NifConfig) =
   exec quoteShell(nifler) & " p " & quoteShell(nimFile) & " " &
     quoteShell(src)
   if fileExists(src):
-    semcheck(src, dest, ensureMove config)
+    semcheck(src, dest, ensureMove config, moduleFlags)
 
 type
   Command = enum
@@ -66,6 +69,7 @@ proc handleCmdLine() =
   var cmd = Command.None
   var forceRebuild = false
   var useEnv = true
+  var moduleFlags: set[ModuleFlag] = {}
   var config = NifConfig()
   config.defines.incl "nimony"
 
@@ -89,6 +93,9 @@ proc handleCmdLine() =
       of "path", "p": config.paths.add val
       of "define", "d": config.defines.incl val
       of "noenv": useEnv = false
+      of "nosystem": moduleFlags.incl SkipSystem
+      of "issystem": moduleFlags.incl IsSystem
+      of "ismain": moduleFlags.incl IsMain
       else: writeHelp()
     of cmdEnd: assert false, "cannot happen"
   if args.len == 0:
@@ -107,7 +114,7 @@ proc handleCmdLine() =
     createDir("nifcache")
     requiresTool "nifler", "src/nifler/nifler.nim", forceRebuild
     requiresTool "nifc", "src/nifc/nifc.nim", forceRebuild
-    processSingleModule(args[0].addFileExt(".nim"), config)
+    processSingleModule(args[0].addFileExt(".nim"), config, moduleFlags)
 
 when isMainModule:
   handleCmdLine()
