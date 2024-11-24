@@ -516,7 +516,10 @@ proc toNif*(n, parent: PNode; c: var TranslationContext) =
     c.b.addTree(nodeKindTranslation(n.kind))
     for i in 0..<n.len-2:
       toNif(n[i], n, c)
-    # n.len-2: pragmas: always ignored for now
+    # n.len-2: pragmas: must be empty (it is deprecated anyway)
+    if n[n.len-2].kind != nkEmpty:
+      c.b.addTree "err"
+      c.b.endTree()
     let last {.cursor.} = n[n.len-1]
     if last.kind == nkRecList:
       for child in last:
