@@ -3,7 +3,7 @@
 The NIF data format is a text based file format designed for compiler frontend/backend
 communication or communication between different programming languages. The design is
 heavily tied to Nim's requirements. However, the design works on language agnostic ASTs
-and is so extensible that other programming languages will work well with it too.
+and is so extensible that other programming languages work well with it too.
 
 A NIF file corresponds to a "module" in the source language. The module is stored as an AST.
 The AST consists of "atoms" and "compound nodes".
@@ -30,8 +30,8 @@ Design goals
 
 Extensibility is primarily achieved by using two different namespaces. One namespace
 is used for "node kinds" and a different one for source level identifiers. This does
-away with the notion of a fixed set of "keywords". In NIF new "keywords" ("node kinds")
-can be introduced without breaking any code.
+away with the notion of a fixed set of "keywords". In NIF new
+"keywords" ("node kinds" / "tags") can be introduced without breaking any code.
 
 
 Why yet another data format?

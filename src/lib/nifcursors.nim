@@ -144,8 +144,8 @@ proc addSubtree*(result: var TokenBuf; c: Cursor) =
       let item = c.load
       result.add item
       if item.kind == ParRi:
-        if nested == 0: break
         dec nested
+        if nested == 0: break
       elif item.kind == ParLe: inc nested
       inc c
 
@@ -269,14 +269,14 @@ proc replace*(dest: var TokenBuf; by: Cursor; pos: int) =
     dest[pos + i] = by.load
     inc by
 
-proc toString*(b: TokenBuf): string =
-  result = nifstreams.toString(toOpenArray(b.data, 0, b.len-1))
+proc toString*(b: TokenBuf; produceLineInfo = true): string =
+  result = nifstreams.toString(toOpenArray(b.data, 0, b.len-1), produceLineInfo)
 
-proc toString*(b: Cursor): string =
+proc toString*(b: Cursor; produceLineInfo = true): string =
   let counter = span(b)
-  result = nifstreams.toString(toOpenArray(cast[ptr UncheckedArray[PackedToken]](b.p), 0, counter-1))
+  result = nifstreams.toString(toOpenArray(cast[ptr UncheckedArray[PackedToken]](b.p), 0, counter-1), produceLineInfo)
 
-proc `$`*(c: Cursor): string = toString(c)
+proc `$`*(c: Cursor): string = toString(c, false)
 
 proc addToken[L](tree: var TokenBuf; kind: TokenKind; id: L; info: PackedLineInfo) =
   tree.add toToken(kind, id, info)
@@ -287,7 +287,7 @@ template copyInto*(dest: var TokenBuf; tag: TagId; info: PackedLineInfo; body: u
   dest.addToken ParRi, 0'u32, info
 
 template copyIntoUnchecked*(dest: var TokenBuf; tag: string; info: PackedLineInfo; body: untyped) =
-  dest.addToken ParLe, pool.strings.getOrIncl(tag), info
+  dest.addToken ParLe, pool.tags.getOrIncl(tag), info
   body
   dest.addToken ParRi, 0'u32, info
 

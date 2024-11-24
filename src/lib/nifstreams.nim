@@ -207,12 +207,12 @@ proc typebits*(n: PackedToken): int =
   else:
     result = 0
 
-proc toString*(tree: openArray[PackedToken]): string =
+proc toString*(tree: openArray[PackedToken]; produceLineInfo = true): string =
   var b = nifbuilder.open(tree.len * 20)
   var stack: seq[PackedLineInfo] = @[]
   for n in 0 ..< tree.len:
     let info = tree[n].info
-    if info.isValid:
+    if produceLineInfo and info.isValid:
       var (file, line, col) = unpack(pool.man, info)
       var fileAsStr = ""
       if stack.len > 0:
@@ -220,6 +220,8 @@ proc toString*(tree: openArray[PackedToken]): string =
         line = line - pline
         col = col - pcol
         if file != pfile: fileAsStr = pool.files[file]
+      else:
+        fileAsStr = pool.files[file]
       b.addLineInfo(col, line, fileAsStr)
 
     case tree[n].kind

@@ -12,7 +12,7 @@ proc isRoutine*(t: SymKind): bool {.inline.} =
   t in {ProcY, FuncY, IterY, MacroY, TemplateY, ConverterY, MethodY}
 
 proc isLocal*(t: SymKind): bool {.inline.} =
-  t in {LetY, VarY, ConstY, ParamY, TypevarY, CursorY, FldY}
+  t in {LetY, VarY, ResultY, ConstY, ParamY, TypevarY, CursorY, FldY}
 
 type
   Local* = object
@@ -48,8 +48,8 @@ type
     typevars*: Cursor # generic parameters
     params*: Cursor
     retType*: Cursor
-    effects*: Cursor
     pragmas*: Cursor
+    effects*: Cursor
     body*: Cursor
 
 proc isGeneric*(r: Routine): bool {.inline.} =
@@ -73,9 +73,9 @@ proc asRoutine*(c: Cursor): Routine =
     skip c
     result.retType = c
     skip c
-    result.effects = c
-    skip c
     result.pragmas = c
+    skip c
+    result.effects = c
     skip c
     result.body = c
 

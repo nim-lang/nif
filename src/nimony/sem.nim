@@ -35,7 +35,8 @@ type
     origin*: SymId
     targetSym*: SymId
     targetType*: TypeCursor
-    typeParams*: seq[TypeCursor]
+    #typeParams*: seq[TypeCursor]
+    inferred*: Table[SymId, Cursor]
     requestFrom*: seq[PackedLineInfo]
 
   ProgramContext = ref object # shared for every `SemContext`
@@ -51,11 +52,11 @@ type
     routine: SemRoutine
     currentScope: Scope
     g: ProgramContext
+    typeRequests, procRequests: seq[InstRequest]
     includeStack: seq[string]
     #importedModules: seq[ImportedModule]
     instantiatedFrom: seq[PackedLineInfo]
     importTab: Iface
-    inType, inCallFn: int
     globals, locals: Table[string, int]
     types: BuiltinTypes
     typeMem: Table[string, TokenBuf]
@@ -69,6 +70,8 @@ proc unquote(c: var Cursor): StrId =
   var r = ""
   while true:
     case c.kind
+    of ParLe:
+      inc c
     of ParRi:
       inc c
       break
@@ -91,7 +94,7 @@ proc unquote(c: var Cursor): StrId =
     of FloatLit:
       r.addFloat pool.floats[c.floatId]
       inc c
-    else:
+    of UnknownToken, DotToken, Symbol, SymbolDef:
       r.add "<unexpected token>: " & $c.kind
       inc c
   assert r.len > 0
@@ -120,7 +123,7 @@ proc getIdent(c: var SemContext; n: var Cursor): StrId =
     if n.kind == ParRi: dec nested
     inc n
 
-template buildTree*(dest: var TokenBuf; kind: StmtKind|ExprKind|TypeKind;
+template buildTree*(dest: var TokenBuf; kind: StmtKind|ExprKind|TypeKind|SymKind;
                     info: PackedLineInfo; body: untyped) =
   dest.add toToken(ParLe, pool.tags.getOrIncl($kind), info)
   body
@@ -135,6 +138,9 @@ proc considerImportedSymbols(c: var SemContext; name: StrId; info: PackedLineInf
 
 proc addSymUse(dest: var TokenBuf; s: Sym; info: PackedLineInfo) =
   dest.add toToken(Symbol, s.name, info)
+
+proc addSymUse(dest: var TokenBuf; s: SymId; info: PackedLineInfo) =
+  dest.add toToken(Symbol, s, info)
 
 proc buildSymChoiceForDot(c: var SemContext; identifier: StrId; info: PackedLineInfo) =
   var count = 0
@@ -403,7 +409,6 @@ proc declareOverloadableSym(c: var SemContext; it: var Item; kind: SymKind): Sym
                   pos: c.dest.len)
       addOverloadable(c.currentScope, lit, s)
       c.dest.add toToken(SymbolDef, s.name, info)
-      inc it.n
 
 proc success(s: SymStatus): bool {.inline.} = s in {OkNew, OkExisting}
 proc success(s: DelayedSym): bool {.inline.} = success s.status
@@ -456,31 +461,34 @@ proc publishSignature(c: var SemContext; s: SymId; start: int) =
 
 # -------------------------------------------------------------------------------------------------
 
-proc copyTree(c: var SemContext; n: var Cursor) =
-  var nested = 0
+proc takeTree(dest: var TokenBuf; n: var Cursor) =
   if n.kind != ParLe:
-    c.dest.add n
+    dest.add n
   else:
+    var nested = 0
     while true:
-      c.dest.add n
+      dest.add n
       case n.kind
-      of Parle: inc nested
+      of ParLe: inc nested
       of ParRi:
-        c.dest.add n
+        dec nested
         if nested == 0:
           inc n
           break
-        dec nested
       of EofToken:
         error "expected ')', but EOF reached"
         break
       else: discard
       inc n
 
-# -------------------------------------------------------------
+proc takeTree(c: var SemContext; n: var Cursor) =
+  takeTree c.dest, n
 
-proc typeToString(c: var SemContext; n: Cursor): string =
-  result = toString(n)
+proc copyTree(dest: var TokenBuf; n: Cursor) =
+  var n = n
+  takeTree dest, n
+
+# -------------------------------------------------------------
 
 proc wantParRi(c: var SemContext; n: var Cursor) =
   if n.kind == ParRi:
@@ -635,7 +643,7 @@ proc semInclude(c: var SemContext; it: var Item) =
   var hasError = false
   let info = it.n.info
   var x = it.n
-  copyTree c, it.n
+  takeTree c, it.n
   inc x # skip the `include`
   filenameVal(x, files, hasError)
 
@@ -680,10 +688,10 @@ proc cyclicImport(c: var SemContext; x: var Cursor) =
 proc semImport(c: var SemContext; it: var Item) =
   let info = it.n.info
   var x = it.n
-  copyTree c, it.n
+  takeTree c, it.n
   inc x # skip the `import`
 
-  if x.kind == ParLe and pool.tags[x.tagId] == "pragmax":
+  if x.kind == ParLe and x == "pragmax":
     inc x
     var y = x
     skip y
@@ -705,12 +713,166 @@ proc semImport(c: var SemContext; it: var Item) =
 
   combineType it.typ, c.types.voidType
 
-# -------------------- sem checking -----------------------------
-
-proc semExpr(c: var SemContext; it: var Item)
+# -------------------- declare `result` -------------------------
 
 proc classifyType(c: var SemContext; n: Cursor): TypeKind =
   result = typeKind(n)
+
+proc declareResult(c: var SemContext; info: PackedLineInfo): SymId =
+  if c.routine.kind in {ProcY, FuncY, ConverterY, MethodY, MacroY} and
+      classifyType(c, c.routine.returnType) != VoidT:
+    let name = pool.strings.getOrIncl("result")
+    result = identToSym(c, name, ResultY)
+    let s = Sym(kind: ResultY, name: result,
+                pos: c.dest.len)
+    discard c.currentScope.addNonOverloadable(name, s)
+
+    buildTree c.dest, ResultS, info:
+      c.dest.add toToken(SymbolDef, result, info) # name
+      c.dest.addDotToken() # export marker
+      c.dest.addDotToken() # pragmas
+      # XXX ^ pragma should be `.noinit` if the proc decl has it
+      c.dest.copyTree(c.routine.returnType) # type
+      c.dest.addDotToken() # value
+  else:
+    result = SymId(0)
+
+# -------------------- generics ---------------------------------
+
+type
+  SubsContext = object
+    newVars: Table[SymId, SymId]
+    params: ptr Table[SymId, Cursor]
+
+proc subs(c: var SemContext; dest: var TokenBuf; sc: var SubsContext; body: Cursor) =
+  var nested = 0
+  var n = body
+  while true:
+    case n.kind
+    of UnknownToken, EofToken, DotToken, Ident, StringLit, CharLit, IntLit, UIntLit, FloatLit:
+      dest.add n
+    of Symbol:
+      let s = n.symId
+      let arg = sc.params[].getOrDefault(s)
+      if arg != default(Cursor):
+        dest.addSubtree arg
+      else:
+        let nv = sc.newVars.getOrDefault(s)
+        if nv != SymId(0):
+          dest.add toToken(Symbol, nv, n.info)
+        else:
+          dest.add n # keep Symbol as it was
+    of SymbolDef:
+      let s = n.symId
+      var isGlobal = false
+      var name = extractBasename(pool.syms[s], isGlobal)
+      if isGlobal:
+        c.makeGlobalSym(name)
+      else:
+        c.makeLocalSym(name)
+      let newDef = pool.syms.getOrIncl(name)
+      sc.newVars[s] = newDef
+      dest.add toToken(SymbolDef, newDef, n.info)
+    of ParLe:
+      dest.add n
+      inc nested
+    of ParRi:
+      dest.add n
+      dec nested
+      if nested == 0: break
+    inc n
+
+proc produceInvoke(c: var SemContext; dest: var TokenBuf; req: InstRequest;
+                   typeVars: Cursor; info: PackedLineInfo) =
+  dest.buildTree InvokeT, info:
+    dest.add toToken(Symbol, req.origin, info)
+    var typeVars = typeVars
+    if typeVars.substructureKind == TypevarsS:
+      while typeVars.kind != ParRi:
+        if typeVars.symKind == TypeVarY:
+          var tv = typeVars
+          inc tv
+          dest.copyTree req.inferred[tv.symId]
+        skip typeVars
+
+proc subsGenericType(c: var SemContext; dest: var TokenBuf; req: InstRequest) =
+  #[
+  What we need to do is rather simple: A generic instantiation is
+  the typical (type :Name ex generic_params pragmas body) tuple but
+  this time the generic_params list the used `Invoke` construct for the
+  instantiation.
+  ]#
+  let info = req.requestFrom[^1]
+  let decl = getTypeSection(req.origin)
+  dest.buildTree TypeS, info:
+    dest.add toToken(SymbolDef, req.targetSym, info)
+    dest.addDotToken() # export
+    produceInvoke c, dest, req, decl.typevars, info
+    # take the pragmas from the origin:
+    dest.copyTree decl.pragmas
+    var sc = SubsContext(params: addr req.inferred)
+    subs(c, dest, sc, decl.body)
+
+proc subsGenericProc(c: var SemContext; dest: var TokenBuf; req: InstRequest) =
+  let info = req.requestFrom[^1]
+  let decl = getProcDecl(req.origin)
+  dest.buildTree decl.kind, info:
+    dest.add toToken(SymbolDef, req.targetSym, info)
+    if decl.exported.kind == ParLe:
+      # magic?
+      dest.copyTree decl.exported
+    else:
+      dest.addDotToken()
+    dest.copyTree decl.pattern
+    produceInvoke c, dest, req, decl.typevars, info
+
+    var sc = SubsContext(params: addr req.inferred)
+    subs(c, dest, sc, decl.params)
+    subs(c, dest, sc, decl.retType)
+    subs(c, dest, sc, decl.effects)
+    subs(c, dest, sc, decl.pragmas)
+    subs(c, dest, sc, decl.body)
+
+template withFromInfo(req: InstRequest; body: untyped) =
+  let oldLen = c.instantiatedFrom.len
+  for jnfo in items(req.requestFrom):
+    pushErrorContext c, jnfo
+  body
+  shrink c.instantiatedFrom, oldLen
+
+proc semTypeSection(c: var SemContext; n: var Cursor)
+proc instantiateGenericType(c: var SemContext; req: InstRequest) =
+  var dest = createTokenBuf(30)
+  withFromInfo req:
+    subsGenericType c, dest, req
+    var n = beginRead(dest)
+    semTypeSection c, n
+
+proc semProc(c: var SemContext; it: var Item; kind: SymKind)
+proc instantiateGenericProc(c: var SemContext; req: InstRequest) =
+  var dest = createTokenBuf(40)
+  withFromInfo req:
+    subsGenericProc c, dest, req
+    var it = Item(n: beginRead(dest), typ: c.types.autoType)
+    semProc c, it, it.n.symKind
+
+proc instantiateGenerics(c: var SemContext) =
+  while c.typeRequests.len + c.procRequests.len > 0:
+    # This way with `move` ensures it is safe even though
+    # the semchecking of generics can add to `c.typeRequests`
+    # or to `c.procRequests`. This is subtle!
+    let typeReqs = move(c.typeRequests)
+    for t in typeReqs: instantiateGenericType c, t
+    let procReqs = move(c.procRequests)
+    for p in procReqs: instantiateGenericProc c, p
+
+# -------------------- sem checking -----------------------------
+
+type
+  SemFlag = enum
+    KeepMagics
+
+proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {})
 
 proc semSymUse(c: var SemContext; s: SymId): Sym =
   # yyy find a better solution
@@ -733,7 +895,7 @@ proc semSymUse(c: var SemContext; s: SymId): Sym =
 proc semBoolExpr(c: var SemContext; it: var Item) =
   semExpr c, it
   if classifyType(c, it.typ) != BoolT:
-    buildErr c, it.n.info, "expected `bool` but got: " & typeToString(c, it.typ)
+    buildErr c, it.n.info, "expected `bool` but got: " & typeToString(it.typ)
 
 proc semConstStrExpr(c: var SemContext; n: var Cursor) =
   # XXX check for constant
@@ -741,7 +903,7 @@ proc semConstStrExpr(c: var SemContext; n: var Cursor) =
   semExpr c, it
   n = it.n
   if classifyType(c, it.typ) != StringT:
-    buildErr c, it.n.info, "expected `string` but got: " & typeToString(c, it.typ)
+    buildErr c, it.n.info, "expected `string` but got: " & typeToString(it.typ)
 
 proc semConstIntExpr(c: var SemContext; n: var Cursor) =
   # XXX check for constant
@@ -749,7 +911,7 @@ proc semConstIntExpr(c: var SemContext; n: var Cursor) =
   semExpr c, it
   n = it.n
   if classifyType(c, it.typ) != IntT:
-    buildErr c, it.n.info, "expected `int` but got: " & typeToString(c, it.typ)
+    buildErr c, it.n.info, "expected `int` but got: " & typeToString(it.typ)
 
 proc semProcBody(c: var SemContext; itB: var Item) =
   #let beforeBodyPos = c.dest.len
@@ -768,7 +930,7 @@ proc semStmt(c: var SemContext; n: var Cursor) =
   if classifyType(c, it.typ) in {NoType, VoidT, AutoT}:
     discard "ok"
   else:
-    buildErr c, n.info, "expression of type `" & typeToString(c, it.typ) & "` must be discarded"
+    buildErr c, n.info, "expression of type `" & typeToString(it.typ) & "` must be discarded"
   n = it.n
 
 template emptyNode(): Cursor =
@@ -814,22 +976,35 @@ proc pickBestMatch(c: var SemContext; m: openArray[Match]): int =
         of SecondWins:
           result = i
 
+when false:
+  proc semExpr2(c: var SemContext; it: var Item): TokenBuf =
+    result = createTokenBuf(20)
+    swap c.dest, result
+    semExpr c, it
+    swap c.dest, result
+
 proc semCall(c: var SemContext; it: var Item) =
   let callNode = it.n
   inc it.n
   var dest = createTokenBuf(16)
   swap c.dest, dest
   var fn = Item(n: it.n, typ: c.types.autoType)
-  semExpr c, fn
+  semExpr(c, fn, {KeepMagics})
   it.n = fn.n
   var args: seq[Item] = @[]
+  var argIndexes: seq[int] = @[]
   while it.n.kind != ParRi:
     var arg = Item(n: it.n, typ: c.types.autoType)
+    argIndexes.add c.dest.len
     semExpr c, arg
-    let next = arg.n
-    arg.n = it.n
-    it.n = next
+    it.n = arg.n
     args.add arg
+  assert args.len == argIndexes.len
+  swap c.dest, dest
+  fn.n = beginRead(dest)
+  for i in 0 ..< args.len:
+    args[i].n = cursorAt(dest, argIndexes[i])
+
   var m: seq[Match] = @[]
   if fn.n.exprKind in {OchoiceX, CchoiceX}:
     var f = fn.n
@@ -848,10 +1023,10 @@ proc semCall(c: var SemContext; it: var Item) =
     m.add createMatch()
     sigmatch(m[^1], fn, args, emptyNode())
   let idx = pickBestMatch(c, m)
-  swap c.dest, dest
+
   c.dest.add callNode
   if idx >= 0:
-    c.dest.add fn.n
+    c.dest.addSubtree m[idx].fn.n
     c.dest.add m[idx].args
     combineType it.typ, m[idx].returnType
   else:
@@ -952,7 +1127,7 @@ proc wantExportMarker(c: var SemContext; n: var Cursor) =
     inc n
   elif n.kind == ParLe:
     # export marker could have been turned into a NIF tag
-    copyTree c, n
+    takeTree c, n
   else:
     buildErr c, n.info, "expected '.' or 'x' for an export marker"
 
@@ -1098,7 +1273,7 @@ proc semEnumType(c: var SemContext; n: var Cursor) =
 
 proc semConceptType(c: var SemContext; n: var Cursor) =
   # XXX implement me
-  copyTree c, n
+  takeTree c, n
 
 proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext) =
   let info = n.info
@@ -1123,7 +1298,7 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
       else:
         c.buildErr info, "not a type"
     of IntT, FloatT, CharT, BoolT, UIntT, VoidT, StringT, NilT, AutoT, SymKindT:
-      copyTree c, n
+      takeTree c, n
     of PtrT, RefT, MutT, OutT, LentT, SinkT, NotT, UncheckedArrayT, SetT, StaticT:
       takeToken c, n
       semLocalTypeImpl c, n, context
@@ -1301,6 +1476,15 @@ proc semParams(c: var SemContext; n: var Cursor) =
   else:
     buildErr c, n.info, "expected '.' or 'params'"
 
+proc addReturnResult(c: var SemContext; resId: SymId; info: PackedLineInfo) =
+  if resId != SymId(0):
+    assert c.dest[c.dest.len-1].kind == ParRi
+    c.dest.shrink c.dest.len-1 # remove the ParRi
+    # maybe add `return result`:
+    buildTree(c.dest, RetS, info):
+      c.dest.addSymUse resId, info
+    c.dest.addParRi() # add it back
+
 proc semProc(c: var SemContext; it: var Item; kind: SymKind) =
   let declStart = c.dest.len
   takeToken c, it.n
@@ -1319,20 +1503,27 @@ proc semProc(c: var SemContext; it: var Item; kind: SymKind) =
     semGenericParams c, it.n
     semParams c, it.n
     c.routine.returnType = semReturnType(c, it.n)
-    if it.n.kind == DotToken:
-      takeToken c, it.n
-    else:
-      buildErr c, it.n.info, "`effects` must be empyt"
-      skip it.n
     var crucial = default CrucialPragma
     semPragmas c, it.n, crucial, kind
     if crucial.magic.len > 0:
       exportMarkerBecomesNifTag c, beforeExportMarker, crucial
+    if it.n.kind == DotToken:
+      takeToken c, it.n
+    else:
+      buildErr c, it.n.info, "`effects` must be empty"
+      skip it.n
+
     publishSignature c, symId, declStart
-    c.openScope() # open body scope
-    semProcBody c, it
-    c.closeScope() # close body scope
-    c.closeScope() # close parameter scope
+    if it.n.kind != DotToken:
+      c.openScope() # open body scope
+      let resId = declareResult(c, it.n.info)
+      semProcBody c, it
+      c.closeScope() # close body scope
+      c.closeScope() # close parameter scope
+      addReturnResult c, resId, it.n.info
+    else:
+      takeToken c, it.n
+      c.closeScope() # close parameter scope
   finally:
     c.routine = c.routine.parent
   wantParRi c, it.n
@@ -1346,13 +1537,14 @@ proc semStmts(c: var SemContext; it: var Item) =
   wantParRi c, it.n
   combineType it.typ, c.types.voidType
 
-proc semExprSym(c: var SemContext; it: var Item; s: Sym) =
+proc semExprSym(c: var SemContext; it: var Item; s: Sym; flags: set[SemFlag]) =
   if s.kind == NoSym:
     c.buildErr it.n.info, "undeclared identifier"
     it.typ = c.types.autoType
   else:
     let res = declToCursor(c, s)
-    maybeInlineMagic c, res
+    if KeepMagics notin flags:
+      maybeInlineMagic c, res
     if res.status == LacksNothing:
       var n = res.decl
       if s.kind.isLocal:
@@ -1401,7 +1593,7 @@ proc semDiscard(c: var SemContext; it: var Item) =
     semExpr c, a
     it.n = a.n
     if classifyType(c, it.typ) == VoidT:
-      buildErr c, it.n.info, "expression of type `" & typeToString(c, it.typ) & "` must not be discarded"
+      buildErr c, it.n.info, "expression of type `" & typeToString(it.typ) & "` must not be discarded"
   wantParRi c, it.n
   combineType it.typ, c.types.voidType
 
@@ -1483,7 +1675,7 @@ proc semTypeSection(c: var SemContext; n: var Cursor) =
   wantParRi c, n
   publish c, delayed.s.name, declStart
 
-proc semExpr(c: var SemContext; it: var Item) =
+proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
   case it.n.kind
   of IntLit:
     combineType it.typ, c.types.intType
@@ -1502,16 +1694,16 @@ proc semExpr(c: var SemContext; it: var Item) =
     takeToken c, it.n
   of Ident:
     let s = semIdent(c, it.n)
-    semExprSym c, it, s
+    semExprSym c, it, s, flags
   of Symbol:
     let s = semSymUse(c, it.n.symId)
     inc it.n
-    semExprSym c, it, s
+    semExprSym c, it, s, flags
   of ParLe:
     case exprKind(it.n)
     of QuotedX:
       let s = semQuoted(c, it.n)
-      semExprSym c, it, s
+      semExprSym c, it, s, flags
     of NoExpr:
       case stmtKind(it.n)
       of NoStmt:
@@ -1628,13 +1820,6 @@ proc semcheck*(infile, outfile: string; config: sink NifConfig) =
   semStmt c, n
   #if n.kind != EofToken:
   #  quit "Internal error: file not processed completely"
-  # fix point: generic instantiations:
-  when false:
-    var i = 0
-    while i < c.requires.len:
-      let r = c.requires[i]
-      if not c.declared.contains(imp):
-        importSymbol(c, imp)
-      inc i
+  instantiateGenerics c
   if reportErrors(c) == 0:
     writeOutput c, outfile
