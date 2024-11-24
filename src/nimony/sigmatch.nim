@@ -384,6 +384,7 @@ proc collectDefaultValues(f: var Cursor): seq[Item] =
   result = @[]
   while f.symKind == ParamY:
     let param = asLocal(f)
+    if param.val.kind == DotToken: break
     result.add Item(n: param.val, typ: param.typ)
     skip f
 
