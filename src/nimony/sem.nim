@@ -981,7 +981,7 @@ proc pickBestMatch(c: var SemContext; m: openArray[Match]): int =
       else:
         case cmpMatches(m[result], m[i])
         of NobodyWins:
-          result = -1 # ambiguous
+          result = -2 # ambiguous
           break
         of FirstWins:
           discard "result remains the same"
@@ -1041,10 +1041,14 @@ proc semCall(c: var SemContext; it: var Item) =
     c.dest.addSubtree m[idx].fn.n
     c.dest.add m[idx].args
     combineType it.typ, m[idx].returnType
-  else:
-    #buildErr c, callNode.info, m[0].args
-    #"call does not match"
+  elif idx == -2:
+    buildErr c, callNode.info, "ambiguous call"
+  elif m.len > 0:
+    # use the first error for now
+    # XXX Improve error messages here
     c.dest.add m[0].args
+  else:
+    buildErr c, callNode.info, "undeclared identifier"
   wantParRi c, it.n
 
 proc sameIdent(sym: SymId; str: StrId): bool =
