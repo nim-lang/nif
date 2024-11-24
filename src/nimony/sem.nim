@@ -108,10 +108,12 @@ proc getIdent(c: var SemContext; n: var Cursor): StrId =
   case n.kind
   of Ident:
     result = n.litId
+    inc n
   of Symbol, SymbolDef:
     let sym = pool.syms[n.symId]
     var isGlobal = false
     result = pool.strings.getOrIncl(extractBasename(sym, isGlobal))
+    inc n
   of ParLe:
     if exprKind(n) == QuotedX:
       result = unquote(n)
@@ -1096,6 +1098,9 @@ proc semDot(c: var SemContext; it: var Item; mode: DotExprMode) =
         c.buildErr it.n.info, "object type exptected"
     else:
       c.buildErr it.n.info, "object type exptected"
+  # skip optional inheritance depth:
+  if it.n.kind == IntLit:
+    inc it.n
   wantParRi c, it.n
 
 proc semWhile(c: var SemContext; it: var Item) =
