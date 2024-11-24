@@ -1814,7 +1814,11 @@ proc writeOutput(c: var SemContext; outfile: string) =
   #b.close()
   writeFile outfile, "(.nif42)\n" & toString(c.dest)
 
-proc semcheck*(infile, outfile: string; config: sink NifConfig) =
+type
+  ModuleFlag* = enum
+    IsSystem, IsMain, SkipSystem
+
+proc semcheck*(infile, outfile: string; config: sink NifConfig; moduleFlags: set[ModuleFlag]) =
   var n = setupProgram(infile)
   var c = SemContext(
     dest: createTokenBuf(),
