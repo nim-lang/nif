@@ -244,7 +244,7 @@ proc openScope(c: var SemContext) =
 proc closeScope(c: var SemContext) =
   c.currentScope = c.currentScope.up
 
-template withNewScope(cc: var SemContext; body: untyped) =
+template withNewScope(c: var SemContext; body: untyped) =
   openScope(c)
   try:
     body
@@ -255,6 +255,13 @@ template withNewScope(cc: var SemContext; body: untyped) =
 
 proc pushErrorContext(c: var SemContext; info: PackedLineInfo) = c.instantiatedFrom.add info
 proc popErrorContext(c: var SemContext) = discard c.instantiatedFrom.pop
+
+template withErrorContext(c: var SemContext; info: PackedLineInfo; body: untyped) =
+  pushErrorContext(c, info)
+  try:
+    body
+  finally:
+    popErrorContext(c)
 
 proc buildErr*(c: var SemContext; info: PackedLineInfo; msg: string) =
   when defined(debug):
@@ -636,6 +643,9 @@ proc combineType(dest: var Cursor; src: Cursor) =
   if typeKind(dest) == AutoT:
     dest = src
 
+proc producesVoid(c: var SemContext; typ: var Cursor) =
+  combineType typ, c.types.voidType
+
 proc getFile(c: var SemContext; info: PackedLineInfo): string =
   let (fid, _, _) = unpack(pool.man, info)
   result = pool.files[fid]
@@ -676,7 +686,7 @@ proc semInclude(c: var SemContext; it: var Item) =
         m.add f2
         c.buildErr info, "recursive include: " & m
 
-  combineType it.typ, c.types.voidType
+  producesVoid c, it.typ
 
 proc importSingleFile(c: var SemContext; f1, origin: string; info: PackedLineInfo) =
   let f2 = resolveFile(c, origin, f1)
@@ -713,7 +723,7 @@ proc semImport(c: var SemContext; it: var Item) =
     for f in files:
       importSingleFile c, f, origin, info
 
-  combineType it.typ, c.types.voidType
+  producesVoid c, it.typ
 
 # -------------------- declare `result` -------------------------
 
@@ -1007,11 +1017,13 @@ proc addFn(c: var SemContext; fn: Cursor; args: openArray[Item]) =
         if n.kind == ParLe:
           inlinedMagic = true
           # ^ export marker position has a `(`? If so, it is a magic!
-          c.dest[c.dest.len-1] = n.load # overwrite the `(call` node with the magic itself
+          copyKeepLineInfo c.dest[c.dest.len-1], n.load # overwrite the `(call` node with the magic itself
           inc n
           if n.kind == IntLit:
             if pool.integers[n.intId] == TypedMagic:
               c.dest.addSubtree args[0].typ
+            else:
+              c.dest.add n
             inc n
           if n.kind != ParRi:
             error "broken `magic`: expected ')', but got: ", n
@@ -1148,7 +1160,7 @@ proc semWhile(c: var SemContext; it: var Item) =
     semStmt c, it.n
   dec c.routine.inLoop
   wantParRi c, it.n
-  combineType it.typ, c.types.voidType
+  producesVoid c, it.typ
 
 proc semBreak(c: var SemContext; it: var Item) =
   takeToken c, it.n
@@ -1157,7 +1169,7 @@ proc semBreak(c: var SemContext; it: var Item) =
   else:
     wantDot c, it.n
   wantParRi c, it.n
-  combineType it.typ, c.types.voidType
+  producesVoid c, it.typ
 
 proc wantExportMarker(c: var SemContext; n: var Cursor) =
   if n.kind == DotToken:
@@ -1483,7 +1495,7 @@ proc semLocal(c: var SemContext; n: var Cursor; kind: SymKind) =
 
 proc semLocal(c: var SemContext; it: var Item; kind: SymKind) =
   semLocal c, it.n, kind
-  combineType it.typ, c.types.voidType
+  producesVoid c, it.typ
 
 proc semGenericParam(c: var SemContext; n: var Cursor) =
   if n == "typevar":
@@ -1572,7 +1584,7 @@ proc semProc(c: var SemContext; it: var Item; kind: SymKind) =
   finally:
     c.routine = c.routine.parent
   wantParRi c, it.n
-  combineType it.typ, c.types.voidType
+  producesVoid c, it.typ
   publish c, symId, declStart
 
 proc semStmts(c: var SemContext; it: var Item) =
@@ -1580,7 +1592,7 @@ proc semStmts(c: var SemContext; it: var Item) =
   while it.n.kind != ParRi:
     semStmt c, it.n
   wantParRi c, it.n
-  combineType it.typ, c.types.voidType
+  producesVoid c, it.typ
 
 proc semExprSym(c: var SemContext; it: var Item; s: Sym; flags: set[SemFlag]) =
   if s.kind == NoSym:
@@ -1615,7 +1627,7 @@ proc semAsgn(c: var SemContext; it: var Item) =
   semExpr c, a # ensures type compatibility with `left-hand-side`
   it.n = a.n
   wantParRi c, it.n
-  combineType it.typ, c.types.voidType
+  producesVoid c, it.typ
 
 proc semEmit(c: var SemContext; it: var Item) =
   takeToken c, it.n
@@ -1624,7 +1636,7 @@ proc semEmit(c: var SemContext; it: var Item) =
     semExpr c, a
     it.n = a.n
   wantParRi c, it.n
-  combineType it.typ, c.types.voidType
+  producesVoid c, it.typ
 
 proc semDiscard(c: var SemContext; it: var Item) =
   takeToken c, it.n
@@ -1637,7 +1649,7 @@ proc semDiscard(c: var SemContext; it: var Item) =
     if classifyType(c, it.typ) == VoidT:
       buildErr c, it.n.info, "expression of type `" & typeToString(it.typ) & "` must not be discarded"
   wantParRi c, it.n
-  combineType it.typ, c.types.voidType
+  producesVoid c, it.typ
 
 proc semIf(c: var SemContext; it: var Item) =
   takeToken c, it.n
@@ -1656,7 +1668,7 @@ proc semIf(c: var SemContext; it: var Item) =
       semStmt c, it.n
     wantParRi c, it.n
   wantParRi c, it.n
-  combineType it.typ, c.types.voidType
+  producesVoid c, it.typ
 
 proc semReturn(c: var SemContext; it: var Item) =
   takeToken c, it.n
@@ -1669,7 +1681,7 @@ proc semReturn(c: var SemContext; it: var Item) =
     semExpr c, a
     it.n = a.n
   wantParRi c, it.n
-  combineType it.typ, c.types.voidType
+  producesVoid c, it.typ
 
 proc semYield(c: var SemContext; it: var Item) =
   takeToken c, it.n
@@ -1682,7 +1694,7 @@ proc semYield(c: var SemContext; it: var Item) =
     semExpr c, a
     it.n = a.n
   wantParRi c, it.n
-  combineType it.typ, c.types.voidType
+  producesVoid c, it.typ
 
 proc semTypeSection(c: var SemContext; n: var Cursor) =
   let declStart = c.dest.len
@@ -1781,7 +1793,7 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
       of YieldS: semYield c, it
       of TypeS:
         semTypeSection c, it.n
-        combineType it.typ, c.types.voidType
+        producesVoid c, it.typ
       of BlockS, ForS, CaseS, TemplateS:
         discard "XXX to implement"
     of FalseX, TrueX:

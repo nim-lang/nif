@@ -41,6 +41,9 @@ proc parRiToken*(info: PackedLineInfo): PackedToken {.inline.} =
 proc addToken*[L](tree: var seq[PackedToken]; kind: TokenKind; id: L; info: PackedLineInfo) =
   tree.add PackedToken(x: toX(kind, uint32(id)), info: info)
 
+proc copyKeepLineInfo*(dest: var PackedToken; src: PackedToken) {.inline.} =
+  dest.x = src.x
+
 type
   StrId* = distinct uint32
   SymId* = distinct uint32

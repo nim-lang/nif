@@ -119,6 +119,10 @@ proc `[]`*(b: TokenBuf; i: int): PackedToken {.inline.} =
   assert i >= 0 and i < b.len
   result = b.data[i]
 
+proc `[]`*(b: var TokenBuf; i: int): var PackedToken {.inline.} =
+  assert i >= 0 and i < b.len
+  result = b.data[i]
+
 proc `[]=`*(b: TokenBuf; i: int; val: PackedToken) {.inline.} =
   assert i >= 0 and i < b.len
   b.data[i] = val
