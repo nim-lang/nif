@@ -305,6 +305,35 @@ proc typeToCanon(c: var SemContext; start: int): string =
       result.add " f"
       result.addInt c.dest[i].floatId.int
 
+proc sameTrees(a, b: TypeCursor): bool =
+  var a = a
+  var b = b
+  var nested = 0
+  while true:
+    if a.kind != b.kind: return false
+    case a.kind
+    of ParLe:
+      if a.tagId != b.tagId: return false
+      inc nested
+    of ParRi:
+      dec nested
+      if nested == 0: return true
+    of Symbol, SymbolDef:
+      if a.symId != b.symId: return false
+    of IntLit:
+      if a.intId != b.intId: return false
+    of UIntLit:
+      if a.uintId != b.uintId: return false
+    of FloatLit:
+      if a.floatId != b.floatId: return false
+    of StringLit, Ident:
+      if a.litId != b.litId: return false
+    of CharLit, UnknownToken:
+      if a.uoperand != b.uoperand: return false
+    of DotToken, EofToken: discard "nothing else to compare"
+    inc a
+    inc b
+
 proc typeToCursor(c: var SemContext; start: int): TypeCursor =
   let key = typeToCanon(c, start)
   if c.typeMem.hasKey(key):
@@ -639,12 +668,22 @@ proc parseFile(nimFile: string): TokenBuf =
 
 proc semStmt(c: var SemContext; n: var Cursor)
 
-proc combineType(dest: var Cursor; src: Cursor) =
+proc typeMismatch(c: var SemContext; info: PackedLineInfo; got, expected: TypeCursor) =
+  c.buildErr info, "type mismatch: got: " & typeToString(got) & " but wanted: " & typeToString(expected)
+
+proc combineType(c: var SemContext; info: PackedLineInfo; dest: var Cursor; src: Cursor) =
   if typeKind(dest) == AutoT:
     dest = src
+  elif sameTrees(dest, src):
+    discard "fine"
+  else:
+    c.typeMismatch info, src, dest
 
-proc producesVoid(c: var SemContext; typ: var Cursor) =
-  combineType typ, c.types.voidType
+proc producesVoid(c: var SemContext; info: PackedLineInfo; dest: var Cursor) =
+  if typeKind(dest) in {AutoT, VoidT}:
+    combineType c, info, dest, c.types.voidType
+  else:
+    c.typeMismatch info, c.types.voidType, dest
 
 proc getFile(c: var SemContext; info: PackedLineInfo): string =
   let (fid, _, _) = unpack(pool.man, info)
@@ -686,7 +725,7 @@ proc semInclude(c: var SemContext; it: var Item) =
         m.add f2
         c.buildErr info, "recursive include: " & m
 
-  producesVoid c, it.typ
+  producesVoid c, info, it.typ
 
 proc importSingleFile(c: var SemContext; f1, origin: string; info: PackedLineInfo) =
   let f2 = resolveFile(c, origin, f1)
@@ -723,7 +762,7 @@ proc semImport(c: var SemContext; it: var Item) =
     for f in files:
       importSingleFile c, f, origin, info
 
-  producesVoid c, it.typ
+  producesVoid c, info, it.typ
 
 # -------------------- declare `result` -------------------------
 
@@ -739,6 +778,7 @@ proc declareResult(c: var SemContext; info: PackedLineInfo): SymId =
                 pos: c.dest.len)
     discard c.currentScope.addNonOverloadable(name, s)
 
+    let declStart = c.dest.len
     buildTree c.dest, ResultS, info:
       c.dest.add toToken(SymbolDef, result, info) # name
       c.dest.addDotToken() # export marker
@@ -746,6 +786,7 @@ proc declareResult(c: var SemContext; info: PackedLineInfo): SymId =
       # XXX ^ pragma should be `.noinit` if the proc decl has it
       c.dest.copyTree(c.routine.returnType) # type
       c.dest.addDotToken() # value
+    publish c, result, declStart
   else:
     result = SymId(0)
 
@@ -1075,7 +1116,7 @@ proc semCall(c: var SemContext; it: var Item) =
   if idx >= 0:
     c.addFn m[idx].fn.n, args
     c.dest.add m[idx].args
-    combineType it.typ, m[idx].returnType
+    combineType c, callNode.info, it.typ, m[idx].returnType
   elif idx == -2:
     buildErr c, callNode.info, "ambiguous call"
   elif m.len > 0:
@@ -1139,7 +1180,7 @@ proc semDot(c: var SemContext; it: var Item; mode: DotExprMode) =
         if field.level >= 0:
           c.dest.add toToken(Symbol, field.sym, info)
           c.dest.add toToken(IntLit, pool.integers.getOrIncl(field.level), info)
-          combineType it.typ, field.typ
+          combineType c, info, it.typ, field.typ
           isMatch = true
         else:
           c.buildErr it.n.info, "undeclared field: " & pool.strings[fieldName]
@@ -1153,6 +1194,7 @@ proc semDot(c: var SemContext; it: var Item; mode: DotExprMode) =
   wantParRi c, it.n
 
 proc semWhile(c: var SemContext; it: var Item) =
+  let info = it.n.info
   takeToken c, it.n
   semBoolExpr c, it
   inc c.routine.inLoop
@@ -1160,16 +1202,17 @@ proc semWhile(c: var SemContext; it: var Item) =
     semStmt c, it.n
   dec c.routine.inLoop
   wantParRi c, it.n
-  producesVoid c, it.typ
+  producesVoid c, info, it.typ
 
 proc semBreak(c: var SemContext; it: var Item) =
+  let info = it.n.info
   takeToken c, it.n
   if c.routine.inLoop+c.routine.inBlock == 0:
     buildErr c, it.n.info, "`break` only possible within a `while` or `block` statement"
   else:
     wantDot c, it.n
   wantParRi c, it.n
-  producesVoid c, it.typ
+  producesVoid c, info, it.typ
 
 proc wantExportMarker(c: var SemContext; n: var Cursor) =
   if n.kind == DotToken:
@@ -1494,8 +1537,9 @@ proc semLocal(c: var SemContext; n: var Cursor; kind: SymKind) =
   publish c, delayed.s.name, declStart
 
 proc semLocal(c: var SemContext; it: var Item; kind: SymKind) =
+  let info = it.n.info
   semLocal c, it.n, kind
-  producesVoid c, it.typ
+  producesVoid c, info, it.typ
 
 proc semGenericParam(c: var SemContext; n: var Cursor) =
   if n == "typevar":
@@ -1543,6 +1587,7 @@ proc addReturnResult(c: var SemContext; resId: SymId; info: PackedLineInfo) =
     c.dest.addParRi() # add it back
 
 proc semProc(c: var SemContext; it: var Item; kind: SymKind) =
+  let info = it.n.info
   let declStart = c.dest.len
   takeToken c, it.n
   let symId = declareOverloadableSym(c, it, kind)
@@ -1584,15 +1629,17 @@ proc semProc(c: var SemContext; it: var Item; kind: SymKind) =
   finally:
     c.routine = c.routine.parent
   wantParRi c, it.n
-  producesVoid c, it.typ
+  producesVoid c, info, it.typ
   publish c, symId, declStart
 
 proc semStmts(c: var SemContext; it: var Item) =
+  var info = it.n.info
   takeToken c, it.n
   while it.n.kind != ParRi:
+    info = it.n.info
     semStmt c, it.n
   wantParRi c, it.n
-  producesVoid c, it.typ
+  producesVoid c, info, it.typ
 
 proc semExprSym(c: var SemContext; it: var Item; s: Sym; flags: set[SemFlag]) =
   if s.kind == NoSym:
@@ -1621,24 +1668,27 @@ proc semExprSym(c: var SemContext; it: var Item; s: Sym; flags: set[SemFlag]) =
       it.typ = c.types.autoType
 
 proc semAsgn(c: var SemContext; it: var Item) =
+  let info = it.n.info
   takeToken c, it.n
   var a = Item(n: it.n, typ: c.types.autoType)
   semExpr c, a # infers type of `left-hand-side`
   semExpr c, a # ensures type compatibility with `left-hand-side`
   it.n = a.n
   wantParRi c, it.n
-  producesVoid c, it.typ
+  producesVoid c, info, it.typ
 
 proc semEmit(c: var SemContext; it: var Item) =
+  let info = it.n.info
   takeToken c, it.n
   while it.n.kind != ParRi:
     var a = Item(n: it.n, typ: c.types.autoType)
     semExpr c, a
     it.n = a.n
   wantParRi c, it.n
-  producesVoid c, it.typ
+  producesVoid c, info, it.typ
 
 proc semDiscard(c: var SemContext; it: var Item) =
+  let info = it.n.info
   takeToken c, it.n
   if it.n.kind == DotToken:
     takeToken c, it.n
@@ -1649,9 +1699,10 @@ proc semDiscard(c: var SemContext; it: var Item) =
     if classifyType(c, it.typ) == VoidT:
       buildErr c, it.n.info, "expression of type `" & typeToString(it.typ) & "` must not be discarded"
   wantParRi c, it.n
-  producesVoid c, it.typ
+  producesVoid c, info, it.typ
 
 proc semIf(c: var SemContext; it: var Item) =
+  let info = it.n.info
   takeToken c, it.n
   if it.n.substructureKind == ElifS:
     while it.n.substructureKind == ElifS:
@@ -1668,9 +1719,10 @@ proc semIf(c: var SemContext; it: var Item) =
       semStmt c, it.n
     wantParRi c, it.n
   wantParRi c, it.n
-  producesVoid c, it.typ
+  producesVoid c, info, it.typ
 
 proc semReturn(c: var SemContext; it: var Item) =
+  let info = it.n.info
   takeToken c, it.n
   if c.routine.kind == NoSym:
     buildErr c, it.n.info, "`return` only allowed within a routine"
@@ -1681,9 +1733,10 @@ proc semReturn(c: var SemContext; it: var Item) =
     semExpr c, a
     it.n = a.n
   wantParRi c, it.n
-  producesVoid c, it.typ
+  producesVoid c, info, it.typ
 
 proc semYield(c: var SemContext; it: var Item) =
+  let info = it.n.info
   takeToken c, it.n
   if c.routine.kind != IterY:
     buildErr c, it.n.info, "`yield` only allowed within an `iterator`"
@@ -1694,7 +1747,7 @@ proc semYield(c: var SemContext; it: var Item) =
     semExpr c, a
     it.n = a.n
   wantParRi c, it.n
-  producesVoid c, it.typ
+  producesVoid c, info, it.typ
 
 proc semTypeSection(c: var SemContext; n: var Cursor) =
   let declStart = c.dest.len
@@ -1732,19 +1785,19 @@ proc semTypeSection(c: var SemContext; n: var Cursor) =
 proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
   case it.n.kind
   of IntLit:
-    combineType it.typ, c.types.intType
+    combineType c, it.n.info, it.typ, c.types.intType
     takeToken c, it.n
   of UIntLit:
-    combineType it.typ, c.types.uintType
+    combineType c, it.n.info, it.typ, c.types.uintType
     takeToken c, it.n
   of FloatLit:
-    combineType it.typ, c.types.floatType
+    combineType c, it.n.info, it.typ, c.types.floatType
     takeToken c, it.n
   of StringLit:
-    combineType it.typ, c.types.stringType
+    combineType c, it.n.info, it.typ, c.types.stringType
     takeToken c, it.n
   of CharLit:
-    combineType it.typ, c.types.charType
+    combineType c, it.n.info, it.typ, c.types.charType
     takeToken c, it.n
   of Ident:
     let s = semIdent(c, it.n)
@@ -1792,16 +1845,17 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
       of RetS: semReturn c, it
       of YieldS: semYield c, it
       of TypeS:
+        let info = it.n.info
         semTypeSection c, it.n
-        producesVoid c, it.typ
+        producesVoid c, info, it.typ
       of BlockS, ForS, CaseS, TemplateS:
         discard "XXX to implement"
     of FalseX, TrueX:
-      combineType it.typ, c.types.boolType
+      combineType c, it.n.info, it.typ, c.types.boolType
       takeToken c, it.n
       wantParRi c, it.n
     of InfX, NegInfX, NanX:
-      combineType it.typ, c.types.floatType
+      combineType c, it.n.info, it.typ, c.types.floatType
       takeToken c, it.n
       wantParRi c, it.n
     of AndX, OrX:
