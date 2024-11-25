@@ -1847,7 +1847,7 @@ proc writeOutput(c: var SemContext; outfile: string) =
   #b.addHeader "nimony", "nim-sem"
   #b.addRaw toString(c.dest)
   #b.close()
-  writeFile outfile, "(.nif42)\n" & toString(c.dest)
+  writeFile outfile, "(.nif24)\n" & toString(c.dest)
 
 type
   ModuleFlag* = enum
