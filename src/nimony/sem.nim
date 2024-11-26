@@ -1054,6 +1054,10 @@ proc semCall(c: var SemContext; it: var Item) =
       else:
         buildErr c, fn.n.info, "`choice` node does not contain `symbol`"
       inc f
+  elif fn.n.kind == Ident:
+    # error should have been given above already:
+    # buildErr c, fn.n.info, "attempt to call undeclared routine"
+    discard
   else:
     m.add createMatch()
     sigmatch(m[^1], fn, args, emptyNode())
