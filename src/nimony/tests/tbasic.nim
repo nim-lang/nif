@@ -31,3 +31,9 @@ discard foo(global.x, "123")
 
 overloaded()
 overloaded("abc")
+
+proc discardable(x: int): int {.discardable.} =
+  result = x + 7
+
+discardable(123)
+discard discardable(123)

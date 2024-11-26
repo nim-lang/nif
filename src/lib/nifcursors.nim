@@ -100,7 +100,7 @@ proc beginRead*(b: var TokenBuf): Cursor =
   inc b.readers
   result = Cursor(p: addr(b.data[0]), rem: b.len)
 
-proc endRead*(b: var TokenBuf; c: Cursor) =
+proc endRead*(b: var TokenBuf) =
   assert b.readers > 0, "unpaired endRead"
   dec b.readers
   if b.readers == 0: thaw(b)

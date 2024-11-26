@@ -176,6 +176,8 @@ type
     Selectany = "selectany"
     Threadvar = "threadvar"
     Globalvar = "global"
+    Discardable = "discardable"
+    NoReturn = "noreturn"
 
   SubstructureKind* = enum
     NoSub

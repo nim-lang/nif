@@ -499,7 +499,7 @@ proc wantParRi(c: var SemContext; n: var Cursor) =
   else:
     error "expected ')', but got: ", n
 
-proc skipParRi(c: var SemContext; n: var Cursor) =
+proc skipParRi(n: var Cursor) =
   if n.kind == ParRi:
     inc n
   else:
@@ -926,13 +926,123 @@ proc semProcBody(c: var SemContext; itB: var Item) =
     buildErr c, itB.n.info, "proc body as expression not implemented"
   itB.n = it.n
 
+proc implicitlyDiscardable(n: Cursor): bool =
+  template checkBranch(branch) =
+    if not implicitlyDiscardable(branch):
+      return false
+
+  var it = n
+  #const
+  #  skipForDiscardable = {nkStmtList, nkStmtListExpr,
+  #    nkOfBranch, nkElse, nkFinally, nkExceptBranch,
+  #    nkElifBranch, nkElifExpr, nkElseExpr, nkBlockStmt, nkBlockExpr,
+  #    nkHiddenStdConv, nkHiddenSubConv, nkHiddenDeref}
+  while it.kind == ParLe and stmtKind(it) in {StmtsS, BlockS}:
+    inc it
+    var last = it
+    while true:
+      skip it
+      if it.kind == ParRi:
+        it = last
+        break
+      else:
+        last = it
+
+  if it.kind != ParLe: return false
+  case stmtKind(it)
+  of IfS:
+    inc it
+    while it.kind != ParRi:
+      case it.substructureKind
+      of ElifS:
+        inc it
+        skip it # condition
+        checkBranch(it)
+        skip it
+        skipParRi it
+      of ElseS:
+        inc it
+        checkBranch(it)
+        skip it
+        skipParRi it
+      else:
+        error "illformed AST: `elif` or `else` inside `if` expected, got ", it
+    # all branches are discardable
+    result = true
+  of CaseS:
+    inc it
+    while it.kind != ParRi:
+      case it.substructureKind
+      of OfS:
+        inc it
+        skip it # ranges
+        checkBranch(it)
+        skip it
+        skipParRi it
+      of ElifS:
+        inc it
+        skip it # condition
+        checkBranch(it)
+        skip it
+        skipParRi it
+      of ElseS:
+        inc it
+        checkBranch(it)
+        skip it
+        skipParRi it
+      else:
+        error "illformed AST: `of`, `elif` or `else` inside `case` expected, got ", it
+    # all branches are discardable
+    result = true
+  #of TryS:
+  #  checkBranch(it[0])
+  #  for i in 1 ..< it.len:
+  #    let branch = it[i]
+  #    if branch.kind != nkFinally:
+  #      checkBranch(branch[^1])
+  #  # all branches are discardable
+  #  result = true
+  of CallS, CmdS:
+    inc it
+    if it.kind == Symbol:
+      let sym = tryLoadSym(it.symId)
+      if sym.status == LacksNothing:
+        var decl = sym.decl
+        if isRoutine(symKind(decl)):
+          inc decl
+          skip decl # name
+          skip decl # exported
+          skip decl # pattern
+          skip decl # typevars
+          skip decl # params
+          skip decl # retType
+          # decl should now be pragmas:
+          inc decl
+          while decl.kind != ParRi:
+            if pragmaKind(decl) in {Discardable, NoReturn}:
+              return true
+            skip decl
+    result = false
+  of RetS, BreakS: # XXX also `continue` and `raise`
+    result = true
+  else:
+    result = false
+
 proc semStmt(c: var SemContext; n: var Cursor) =
   var it = Item(n: n, typ: c.types.autoType)
+  let exPos = c.dest.len
   semExpr c, it
   if classifyType(c, it.typ) in {NoType, VoidT, AutoT}:
     discard "ok"
   else:
-    buildErr c, n.info, "expression of type `" & typeToString(it.typ) & "` must be discarded"
+    # analyze the expression that was just produced:
+    let ex = cursorAt(c.dest, exPos)
+    let discardable = implicitlyDiscardable(ex)
+    endRead(c.dest)
+    if discardable:
+      combineType it.typ, c.types.voidType
+    else:
+      buildErr c, n.info, "expression of type `" & typeToString(it.typ) & "` must be discarded"
   n = it.n
 
 template emptyNode(): Cursor =
@@ -1233,8 +1343,9 @@ proc semPragma(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; kin
     inc n
     semConstIntExpr c, n
     wantParRi c, n
-  of Nodecl, Selectany, Threadvar, Globalvar:
+  of Nodecl, Selectany, Threadvar, Globalvar, Discardable, Noreturn:
     c.dest.add toToken(ParLe, pool.tags.getOrIncl($pk), n.info)
+    c.dest.addParRi()
     inc n
 
 proc semPragmas(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; kind: SymKind) =
