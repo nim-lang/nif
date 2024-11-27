@@ -25,7 +25,7 @@ proc fromBuffer*(x: openArray[PackedToken]): Cursor {.inline.} =
   Cursor(p: addr(x[0]), rem: x.len)
 
 proc setSpan*(c: var Cursor; beyondLast: Cursor) {.inline.} =
-  c.rem = cast[int](beyondLast.p) - cast[int](c.p)
+  c.rem = (cast[int](beyondLast.p) - cast[int](c.p)) div sizeof(PackedToken)
 
 proc load*(c: Cursor): PackedToken {.inline.} = c.p[]
 
