@@ -212,6 +212,11 @@
   )
   )
 
+  (proc :foo.escaped . . . (stmts
+    (var :x.m . unsignedX20Qchar.c +12)
+    (call assert.c (eq x.m +12))
+  ))
+
   (proc :main.c . (i +32) (pragmas (errs)) (stmts
     1,1,hello.nim(var :x1.m . (i +32) +12)
     1,2,hello.nim(var :z2.m . (ptr (c +8)) (cast (ptr (c +8)) (suf "hello" "r")))
