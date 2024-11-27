@@ -31,6 +31,9 @@ type
     currentOwner: SymId
     toMangle: Table[SymbolKey, string]
 
+const AtomTokenKinds = {SymbolDef, Symbol, UnknownToken, DotToken, Ident,
+          StringLit, CharLit, IntLit, UIntLit, FloatLit}
+
 proc newNifModule(infile: string): NifModule =
   result = NifModule(stream: nifstreams.open(infile))
   discard processDirectives(result.stream.r)
@@ -404,31 +407,41 @@ proc traverseTypeDecl(e: var EContext; c: var Cursor) =
     e.headers.incl prag.header
   discard setOwner(e, oldOwner)
 
+
+proc wantAtom(e: var EContext; c: var Cursor) =
+  case c.kind
+  of SymbolDef:
+    e.dest.add c
+    e.offer c.symId
+  of Symbol:
+    e.dest.add c
+    e.demand c.symId
+  of UnknownToken, DotToken, Ident, StringLit, CharLit, IntLit, UIntLit, FloatLit:
+    e.dest.add c
+  else:
+    quit "unreachable"
+
 proc traverseExpr(e: var EContext; c: var Cursor) =
-  var nested = 0
-  while true:
-    case c.kind
-    of EofToken: break
-    of ParLe:
-      e.dest.add c
-      inc nested
-    of ParRi: # TODO: refactoring: take the whole statement into consideration
-      if nested == 0:
-        break
-      e.dest.add c
-      dec nested
-      if nested == 0:
-        inc c
-        break
-    of SymbolDef:
-      e.dest.add c
-      e.offer c.symId
-    of Symbol:
-      e.dest.add c
-      e.demand c.symId
-    of UnknownToken, DotToken, Ident, StringLit, CharLit, IntLit, UIntLit, FloatLit:
-      e.dest.add c
+  if c.kind in AtomTokenKinds:
+    wantAtom(e, c)
     inc c
+  else:
+    var nested = 0
+    while true:
+      case c.kind
+      of EofToken: break
+      of ParLe:
+        e.dest.add c
+        inc nested
+      of ParRi:
+        e.dest.add c
+        dec nested
+        if nested == 0:
+          inc c
+          break
+      of AtomTokenKinds:
+        wantAtom(e, c)
+      inc c
 
 proc traverseLocal(e: var EContext; c: var Cursor; tag: string; mode: TraverseMode) =
   let toPatch = e.dest.len
