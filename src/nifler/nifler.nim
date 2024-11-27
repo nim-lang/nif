@@ -23,6 +23,7 @@ Command:
                                         entire configuration of `project.nim`
 
 Options:
+  --portablePaths       keep line information portable accross different OSes
   --force, -f           force a rebuild
   --version             show the version
   --help                show this help
@@ -35,6 +36,7 @@ proc handleCmdLine() =
   var action = ""
   var args: seq[string] = @[]
   var forceRebuild = false
+  var portablePaths = true # false
   for kind, key, val in getopt():
     case kind
     of cmdArgument:
@@ -47,7 +49,8 @@ proc handleCmdLine() =
       of "help", "h": writeHelp()
       of "version", "v": writeVersion()
       of "force", "f": forceRebuild = true
-      else: writeHelp()
+      of "portablepaths": portablePaths = true
+      else: quit(Usage)
     of cmdEnd: assert false, "cannot happen"
 
   case action
@@ -63,7 +66,7 @@ proc handleCmdLine() =
           getLastModificationTime(outp) > getLastModificationTime(inp):
         discard "nothing to do"
       else:
-        parseFile inp, outp
+        parseFile inp, outp, portablePaths
   of "config":
     if args.len == 0:
       quit "'config' command takes a filename"

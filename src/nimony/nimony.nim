@@ -55,7 +55,7 @@ proc processSingleModule(nimFile: string; config: sink NifConfig; moduleFlags: s
   let name = nimFile.splitFile.name
   let src = "nifcache" / name & ".1.nif"
   let dest = "nifcache" / name & ".2.nif"
-  exec quoteShell(nifler) & " p " & quoteShell(nimFile) & " " &
+  exec quoteShell(nifler) & " --portablePaths p " & quoteShell(nimFile) & " " &
     quoteShell(src)
   if fileExists(src):
     semcheck(src, dest, ensureMove config, moduleFlags)
