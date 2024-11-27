@@ -30,7 +30,7 @@ proc escape*(s: string): string =
   result = newStringOfCap(s.len)
   for c in s:
     case c
-    of 'A'..pred('X'), succ('X')..'Z', 'a'..'z', '0'..'9':
+    of 'A'..pred('X'), succ('X')..'Z', 'a'..'z', '0'..'9', '_':
       result.add c
     else:
       result.escape c
