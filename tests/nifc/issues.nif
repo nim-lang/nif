@@ -213,7 +213,7 @@
   )
 
   (proc :foo.escaped . . . (stmts
-    (var :x.m . unsignedX20Qchar.c +12)
+    (var :x.m . unsigned\20char.c +12)
     (call assert.c (eq x.m +12))
   ))
 
@@ -270,6 +270,8 @@
     (call printf.c "success!\0A")
     (lab :L2.c)
     (call assert.c (eq s.cpp +3))
+
+    (call foo.escaped)
 
     (ret +0)
   ))

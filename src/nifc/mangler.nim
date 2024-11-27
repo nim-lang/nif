@@ -10,7 +10,6 @@
 ## Name mangling. See nifc-spec.md for details.
 
 from std / strutils import toOctal, replace, endsWith
-import std/assertions
 
 proc escape(result: var string; c: char) {.inline.} =
   const HexChars = "0123456789ABCDEF"
@@ -20,39 +19,9 @@ proc escape(result: var string; c: char) {.inline.} =
   result.add HexChars[n and 0xF]
   result.add 'Q'
 
-proc getHexChar(c: char): byte =
-  case c
-  of '0'..'9': byte(c) - byte('0')
-  of 'A'..'F': byte(c) - byte('A') + 10
-  else: raiseAssert "invalid hex char " & c
-
-proc escape*(s: string): string =
-  result = newStringOfCap(s.len)
-  for c in s:
-    case c
-    of 'A'..pred('X'), succ('X')..'Z', 'a'..'z', '0'..'9', '_':
-      result.add c
-    else:
-      result.escape c
-
-proc unescape*(s: string): string =
-  var i = 0
-  result = newStringOfCap(s.len)
-  while i < s.len:
-    case s[i]
-    of 'A'..pred('X'), succ('X')..'Z', 'a'..'z', '0'..'9':
-      result.add s[i]
-    of 'X':
-      let b = (getHexChar(s[i + 1]) shr 4) or getHexChar(s[i + 2])
-      result.add char(b)
-      inc i, 3
-    else:
-      raiseAssert "invalid escaped character " & s[i]
-    inc i
-
 proc mangle*(s: string): string =
   if s.len > 2 and s[s.len-2] == '.' and s[s.len-1] == 'c':
-    result = unescape(substr(s, 0, s.len-3))
+    result = substr(s, 0, s.len-3)
   else:
     var i = 0
     result = newStringOfCap(s.len)
