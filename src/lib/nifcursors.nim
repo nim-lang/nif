@@ -25,7 +25,7 @@ proc fromBuffer*(x: openArray[PackedToken]): Cursor {.inline.} =
   Cursor(p: addr(x[0]), rem: x.len)
 
 proc setSpan*(c: var Cursor; beyondLast: Cursor) {.inline.} =
-  c.rem = cast[int](beyondLast.p) - cast[int](c.p)
+  c.rem = (cast[int](beyondLast.p) - cast[int](c.p)) div sizeof(PackedToken)
 
 proc load*(c: Cursor): PackedToken {.inline.} = c.p[]
 
@@ -100,7 +100,7 @@ proc beginRead*(b: var TokenBuf): Cursor =
   inc b.readers
   result = Cursor(p: addr(b.data[0]), rem: b.len)
 
-proc endRead*(b: var TokenBuf; c: Cursor) =
+proc endRead*(b: var TokenBuf) =
   assert b.readers > 0, "unpaired endRead"
   dec b.readers
   if b.readers == 0: thaw(b)
