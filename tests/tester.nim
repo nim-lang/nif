@@ -257,8 +257,6 @@ proc testGear3() =
 testGear3()
 
 proc testNimony() =
-  exec "nim c src/nimony/nimony"
-  for testFile in os.walkPattern("src/nimony/tests/t*.nim"):
-    exec ("src" / "nimony" / "nimony").addFileExt(ExeExt) & " --noSystem m " & quoteShell(testFile)
+  exec "nim c -r src/nimony/tests/tester"
 
 testNimony()

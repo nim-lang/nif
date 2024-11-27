@@ -3,6 +3,8 @@
 
 import std / [syncio, assertions, parseopt, strutils, times, os, osproc, algorithm]
 
+import "../.." / gear2 / modnames
+
 const
   Version = "0.6"
   Usage = "tester - tester tool for Nimony Version " & Version & """
@@ -128,12 +130,20 @@ proc markersToCmdLine(s: seq[LineInfo]): string =
   for x in items(s):
     result.add " --track:" & $x.line & ":" & $x.col & ":" & x.filename
 
+proc execNimony(cmd: string): (string, int) =
+  const nimonyExe = when defined(windows): ".\\nimony.exe" else: "./nimony"
+  result = osproc.execCmdEx(nimonyExe & " " & cmd)
+
+proc generatedFile(orig, ext: string): string =
+  let name = modnames.moduleSuffix(expandFilename orig)
+  result = "nifcache" / name.addFileExt(ext)
+
 proc testFile(c: var TestCounters; file: string; overwrite, useTrack: bool) =
   inc c.total
   var nimonycmd = "m"
   if useTrack:
     nimonycmd.add markersToCmdLine extractMarkers(readFile(file))
-  let (compilerOutput, compilerExitCode) = osproc.execCmdEx("nimony " & nimonycmd & " " & quoteShell(file))
+  let (compilerOutput, compilerExitCode) = execNimony(nimonycmd & " " & quoteShell(file))
 
   let msgs = file.changeFileExt(".msgs")
 
@@ -152,33 +162,27 @@ proc testFile(c: var TestCounters; file: string; overwrite, useTrack: bool) =
   if compilerExitCode == 0:
     let cfile = file.changeFileExt(".nim.c")
     if cfile.fileExists():
-      let (compilerOutput, compilerExitCode) = osproc.execCmdEx("nimony locateC " & quoteShell(file))
-      if compilerExitCode == 0:
-        let nimcacheC = compilerOutput.strip
-        diffFiles c, file, cfile, nimcacheC, overwrite
-      else:
-        failure c, file, "expected a .c file", compilerOutput
+      let nimcacheC = generatedFile(file, ".c")
+      diffFiles c, file, cfile, nimcacheC, overwrite
 
-    let (testProgramOutput, testProgramExitCode) = osproc.execCmdEx(quoteShell file.changeFileExt(ExeExt))
-    if testProgramExitCode != 0:
-      failure c, file, "test program exitcode 0", "exitcode " & $testProgramExitCode
-    let output = file.changeFileExt(".output")
-    if output.fileExists():
-      let outputSpec = readFile(output).strip
-      let success = outputSpec == testProgramOutput.strip
-      if not success:
-        if overwrite:
-          writeFile(output, testProgramOutput)
-        failure c, file, outputSpec, testProgramOutput
+    when false:
+      # XXX Enable when we have a code generator
+      let (testProgramOutput, testProgramExitCode) = osproc.execCmdEx(quoteShell file.changeFileExt(ExeExt))
+      if testProgramExitCode != 0:
+        failure c, file, "test program exitcode 0", "exitcode " & $testProgramExitCode
+      let output = file.changeFileExt(".output")
+      if output.fileExists():
+        let outputSpec = readFile(output).strip
+        let success = outputSpec == testProgramOutput.strip
+        if not success:
+          if overwrite:
+            writeFile(output, testProgramOutput)
+          failure c, file, outputSpec, testProgramOutput
 
-    let ast = file.changeFileExt(".ast")
+    let ast = file.changeFileExt(".nif")
     if ast.fileExists():
-      let (compilerOutput, compilerExitCode) = osproc.execCmdEx("nimony view " & quoteShell(file))
-      if compilerExitCode == 0:
-        let nimcacheAst = compilerOutput.strip
-        diffFiles c, file, ast, nimcacheAst, overwrite
-      else:
-        failure c, file, "expected an .ast file", compilerOutput
+      let nif = generatedFile(file, ".nif")
+      diffFiles c, file, ast, nif, overwrite
 
 proc testDir(c: var TestCounters; dir: string; overwrite, useTrack: bool) =
   var files: seq[string] = @[]
@@ -187,15 +191,16 @@ proc testDir(c: var TestCounters; dir: string; overwrite, useTrack: bool) =
       files.add x.path
   sort files
   for f in items files:
-   testFile c, f, overwrite, useTrack
+    testFile c, f, overwrite, useTrack
 
 proc tests(overwrite: bool) =
   ## Run all the tests in the test-suite.
+  const TestDir = "src/nimony/tests"
   let t0 = epochTime()
   var c = TestCounters(total: 0, failures: 0)
-  for x in walkDir("tests", relative = true):
+  for x in walkDir(TestDir, relative = true):
     if x.kind == pcDir:
-      testDir c, "tests" / x.path, overwrite, (x.path == "track")
+      testDir c, TestDir / x.path, overwrite, (x.path == "track")
   echo c.total - c.failures, " / ", c.total, " tests successful in ", formatFloat(epochTime() - t0, precision=2), "s."
   if c.failures > 0:
     quit "FAILURE: Some tests failed."
@@ -236,7 +241,6 @@ proc record(file, test: string; flags: set[RecordFlag]) =
   if compilerExitCode == 1:
     let idx = compilerOutput.find(ErrorKeyword)
     assert idx >= 0, "compiler output did not contain: " & ErrorKeyword
-    let first = idx + len(ErrorKeyword) + 1
     copyFile file, test
     # run the test again so that the error messages contain the correct paths:
     let (finalCompilerOutput, finalCompilerExitCode) = osproc.execCmdEx("nimony m " & quoteShell(test))
@@ -244,34 +248,29 @@ proc record(file, test: string; flags: set[RecordFlag]) =
     gitAdd test
     addTestSpec test.changeFileExt(".msgs"), finalCompilerOutput
   else:
-    let (testProgramOutput, testProgramExitCode) = osproc.execCmdEx(quoteShell file.changeFileExt(ExeExt))
-    assert testProgramExitCode == 0, "the test program had an invalid exitcode; unsupported"
-    addTestCode test, file
-    addTestSpec test.changeFileExt(".output"), testProgramOutput
+    when false:
+      # XXX We don't have a backend yet so no `.output` files can be extracted
+      let (testProgramOutput, testProgramExitCode) = osproc.execCmdEx(quoteShell file.changeFileExt(ExeExt))
+      assert testProgramExitCode == 0, "the test program had an invalid exitcode; unsupported"
+      addTestCode test, file
+      addTestSpec test.changeFileExt(".output"), testProgramOutput
 
-  if RecordCodegen in flags:
-    let (finalCompilerOutput, finalCompilerExitCode) = osproc.execCmdEx("nimony m " & quoteShell(test))
-    assert finalCompilerExitCode == 0, finalCompilerOutput
-
-    let (compilerOutput, compilerExitCode) = osproc.execCmdEx("nimony locateC " & quoteShell(test))
-    if compilerExitCode == 0:
-      addTestCode test.changeFileExt(".nim.c"), compilerOutput.strip
-    else:
-      quit "expected a .c file, but nimony produced: " & compilerOutput
-
-  if RecordAst in flags:
-    if RecordCodegen notin flags:
+    if {RecordCodegen, RecordAst} * flags != {}:
       let (finalCompilerOutput, finalCompilerExitCode) = osproc.execCmdEx("nimony m " & quoteShell(test))
       assert finalCompilerExitCode == 0, finalCompilerOutput
 
-    let (compilerOutput, compilerExitCode) = osproc.execCmdEx("nimony view " & quoteShell(test))
-    if compilerExitCode == 0:
-      addTestCode test.changeFileExt(".nif"), compilerOutput.strip
-    else:
-      quit "expected an .nif file, but nimony produced: " & compilerOutput
+    if RecordCodegen in flags:
+      let nimcacheC = generatedFile(test, ".c")
+      addTestCode test.changeFileExt(".nim.c"), nimcacheC
+
+    if RecordAst in flags:
+      let nif = generatedFile(test, ".2.nif")
+      addTestCode test.changeFileExt(".nif"), nif
 
 proc buildNimony() =
   exec "nim c src/nimony/nimony.nim"
+  let nimony = "nimony".addFileExt(ExeExt)
+  moveFile "src/nimony/" & nimony, nimony
 
 proc handleCmdLine =
   var primaryCmd = ""
