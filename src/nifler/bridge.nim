@@ -9,7 +9,7 @@
 when defined(nifBench):
   import std / monotimes
 
-import std / [assertions, syncio]
+import std / [assertions, syncio, os]
 
 import compiler / [
   ast, options, pathutils, renderer, lineinfos,
@@ -106,9 +106,13 @@ type
     conf: ConfigRef
     section: string
     b: Builder
+    portablePaths: bool
 
 proc absLineInfo(i: TLineInfo; c: var TranslationContext) =
-  c.b.addLineInfo int32(i.col), int32(i.line), toFullPath(c.conf, i.fileIndex)
+  var fp = toFullPath(c.conf, i.fileIndex)
+  if c.portablePaths:
+    fp = relativePath(fp, getCurrentDir(), '/')
+  c.b.addLineInfo int32(i.col), int32(i.line), fp
 
 proc relLineInfo(n, parent: PNode; c: var TranslationContext;
                  emitSpace = false) =
@@ -534,8 +538,9 @@ proc toNif*(n, parent: PNode; c: var TranslationContext) =
       toNif(n[i], n, c)
     c.b.endTree()
 
-proc initTranslationContext*(conf: ConfigRef; outfile: string): TranslationContext =
-  result = TranslationContext(conf: conf, b: nifbuilder.open(outfile))
+proc initTranslationContext*(conf: ConfigRef; outfile: string; portablePaths: bool): TranslationContext =
+  result = TranslationContext(conf: conf, b: nifbuilder.open(outfile),
+    portablePaths: portablePaths)
 
 proc moduleToIr*(n: PNode; c: var TranslationContext) =
   c.b.addHeader "Nifler", "nim-parsed"
@@ -554,7 +559,7 @@ template bench(task, body) =
   else:
     body
 
-proc parseFile*(thisfile, outfile: string) =
+proc parseFile*(thisfile, outfile: string; portablePaths: bool) =
   let stream = llStreamOpen(AbsoluteFile thisfile, fmRead)
   if stream == nil:
     quit "cannot open file: " & thisfile
@@ -562,7 +567,7 @@ proc parseFile*(thisfile, outfile: string) =
     var conf = createConf()
     var parser: Parser
     openParser(parser, AbsoluteFile(thisfile), stream, newIdentCache(), conf)
-    var tc = initTranslationContext(conf, outfile)
+    var tc = initTranslationContext(conf, outfile, portablePaths)
 
     bench "parseAll":
       let fullTree = parseAll(parser)

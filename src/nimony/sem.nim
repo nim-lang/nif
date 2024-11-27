@@ -656,7 +656,7 @@ proc parseFile(nimFile: string): TokenBuf =
   let nifler = findTool("nifler")
   let name = nimFile.splitFile.name
   let src = "nifcache" / name & ".1.nif"
-  exec quoteShell(nifler) & " p " & quoteShell(nimFile) & " " &
+  exec quoteShell(nifler) & " --portablePaths p " & quoteShell(nimFile) & " " &
     quoteShell(src)
 
   var stream = nifstreams.open(src)
