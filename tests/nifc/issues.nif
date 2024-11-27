@@ -212,6 +212,11 @@
   )
   )
 
+  (proc :foo.escaped . . . (stmts
+    (var :x.m . unsigned\20char.c +12)
+    (call assert.c (eq x.m +12))
+  ))
+
   (proc :main.c . (i +32) (pragmas (errs)) (stmts
     1,1,hello.nim(var :x1.m . (i +32) +12)
     1,2,hello.nim(var :z2.m . (ptr (c +8)) (cast (ptr (c +8)) (suf "hello" "r")))
@@ -265,6 +270,8 @@
     (call printf.c "success!\0A")
     (lab :L2.c)
     (call assert.c (eq s.cpp +3))
+
+    (call foo.escaped)
 
     (ret +0)
   ))
