@@ -1080,6 +1080,7 @@ proc implicitlyDiscardable(n: Cursor): bool =
     result = false
 
 proc semStmt(c: var SemContext; n: var Cursor) =
+  let info = n.info
   var it = Item(n: n, typ: c.types.autoType)
   let exPos = c.dest.len
   semExpr c, it
@@ -1091,9 +1092,9 @@ proc semStmt(c: var SemContext; n: var Cursor) =
     let discardable = implicitlyDiscardable(ex)
     endRead(c.dest)
     if discardable:
-      combineType it.typ, c.types.voidType
+      combineType c, info, it.typ, c.types.voidType
     else:
-      buildErr c, n.info, "expression of type `" & typeToString(it.typ) & "` must be discarded"
+      buildErr c, info, "expression of type `" & typeToString(it.typ) & "` must be discarded"
   n = it.n
 
 template emptyNode(): Cursor =
