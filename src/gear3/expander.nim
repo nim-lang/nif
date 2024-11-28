@@ -608,6 +608,8 @@ proc traverseStmt(e: var EContext; c: var Cursor; mode = TraverseAll) =
       skip c
     of TypeS:
       traverseTypeDecl e, c
+    of ContinueS:
+      error e, "unreachable: ", c
   else:
     error e, "statement expected, but got: ", c
 

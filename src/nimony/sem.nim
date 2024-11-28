@@ -1074,7 +1074,7 @@ proc implicitlyDiscardable(n: Cursor): bool =
               return true
             skip decl
     result = false
-  of RetS, BreakS: # XXX also `continue` and `raise`
+  of RetS, BreakS, ContinueS: # XXX also `raise`
     result = true
   else:
     result = false
@@ -1324,6 +1324,16 @@ proc semBreak(c: var SemContext; it: var Item) =
   takeToken c, it.n
   if c.routine.inLoop+c.routine.inBlock == 0:
     buildErr c, it.n.info, "`break` only possible within a `while` or `block` statement"
+  else:
+    wantDot c, it.n
+  wantParRi c, it.n
+  producesVoid c, info, it.typ
+
+proc semContinue(c: var SemContext; it: var Item) =
+  let info = it.n.info
+  takeToken c, it.n
+  if c.routine.inLoop == 0:
+    buildErr c, it.n.info, "`continue` only possible within a `while` statement"
   else:
     wantDot c, it.n
   wantParRi c, it.n
@@ -1951,6 +1961,7 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
       of ConstS: semLocal c, it, ConstY
       of StmtsS: semStmts c, it
       of BreakS: semBreak c, it
+      of ContinueS: semContinue c, it
       of CallS, CmdS: semCall c, it
       of IncludeS: semInclude c, it
       of ImportS: semImport c, it
