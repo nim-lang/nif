@@ -11,7 +11,7 @@
 import std / [tables, sets, os, syncio, formatfloat, assertions]
 include nifprelude
 import nimony_model, symtabs, builtintypes, decls, symparser,
-  programs, sigmatch, magics, reporters, nifconfig
+  programs, sigmatch, magics, reporters, nifconfig, nifindexes
 
 import ".." / gear2 / modnames
 
@@ -574,10 +574,12 @@ proc filenameVal(n: var Cursor; res: var seq[string]; hasError: var bool) =
   case n.kind
   of StringLit, Ident:
     res.add pool.strings[n.litId]
+    inc n
   of Symbol:
     var s = pool.syms[n.symId]
     extractBasename s
     res.add s
+    inc n
   of ParLe:
     case exprKind(n)
     of OchoiceX, CchoiceX:
@@ -589,7 +591,7 @@ proc filenameVal(n: var Cursor; res: var seq[string]; hasError: var bool) =
       else:
         hasError = true
         inc n
-    of CallX:
+    of CallX, InfixX:
       var x = n
       skip n # ensure we skipped it completely
       inc x
@@ -639,8 +641,10 @@ proc filenameVal(n: var Cursor; res: var seq[string]; hasError: var bool) =
         hasError = true
         inc n
     else:
+      skip n
       hasError = true
   else:
+    skip n
     hasError = true
 
 # ------------------ include/import handling ------------------------
@@ -2041,13 +2045,14 @@ proc writeOutput(c: var SemContext; outfile: string) =
   #b.addRaw toString(c.dest)
   #b.close()
   writeFile outfile, "(.nif24)\n" & toString(c.dest)
+  createIndex outfile
 
 type
   ModuleFlag* = enum
     IsSystem, IsMain, SkipSystem
 
 proc semcheck*(infile, outfile: string; config: sink NifConfig; moduleFlags: set[ModuleFlag]) =
-  var n = setupProgram(infile)
+  var n = setupProgram(infile, outfile)
   var c = SemContext(
     dest: createTokenBuf(),
     types: createBuiltinTypes(),
