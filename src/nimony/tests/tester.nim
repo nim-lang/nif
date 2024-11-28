@@ -4,6 +4,7 @@
 import std / [syncio, assertions, parseopt, strutils, times, os, osproc, algorithm]
 
 import "../.." / gear2 / modnames
+import compiler / pathutils
 
 const
   Version = "0.6"
@@ -144,6 +145,8 @@ proc testFile(c: var TestCounters; file: string; overwrite, useTrack: bool) =
   if useTrack:
     nimonycmd.add markersToCmdLine extractMarkers(readFile(file))
   let (compilerOutput, compilerExitCode) = execNimony(nimonycmd & " " & quoteShell(file))
+
+  echo "TEST ", file, " ->", pathutils.customPath(file)
 
   let msgs = file.changeFileExt(".msgs")
 
