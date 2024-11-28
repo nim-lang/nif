@@ -136,7 +136,7 @@ proc execNimony(cmd: string): (string, int) =
   result = osproc.execCmdEx(nimonyExe & " " & cmd)
 
 proc generatedFile(orig, ext: string): string =
-  let name = modnames.moduleSuffix(expandFilename orig)
+  let name = modnames.moduleSuffix(orig)
   result = "nifcache" / name.addFileExt(ext)
 
 proc testFile(c: var TestCounters; file: string; overwrite, useTrack: bool) =
@@ -145,8 +145,6 @@ proc testFile(c: var TestCounters; file: string; overwrite, useTrack: bool) =
   if useTrack:
     nimonycmd.add markersToCmdLine extractMarkers(readFile(file))
   let (compilerOutput, compilerExitCode) = execNimony(nimonycmd & " " & quoteShell(file))
-
-  echo "TEST ", file, " ->", pathutils.customPath(file)
 
   let msgs = file.changeFileExt(".msgs")
 
