@@ -9,6 +9,7 @@
 import std / [parseopt, sets, strutils, os, assertions, syncio]
 
 import ".." / gear3 / gear3 # only imported to ensure it keeps compiling
+import ".." / gear2 / modnames
 import sem, nifconfig
 
 const
@@ -52,7 +53,7 @@ proc requiresTool(tool, src: string; forceRebuild: bool) =
 
 proc processSingleModule(nimFile: string; config: sink NifConfig; moduleFlags: set[ModuleFlag]) =
   let nifler = findTool("nifler")
-  let name = nimFile.splitFile.name
+  let name = moduleSuffix(nimFile)
   let src = "nifcache" / name & ".1.nif"
   let dest = "nifcache" / name & ".2.nif"
   exec quoteShell(nifler) & " --portablePaths p " & quoteShell(nimFile) & " " &

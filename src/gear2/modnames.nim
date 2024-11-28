@@ -33,7 +33,7 @@ proc uhash(s: string): UHash =
 
 # ------------------------------------------
 
-from os import splitFile
+from os import splitFile, isAbsolute, getCurrentDir, `/`
 
 proc extractModulename(x: string): string = splitFile(x).name
 
@@ -43,8 +43,8 @@ const
 const
   Base36 = "0123456789abcdefghijklmnopqrstuvwxyz"
 
-proc moduleSuffix*(fullPath: string): string =
-  let f = pathutils.customPath(fullPath)
+proc moduleSuffix*(path: string): string =
+  let f = pathutils.customPath(if path.isAbsolute: path else: getCurrentDir() / path)
   let m = extractModulename(f)
   var id = uhash(f)
   result = newStringOfCap(10)

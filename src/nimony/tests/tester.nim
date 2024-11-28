@@ -252,9 +252,9 @@ proc record(file, test: string; flags: set[RecordFlag]) =
       # XXX We don't have a backend yet so no `.output` files can be extracted
       let (testProgramOutput, testProgramExitCode) = osproc.execCmdEx(quoteShell file.changeFileExt(ExeExt))
       assert testProgramExitCode == 0, "the test program had an invalid exitcode; unsupported"
-      addTestCode test, file
       addTestSpec test.changeFileExt(".output"), testProgramOutput
 
+    addTestCode test, file
     if {RecordCodegen, RecordAst} * flags != {}:
       let (finalCompilerOutput, finalCompilerExitCode) = osproc.execCmdEx("nimony m " & quoteShell(test))
       assert finalCompilerExitCode == 0, finalCompilerOutput

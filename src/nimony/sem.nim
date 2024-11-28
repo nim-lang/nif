@@ -654,7 +654,7 @@ proc exec*(cmd: string) =
 
 proc parseFile(nimFile: string): TokenBuf =
   let nifler = findTool("nifler")
-  let name = nimFile.splitFile.name
+  let name = moduleSuffix(nimFile)
   let src = "nifcache" / name & ".1.nif"
   exec quoteShell(nifler) & " --portablePaths p " & quoteShell(nimFile) & " " &
     quoteShell(src)
