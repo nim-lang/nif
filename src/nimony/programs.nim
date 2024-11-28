@@ -27,17 +27,16 @@ var
 proc newNifModule(infile: string): NifModule =
   result = NifModule(stream: nifstreams.open(infile))
   discard processDirectives(result.stream.r)
-
   result.buf = fromStream(result.stream)
-  let indexName = infile.changeFileExt".idx.nif"
-  if not fileExists(indexName) or getLastModificationTime(indexName) < getLastModificationTime(infile):
-    createIndex infile
-  result.index = readIndex(indexName)
 
 proc load*(suffix: string): NifModule =
   if not prog.mods.hasKey(suffix):
     let infile = prog.dir / suffix & prog.ext
     result = newNifModule(infile)
+    let indexName = infile.changeFileExt".idx.nif"
+    #if not fileExists(indexName) or getLastModificationTime(indexName) < getLastModificationTime(infile):
+    #  createIndex infile
+    result.index = readIndex(indexName)
     prog.mods[suffix] = result
   else:
     result = prog.mods[suffix]
@@ -109,8 +108,9 @@ proc splitModulePath(s: string): (string, string, string) =
     main.setLen dotPos
   result = (dir, main, ext)
 
-proc setupProgram*(infile: string): Cursor =
-  let (dir, file, ext) = splitModulePath(infile)
+proc setupProgram*(infile, outfile: string): Cursor =
+  let (dir, file, _) = splitModulePath(infile)
+  let (_, _, ext) = splitModulePath(outfile)
   prog.dir = (if dir.len == 0: getCurrentDir() else: dir)
   prog.ext = ext
   prog.main = file

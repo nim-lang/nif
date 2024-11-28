@@ -81,6 +81,7 @@ proc open*(filename: string): Reader =
   let f = try:
       memfiles.open(filename)
     except:
+      when defined(debug): writeStackTrace()
       quit "cannot open: " & filename
   result = Reader(f: f, p: nil)
   result.p = cast[pchar](result.f.mem)
