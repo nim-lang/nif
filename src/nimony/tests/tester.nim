@@ -181,7 +181,7 @@ proc testFile(c: var TestCounters; file: string; overwrite, useTrack: bool) =
 
     let ast = file.changeFileExt(".nif")
     if ast.fileExists():
-      let nif = generatedFile(file, ".nif")
+      let nif = generatedFile(file, ".2.nif")
       diffFiles c, file, ast, nif, overwrite
 
 proc testDir(c: var TestCounters; dir: string; overwrite, useTrack: bool) =
