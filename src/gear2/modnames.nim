@@ -45,7 +45,8 @@ const
   Base36 = "0123456789abcdefghijklmnopqrstuvwxyz"
 
 proc moduleSuffix*(path: string): string =
-  let f = when defined(windows): path.replace('\\', '/') else: path
+  let f = relativePath(path, getCurrentDir(), '/')
+  #when defined(windows): path.replace('\\', '/') else: path
   #pathutils.customPath(path)
   let m = extractModulename(f)
   var id = uhash(f)
