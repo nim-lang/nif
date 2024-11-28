@@ -22,6 +22,7 @@ type
     BlockS = "block"
     IfS = "if"
     BreakS = "break"
+    ContinueS = "continue"
     WhileS = "while"
     ForS = "for"
     CaseS = "case"
