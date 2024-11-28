@@ -652,9 +652,9 @@ proc findTool*(name: string): string =
 proc exec*(cmd: string) =
   if execShellCmd(cmd) != 0: quit("FAILURE: " & cmd)
 
-proc parseFile(nimFile: string): TokenBuf =
+proc parseFile(nimFile: string; paths: openArray[string]): TokenBuf =
   let nifler = findTool("nifler")
-  let name = nimFile.splitFile.name
+  let name = moduleSuffix(nimFile, paths)
   let src = "nifcache" / name & ".1.nif"
   exec quoteShell(nifler) & " --portablePaths p " & quoteShell(nimFile) & " " &
     quoteShell(src)
@@ -711,7 +711,7 @@ proc semInclude(c: var SemContext; it: var Item) =
           break
 
       if not isRecursive:
-        var buf = parseFile f2
+        var buf = parseFile(f2, c.g.config.paths)
         c.includeStack.add f2
         #c.m.includes.add f2
         var n = cursorAt(buf, 0)
@@ -729,7 +729,7 @@ proc semInclude(c: var SemContext; it: var Item) =
 
 proc importSingleFile(c: var SemContext; f1, origin: string; info: PackedLineInfo) =
   let f2 = resolveFile(c, origin, f1)
-  let suffix = moduleSuffix(f2)
+  let suffix = moduleSuffix(f2, c.g.config.paths)
   if not c.processedModules.containsOrIncl(suffix):
     loadInterface suffix, c.importTab
 

@@ -33,7 +33,8 @@ proc uhash(s: string): UHash =
 
 # ------------------------------------------
 
-from os import splitFile
+from std / os import splitFile, relativePath, isAbsolute, getCurrentDir, `/`
+from std / strutils import replace
 
 proc extractModulename(x: string): string = splitFile(x).name
 
@@ -43,8 +44,15 @@ const
 const
   Base36 = "0123456789abcdefghijklmnopqrstuvwxyz"
 
-proc moduleSuffix*(fullPath: string): string =
-  let f = pathutils.customPath(fullPath)
+proc moduleSuffix*(path: string; searchPaths: openArray[string]): string =
+  var f = relativePath(path, getCurrentDir(), '/')
+  # Select the path that is shortest relative to the searchPath:
+  for s in searchPaths:
+    let candidate = relativePath(path, s, '/')
+    if candidate.len < f.len:
+      f = candidate
+  #when defined(windows): path.replace('\\', '/') else: path
+  #pathutils.customPath(path)
   let m = extractModulename(f)
   var id = uhash(f)
   result = newStringOfCap(10)
