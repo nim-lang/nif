@@ -44,8 +44,13 @@ const
 const
   Base36 = "0123456789abcdefghijklmnopqrstuvwxyz"
 
-proc moduleSuffix*(path: string): string =
-  let f = relativePath(path, getCurrentDir(), '/')
+proc moduleSuffix*(path: string; searchPaths: openArray[string]): string =
+  var f = relativePath(path, getCurrentDir(), '/')
+  # Select the path that is shortest relative to the searchPath:
+  for s in searchPaths:
+    let candidate = relativePath(path, s, '/')
+    if candidate.len < f.len:
+      f = candidate
   #when defined(windows): path.replace('\\', '/') else: path
   #pathutils.customPath(path)
   let m = extractModulename(f)

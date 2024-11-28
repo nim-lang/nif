@@ -136,7 +136,7 @@ proc execNimony(cmd: string): (string, int) =
   result = osproc.execCmdEx(nimonyExe & " " & cmd)
 
 proc generatedFile(orig, ext: string): string =
-  let name = modnames.moduleSuffix(orig)
+  let name = modnames.moduleSuffix(orig, [])
   result = "nifcache" / name.addFileExt(ext)
 
 proc testFile(c: var TestCounters; file: string; overwrite, useTrack: bool) =

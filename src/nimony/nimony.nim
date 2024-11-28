@@ -53,7 +53,7 @@ proc requiresTool(tool, src: string; forceRebuild: bool) =
 
 proc processSingleModule(nimFile: string; config: sink NifConfig; moduleFlags: set[ModuleFlag]) =
   let nifler = findTool("nifler")
-  let name = moduleSuffix(nimFile)
+  let name = moduleSuffix(nimFile, config.paths)
   let src = "nifcache" / name & ".1.nif"
   let dest = "nifcache" / name & ".2.nif"
   exec quoteShell(nifler) & " --portablePaths p " & quoteShell(nimFile) & " " &
