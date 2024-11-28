@@ -44,7 +44,7 @@ const
   Base36 = "0123456789abcdefghijklmnopqrstuvwxyz"
 
 proc moduleSuffix*(path: string): string =
-  let f = pathutils.customPath(if path.isAbsolute: path else: getCurrentDir() / path)
+  let f = pathutils.customPath(path) #(if path.isAbsolute: path else: getCurrentDir() / path)
   let m = extractModulename(f)
   var id = uhash(f)
   result = newStringOfCap(10)
