@@ -336,6 +336,11 @@ proc singleArg(m: var Match; f: var Cursor; arg: Item) =
       var a = skipModifier(arg.typ)
       linearMatch m, f, a
       expectParRi m, f
+    of TypedescT:
+      # do not skip modifier
+      var a = arg.typ
+      linearMatch m, f, a
+      expectParRi m, f
     else:
       m.error "BUG: unhandled type: " & pool.tags[f.tagId]
   else:
