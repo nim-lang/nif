@@ -724,7 +724,7 @@ proc semInclude(c: var SemContext; it: var Item) =
       else:
         var m = ""
         for i in 0..<c.includeStack.len:
-          m.add c.includeStack[i]
+          m.add shortenDir c.includeStack[i]
           m.add " -> "
         m.add f2
         c.buildErr info, "recursive include: " & m
