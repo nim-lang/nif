@@ -726,7 +726,7 @@ proc semInclude(c: var SemContext; it: var Item) =
         for i in 0..<c.includeStack.len:
           m.add shortenDir c.includeStack[i]
           m.add " -> "
-        m.add f2
+        m.add shortenDir f2
         c.buildErr info, "recursive include: " & m
 
   producesVoid c, info, it.typ
@@ -2024,7 +2024,7 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
 proc reportErrors(c: var SemContext): int =
   let errTag = pool.tags.getOrIncl("err")
   var i = 0
-  var r = Reporter(verbosity: 2)
+  var r = Reporter(verbosity: 2, noColors: not useColors())
   result = 0
   while i < c.dest.len:
     if c.dest[i].kind == ParLe and c.dest[i].tagId == errTag:

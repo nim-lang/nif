@@ -22,9 +22,12 @@ type
     warnings*: int
     errors*: int
 
+proc useColors*(): bool = terminal.isatty(stdout)
+
 proc writeMessage(c: var Reporter; category: string; p, arg: string) =
   var msg = p
   msg.add ' '
+  msg.add category
   msg.add arg
   stdout.writeLine msg
 
