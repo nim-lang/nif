@@ -735,6 +735,9 @@ proc importSingleFile(c: var SemContext; f1, origin: string; info: PackedLineInf
   let f2 = resolveFile(c, origin, f1)
   let suffix = moduleSuffix(f2, c.g.config.paths)
   if not c.processedModules.containsOrIncl(suffix):
+    if needsRecompile(f2, suffix):
+      exec os.getAppFilename() & " m " & quoteShell(f2)
+
     loadInterface suffix, c.importTab
 
 proc cyclicImport(c: var SemContext; x: var Cursor) =

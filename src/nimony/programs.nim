@@ -29,9 +29,16 @@ proc newNifModule(infile: string): NifModule =
   discard processDirectives(result.stream.r)
   result.buf = fromStream(result.stream)
 
+proc suffixToNif*(suffix: string): string {.inline.} =
+  prog.dir / suffix & prog.ext
+
+proc needsRecompile*(nimfile, suffix: string): bool =
+  let nifModule = suffixToNif(suffix)
+  result =  not fileExists(nifModule) or getLastModificationTime(nifModule) < getLastModificationTime(nimfile)
+
 proc load*(suffix: string): NifModule =
   if not prog.mods.hasKey(suffix):
-    let infile = prog.dir / suffix & prog.ext
+    let infile = suffixToNif suffix
     result = newNifModule(infile)
     let indexName = infile.changeFileExt".idx.nif"
     #if not fileExists(indexName) or getLastModificationTime(indexName) < getLastModificationTime(infile):
