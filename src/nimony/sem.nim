@@ -1787,7 +1787,8 @@ proc semExprSym(c: var SemContext; it: var Item; s: Sym; flags: set[SemFlag]) =
     it.typ = c.types.autoType
   elif s.kind in {TypeY, TypevarY}:
     let start = c.dest.len
-    c.dest.buildTree(TypedescT, it.n.info):
+    c.dest.buildTree TypedescT, it.n.info:
+      c.dest.add toToken(Symbol, s.name, it.n.info)
       semTypeSym c, s, it.n.info
     it.typ = typeToCursor(c, start)
     c.dest.shrink start
