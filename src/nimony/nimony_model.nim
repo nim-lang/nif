@@ -30,7 +30,7 @@ type
     YieldS = "yld"
     ProcS = "proc"
     FuncS = "func"
-    IterS = "iter"
+    IterS = "iterator"
     ConverterS = "converter"
     MethodS = "method"
     MacroS = "macro"
