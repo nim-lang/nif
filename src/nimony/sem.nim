@@ -2070,3 +2070,5 @@ proc semcheck*(infile, outfile: string; config: sink NifConfig; moduleFlags: set
   instantiateGenerics c
   if reportErrors(c) == 0:
     writeOutput c, outfile
+  else:
+    quit 1
