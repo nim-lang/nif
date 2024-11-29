@@ -37,3 +37,26 @@ proc discardable(x: int): int {.discardable.} =
 
 discardable(123)
 discard discardable(123)
+
+proc foo_block* =
+  var x = 12
+  x = 3
+
+  block lab:
+    var s = 12
+    break lab
+
+  block:
+    var s = 13
+    break
+
+  block lab:
+    var s = 14
+    break lab
+
+  block late:
+    block lab:
+      var s = 12
+      break lab
+    block lab2:
+      break late

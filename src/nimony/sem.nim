@@ -1324,13 +1324,38 @@ proc semWhile(c: var SemContext; it: var Item) =
   wantParRi c, it.n
   producesVoid c, info, it.typ
 
+proc semBlock(c: var SemContext; it: var Item) =
+  let info = it.n.info
+  takeToken c, it.n
+
+  inc c.routine.inBlock
+  withNewScope c:
+    if it.n.kind == DotToken:
+      takeToken c, it.n
+    else:
+      let declStart = c.dest.len
+      let delayed = handleSymDef(c, it.n, LabelY)
+      c.addSym delayed
+      publish c, delayed.s.name, declStart
+
+    semStmt c, it.n
+  dec c.routine.inBlock
+
+  wantParRi c, it.n
+  producesVoid c, info, it.typ
+
 proc semBreak(c: var SemContext; it: var Item) =
   let info = it.n.info
   takeToken c, it.n
   if c.routine.inLoop+c.routine.inBlock == 0:
     buildErr c, it.n.info, "`break` only possible within a `while` or `block` statement"
   else:
-    wantDot c, it.n
+    if it.n.kind == DotToken:
+      wantDot c, it.n
+    else:
+      var a = Item(n: it.n, typ: c.types.voidType)
+      semExpr(c, a)
+      it.n = a.n
   wantParRi c, it.n
   producesVoid c, info, it.typ
 
@@ -1790,6 +1815,8 @@ proc semExprSym(c: var SemContext; it: var Item; s: Sym; flags: set[SemFlag]) =
         skipToLocalType n
       elif s.kind.isRoutine:
         skipToParams n
+      elif s.kind == LabelY:
+        discard
       else:
         # XXX enum field?
         assert false, "not implemented"
@@ -1980,7 +2007,9 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
         let info = it.n.info
         semTypeSection c, it.n
         producesVoid c, info, it.typ
-      of BlockS, ForS, CaseS, TemplateS:
+      of BlockS:
+        semBlock c, it
+      of ForS, CaseS, TemplateS:
         discard "XXX to implement"
     of FalseX, TrueX:
       combineType c, it.n.info, it.typ, c.types.boolType
