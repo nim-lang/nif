@@ -212,9 +212,18 @@
   )
   )
 
+  (type :ContainsImported.m . (object .
+    (fld :x.f . unsigned\20char.c)))
+
+  (proc :foo.escapedproc (params (param :x.p . unsigned\20char.c)) unsigned\20char.c . (stmts
+    (ret x.p)
+  ))
+
   (proc :foo.escaped . . . (stmts
     (var :x.m . unsigned\20char.c +12)
     (call assert.c (eq x.m +12))
+    (call assert.c (eq (call foo.escapedproc x.m) x.m))
+    (var :y.m . ContainsImported.m .)
   ))
 
   (proc :main.c . (i +32) (pragmas (errs)) (stmts

@@ -62,7 +62,11 @@ proc recordDependency(m: Module; o: var TypeOrder; parent, child: TypeId) =
     let id = m.code[ch].litId
     let def = m.defs.getOrDefault(id)
     if def.pos == NodePos(0):
-      error m, "undeclared symbol: ", m.code, ch
+      if m.lits.strings[id].endsWith(".c"):
+        # imported from c, no need to check dependency
+        discard
+      else:
+        error m, "undeclared symbol: ", m.code, ch
     else:
       let decl = asTypeDecl(m.code, def.pos)
       if not containsOrIncl(o.lookedAtBodies, decl.body.int):
