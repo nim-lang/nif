@@ -275,35 +275,35 @@ proc buildErr*(c: var SemContext; info: PackedLineInfo; msg: string) =
 
 # -------------------------- type handling ---------------------------
 
-proc typeToCanon(c: var SemContext; start: int): string =
+proc typeToCanon(buf: TokenBuf; start: int): string =
   result = ""
-  for i in start..<c.dest.len:
-    case c.dest[i].kind
+  for i in start..<buf.len:
+    case buf[i].kind
     of ParLe:
       result.add '('
-      result.addInt c.dest[i].tagId.int
+      result.addInt buf[i].tagId.int
     of ParRi: result.add ')'
     of Ident, StringLit:
       result.add ' '
-      result.addInt c.dest[i].litId.int
+      result.addInt buf[i].litId.int
     of UnknownToken: result.add " unknown"
     of EofToken: result.add " eof"
     of DotToken: result.add '.'
     of Symbol, SymbolDef:
       result.add " s"
-      result.addInt c.dest[i].symId.int
+      result.addInt buf[i].symId.int
     of CharLit:
       result.add " c"
-      result.addInt c.dest[i].uoperand.int
+      result.addInt buf[i].uoperand.int
     of IntLit:
       result.add " i"
-      result.addInt c.dest[i].intId.int
+      result.addInt buf[i].intId.int
     of UIntLit:
       result.add " u"
-      result.addInt c.dest[i].uintId.int
+      result.addInt buf[i].uintId.int
     of FloatLit:
       result.add " f"
-      result.addInt c.dest[i].floatId.int
+      result.addInt buf[i].floatId.int
 
 proc sameTrees(a, b: TypeCursor): bool =
   var a = a
@@ -334,16 +334,19 @@ proc sameTrees(a, b: TypeCursor): bool =
     inc a
     inc b
 
-proc typeToCursor(c: var SemContext; start: int): TypeCursor =
-  let key = typeToCanon(c, start)
+proc typeToCursor(c: var SemContext; buf: TokenBuf; start: int): TypeCursor =
+  let key = typeToCanon(buf, start)
   if c.typeMem.hasKey(key):
     result = cursorAt(c.typeMem[key], 0)
   else:
-    var buf = createTokenBuf(c.dest.len - start)
-    for i in start..<c.dest.len:
-      buf.add c.dest[i]
-    result = cursorAt(buf, 0)
-    c.typeMem[key] = buf
+    var newBuf = createTokenBuf(buf.len - start)
+    for i in start..<buf.len:
+      newBuf.add buf[i]
+    result = cursorAt(newBuf, 0)
+    c.typeMem[key] = newBuf
+
+proc typeToCursor(c: var SemContext; start: int): TypeCursor =
+  typeToCursor(c, c.dest, start)
 
 proc declToCursor(c: var SemContext; s: Sym): LoadResult =
   if knowsSym(s.name) or s.pos == ImportedPos:
@@ -1099,7 +1102,7 @@ proc semStmt(c: var SemContext; n: var Cursor) =
     let discardable = implicitlyDiscardable(ex)
     endRead(c.dest)
     if discardable:
-      combineType c, info, it.typ, c.types.voidType
+      producesVoid c, info, it.typ
     else:
       buildErr c, info, "expression of type `" & typeToString(it.typ) & "` must be discarded"
   n = it.n
@@ -1532,7 +1535,7 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
         c.buildErr info, "not a type"
     of IntT, FloatT, CharT, BoolT, UIntT, VoidT, StringT, NilT, AutoT, SymKindT:
       takeTree c, n
-    of PtrT, RefT, MutT, OutT, LentT, SinkT, NotT, UncheckedArrayT, SetT, StaticT:
+    of PtrT, RefT, MutT, OutT, LentT, SinkT, NotT, UncheckedArrayT, SetT, StaticT, TypedescT:
       takeToken c, n
       semLocalTypeImpl c, n, context
       wantParRi c, n
@@ -1782,6 +1785,12 @@ proc semExprSym(c: var SemContext; it: var Item; s: Sym; flags: set[SemFlag]) =
     if KeepMagics notin flags:
       c.buildErr it.n.info, "ambiguous identifier"
     it.typ = c.types.autoType
+  elif s.kind in {TypeY, TypevarY}:
+    let start = c.dest.len
+    c.dest.buildTree(TypedescT, it.n.info):
+      semTypeSym c, s, it.n.info
+    it.typ = typeToCursor(c, start)
+    c.dest.shrink start
   else:
     let res = declToCursor(c, s)
     if KeepMagics notin flags:

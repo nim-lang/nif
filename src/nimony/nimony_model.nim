@@ -163,6 +163,7 @@ type
     SetT = "sett"
     AutoT = "auto"
     SymKindT = "symkind"
+    TypedescT = "typedesc"
 
   PragmaKind* = enum
     NoPragma
