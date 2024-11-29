@@ -5,7 +5,7 @@
   (pragmas 2
    (magic 7 Int)) . .) 2,3
  (type :float.0.t27hh87f1 
-  (f +64) 7
+  (f -1) 7
   (pragmas 2
    (magic 7 Float)) . .) 2,4
  (type :string.0.t27hh87f1 
