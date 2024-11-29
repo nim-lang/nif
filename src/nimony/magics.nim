@@ -144,7 +144,7 @@ proc magicToTag*(m: TMagic): (string, int) =
   of mUInt16: res UIntT, 16
   of mUInt32: res UIntT, 32
   of mUInt64: res UIntT, 64
-  of mFloat: res FloatT, 64
+  of mFloat: res FloatT, -1
   of mFloat32: res FloatT, 32
   of mFloat64: res FloatT, 64
   of mFloat128: res FloatT, 128
