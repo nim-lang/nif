@@ -1816,7 +1816,7 @@ proc semExprSym(c: var SemContext; it: var Item; s: Sym; flags: set[SemFlag]) =
       elif s.kind.isRoutine:
         skipToParams n
       elif s.kind == LabelY:
-        skip n # skip label
+        discard
       else:
         # XXX enum field?
         assert false, "not implemented"
