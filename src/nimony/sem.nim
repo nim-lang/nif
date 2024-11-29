@@ -1098,9 +1098,7 @@ proc semStmt(c: var SemContext; n: var Cursor) =
     let ex = cursorAt(c.dest, exPos)
     let discardable = implicitlyDiscardable(ex)
     endRead(c.dest)
-    if discardable:
-      combineType c, info, it.typ, c.types.voidType
-    else:
+    if not discardable:
       buildErr c, info, "expression of type `" & typeToString(it.typ) & "` must be discarded"
   n = it.n
 
