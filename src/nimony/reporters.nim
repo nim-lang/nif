@@ -22,9 +22,12 @@ type
     warnings*: int
     errors*: int
 
+proc useColors*(): bool = terminal.isatty(stdout)
+
 proc writeMessage(c: var Reporter; category: string; p, arg: string) =
   var msg = p
   msg.add ' '
+  msg.add category
   msg.add arg
   stdout.writeLine msg
 
@@ -74,7 +77,8 @@ proc fatal*(msg: string) =
     writeStackTrace()
   quit "[Error] " & msg
 
-proc shortenDir(x: string; to: var string): string =
+proc shortenDir*(x: string): string =
+  var to = getCurrentDir()
   when defined(windows):
     let x = x.replace('\\', '/')
     to = to.replace('\\', '/')
@@ -90,6 +94,5 @@ proc infoToStr*(info: PackedLineInfo): string =
   if not info.isValid:
     result = "???"
   else:
-    var cwd = getCurrentDir()
-    result = pool.files[file].shortenDir(cwd)
+    result = pool.files[file].shortenDir()
     result.add "(" & $line & ", " & $(col+1) & ")"
