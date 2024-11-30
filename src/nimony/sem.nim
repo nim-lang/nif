@@ -1759,6 +1759,12 @@ proc semProc(c: var SemContext; it: var Item; kind: SymKind) =
     buildErr c, it.n.info, "TR pattern not implemented"
     skip it.n
   c.routine = createSemRoutine(kind, c.routine)
+  # 'break' and 'continue' are valid in a template regardless of whether we
+  # really have a loop or not:
+  if kind == TemplateY:
+    inc c.routine.inLoop
+    inc c.routine.inGeneric
+
   try:
     c.openScope() # open parameter scope
     semGenericParams c, it.n
@@ -1898,6 +1904,10 @@ proc semReturn(c: var SemContext; it: var Item) =
     takeToken c, it.n
   else:
     var a = Item(n: it.n, typ: c.routine.returnType)
+    # `return` within a template refers to the caller, so
+    # we allow any type here:
+    if c.routine.kind == TemplateY:
+      a.typ = c.types.autoType
     semExpr c, a
     it.n = a.n
   wantParRi c, it.n
@@ -1993,6 +2003,8 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
         semProc c, it, ConverterY
       of MethodS:
         semProc c, it, MethodY
+      of TemplateS:
+        semProc c, it, TemplateY
       of MacroS:
         semProc c, it, MacroY
       of WhileS: semWhile c, it
@@ -2019,7 +2031,7 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
         producesVoid c, info, it.typ
       of BlockS:
         semBlock c, it
-      of ForS, CaseS, TemplateS:
+      of ForS, CaseS:
         discard "XXX to implement"
     of FalseX, TrueX:
       combineType c, it.n.info, it.typ, c.types.boolType
