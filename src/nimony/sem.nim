@@ -62,6 +62,7 @@ type
     typeMem: Table[string, TokenBuf]
     thisModuleSuffix: string
     processedModules: HashSet[string]
+    usedTypevars: int
     #fieldsCache: Table[SymId, Table[StrId, ObjField]]
 
 # -------------- symbol lookups -------------------------------------
@@ -937,7 +938,7 @@ type
 
 proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {})
 
-proc semSymUse(c: var SemContext; s: SymId): Sym =
+proc fetchSym(c: var SemContext; s: SymId): Sym =
   # yyy find a better solution
   var name = pool.syms[s]
   extractBasename name
@@ -1218,7 +1219,7 @@ proc semCall(c: var SemContext; it: var Item) =
     inc f
     while f.kind != ParRi:
       if f.kind == Symbol:
-        let s = semSymUse(c, f.symId)
+        let s = fetchSym(c, f.symId)
         var candidate = Item(n: f, typ: c.types.autoType)
         fetchType c, candidate, s
         m.add createMatch()
@@ -1466,7 +1467,7 @@ proc semIdentImpl(c: var SemContext; n: var Cursor; ident: StrId): Sym =
     let sym = c.dest[insertPos+1].symId
     c.dest.shrink insertPos
     c.dest.add toToken(Symbol, sym, info)
-    result = semSymUse(c, sym)
+    result = fetchSym(c, sym)
   else:
     result = Sym(kind: if count == 0: NoSym else: CchoiceY)
 
@@ -1497,6 +1498,7 @@ proc semTypeSym(c: var SemContext; s: Sym; info: PackedLineInfo) =
   if s.kind in {TypeY, TypevarY}:
     let res = tryLoadSym(s.name)
     maybeInlineMagic c, res
+    if s.kind == TypevarY: inc c.usedTypevars
   else:
     c.buildErr info, "type name expected, but got: " & pool.syms[s.name]
 
@@ -1534,6 +1536,32 @@ proc semConceptType(c: var SemContext; n: var Cursor) =
   # XXX implement me
   takeTree c, n
 
+proc getGenericHead(c: var SemContext; typeStart: int): SymId =
+  result = SymId(0)
+  if c.dest[typeStart].kind == Symbol:
+    result = c.dest[typeStart].symId
+    let sym = fetchSym(c, result)
+    if sym.kind != TypeY: result = SymId(0)
+
+proc semInvoke(c: var SemContext; n: var Cursor; context: TypeDeclContext) =
+  let typeStart = c.dest.len
+  takeToken c, n # copy `at`
+  semLocalTypeImpl c, n, context
+  let head = getGenericHead(c, typeStart+1)
+  if head == SymId(0):
+    c.buildErr n.info, "cannot attempt to instantiate a concrete type"
+  var genericArgs = 0
+  swap c.usedTypevars, genericArgs
+  while n.kind != ParRi:
+    semLocalTypeImpl c, n, AllowValues
+  swap c.usedTypevars, genericArgs
+  wantParRi c, n
+  if genericArgs == 0:
+    # we have to be eager in generic type instantiations so that type-checking
+    # can do its job properly:
+    #c.dest.shrink typeStart
+    echo "Yes"
+
 proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext) =
   let info = n.info
   case n.kind
@@ -1541,7 +1569,7 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
     let s = semIdent(c, n)
     semTypeSym c, s, info
   of Symbol:
-    let s = semSymUse(c, n.symId)
+    let s = fetchSym(c, n.symId)
     inc n
     semTypeSym c, s, info
   of ParLe:
@@ -1566,12 +1594,6 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
       takeToken c, n
       semLocalTypeImpl c, n, context
       semLocalTypeImpl c, n, context
-      wantParRi c, n
-    of InvokeT:
-      takeToken c, n
-      semLocalTypeImpl c, n, context
-      while n.kind != ParRi:
-        semLocalTypeImpl c, n, AllowValues
       wantParRi c, n
     of TupleT:
       takeToken c, n
@@ -1628,6 +1650,8 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
       var ignored = default CrucialPragma
       semPragmas c, n, ignored, ProcY
       wantParRi c, n
+    of InvokeT:
+      semInvoke c, n, context
   of DotToken:
     if context in {InReturnTypeDecl, InGenericConstraint}:
       takeToken c, n
@@ -1981,7 +2005,7 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
     let s = semIdent(c, it.n)
     semExprSym c, it, s, flags
   of Symbol:
-    let s = semSymUse(c, it.n.symId)
+    let s = fetchSym(c, it.n.symId)
     inc it.n
     semExprSym c, it, s, flags
   of ParLe:
