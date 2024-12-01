@@ -59,7 +59,8 @@ type
     importTab: Iface
     globals, locals: Table[string, int]
     types: BuiltinTypes
-    typeMem, instantiatedTypes: Table[string, TokenBuf]
+    typeMem: Table[string, TokenBuf]
+    instantiatedTypes: OrderedTable[string, TokenBuf]
     thisModuleSuffix: string
     processedModules: HashSet[string]
     usedTypevars: int
@@ -1564,6 +1565,7 @@ proc instGenericType(c: var SemContext; dest: var TokenBuf; info: PackedLineInfo
       dest.add toToken(Symbol, origin, info)
       var a = args
       var typevars = decl.typevars
+      inc typevars
       while a.kind != ParRi and typevars.kind != ParRi:
         var tv = typevars
         assert tv == "typevar"
@@ -2030,11 +2032,6 @@ proc semTypeSection(c: var SemContext; n: var Cursor) =
   let beforeExportMarker = c.dest.len
   wantExportMarker c, n # 1
 
-  var crucial = default CrucialPragma
-  semPragmas c, n, crucial, TypeY # 2
-  if crucial.magic.len > 0:
-    exportMarkerBecomesNifTag c, beforeExportMarker, crucial
-
   var isGeneric: bool
   if n.kind == DotToken:
     takeToken c, n
@@ -2043,6 +2040,11 @@ proc semTypeSection(c: var SemContext; n: var Cursor) =
     openScope c
     semGenericParams c, n
     isGeneric = true
+
+  var crucial = default CrucialPragma
+  semPragmas c, n, crucial, TypeY # 2
+  if crucial.magic.len > 0:
+    exportMarkerBecomesNifTag c, beforeExportMarker, crucial
 
   if n.kind == DotToken:
     takeToken c, n
@@ -2212,6 +2214,8 @@ proc semcheck*(infile, outfile: string; config: sink NifConfig; moduleFlags: set
   #if n.kind != EofToken:
   #  quit "Internal error: file not processed completely"
   instantiateGenerics c
+  for _, val in mpairs(c.instantiatedTypes):
+    c.dest.copyTree beginRead(val)
   if reportErrors(c) == 0:
     writeOutput c, outfile
   else:

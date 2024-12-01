@@ -237,12 +237,14 @@ proc toNif*(n, parent: PNode; c: var TranslationContext) =
     else:
       c.b.addEmpty
 
+    toNif(n[1], n, c) # generics
+
     if pragma != nil:
       toNif(pragma, n, c)
     else:
       c.b.addEmpty
 
-    for i in 1..<n.len:
+    for i in 2..<n.len:
       toNif(n[i], n, c)
     c.b.endTree()
 
