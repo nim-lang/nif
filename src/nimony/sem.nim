@@ -60,7 +60,7 @@ type
     globals, locals: Table[string, int]
     types: BuiltinTypes
     typeMem: Table[string, TokenBuf]
-    instantiatedTypes: OrderedTable[string, TokenBuf]
+    instantiatedTypes: OrderedTable[string, SymId]
     thisModuleSuffix: string
     processedModules: HashSet[string]
     usedTypevars: int
@@ -1621,17 +1621,15 @@ proc semInvoke(c: var SemContext; n: var Cursor) =
     # can do its job properly:
     let key = typeToCanon(c.dest, typeStart)
     if c.instantiatedTypes.hasKey(key):
-      let typeDecl = cursorAt(c.instantiatedTypes[key], 1)
-      assert typeDecl.kind == SymbolDef
-      c.dest.shrink typeStart
-      c.dest.add toToken(Symbol, typeDecl.symId, info)
+      c.dest.add toToken(Symbol, c.instantiatedTypes[key], info)
     else:
       let targetSym = newSymId(c, headId)
       var args = cursorAt(c.dest, beforeArgs)
       var instance = createTokenBuf(30)
       instGenericType c, instance, info, headId, targetSym, decl, args
       c.dest.endRead()
-      c.instantiatedTypes[key] = ensureMove(instance)
+      publish targetSym, ensureMove instance
+      c.instantiatedTypes[key] = targetSym
       c.dest.shrink typeStart
       c.dest.add toToken(Symbol, targetSym, info)
 
@@ -2216,7 +2214,10 @@ proc semcheck*(infile, outfile: string; config: sink NifConfig; moduleFlags: set
     semStmt c, n
   instantiateGenerics c
   for _, val in mpairs(c.instantiatedTypes):
-    c.dest.copyTree beginRead(val)
+    let s = fetchSym(c, val)
+    let res = declToCursor(c, s)
+    if res.status == LacksNothing:
+      c.dest.copyTree res.decl
   wantParRi c, n
   if reportErrors(c) == 0:
     writeOutput c, outfile
