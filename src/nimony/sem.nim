@@ -319,6 +319,7 @@ proc sameTrees(a, b: TypeCursor): bool =
   var a = a
   var b = b
   var nested = 0
+  let isAtom = a.kind != ParLe
   while true:
     if a.kind != b.kind: return false
     case a.kind
@@ -341,6 +342,7 @@ proc sameTrees(a, b: TypeCursor): bool =
     of CharLit, UnknownToken:
       if a.uoperand != b.uoperand: return false
     of DotToken, EofToken: discard "nothing else to compare"
+    if isAtom: return true
     inc a
     inc b
 
@@ -688,6 +690,12 @@ proc semStmt(c: var SemContext; n: var Cursor)
 proc typeMismatch(c: var SemContext; info: PackedLineInfo; got, expected: TypeCursor) =
   c.buildErr info, "type mismatch: got: " & typeToString(got) & " but wanted: " & typeToString(expected)
 
+proc typecheck(c: var SemContext; info: PackedLineInfo; got, expected: TypeCursor) =
+  if sameTrees(expected, got):
+    discard "fine"
+  else:
+    c.typeMismatch info, got, expected
+
 proc combineType(c: var SemContext; info: PackedLineInfo; dest: var Cursor; src: Cursor) =
   if typeKind(dest) == AutoT:
     dest = src
@@ -990,14 +998,23 @@ proc semConstIntExpr(c: var SemContext; n: var Cursor) =
     buildErr c, it.n.info, "expected `int` but got: " & typeToString(it.typ)
 
 proc semProcBody(c: var SemContext; itB: var Item) =
-  #let beforeBodyPos = c.dest.len
+  let beforeBodyPos = c.dest.len
+  let info = itB.n.info
   var it = Item(n: itB.n, typ: c.types.autoType)
   semExpr c, it
-  if classifyType(c, it.typ) == VoidT:
+  if c.routine.kind == TemplateY:
+    typecheck(c, info, it.typ, c.routine.returnType)
+  elif classifyType(c, it.typ) == VoidT:
     discard "ok"
   else:
-    # XXX
-    buildErr c, itB.n.info, "proc body as expression not implemented"
+    typecheck(c, info, it.typ, c.routine.returnType)
+    # transform `expr` to `result = expr`:
+    if c.routine.resId != SymId(0):
+      var prefix = [
+        toToken(ParLe, pool.tags.getOrIncl($AsgnS), info),
+        toToken(Symbol, c.routine.resId, info)]
+      c.dest.insert prefix, beforeBodyPos
+      c.dest.addParRi()
   itB.n = it.n
 
 proc implicitlyDiscardable(n: Cursor): bool =
