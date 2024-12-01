@@ -1629,7 +1629,7 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
       semPragmas c, n, ignored, ProcY
       wantParRi c, n
   of DotToken:
-    if context == InReturnTypeDecl:
+    if context in {InReturnTypeDecl, InGenericConstraint}:
       takeToken c, n
     else:
       c.buildErr info, "not a type"
@@ -1668,7 +1668,7 @@ proc semLocal(c: var SemContext; n: var Cursor; kind: SymKind) =
     exportMarkerBecomesNifTag c, beforeExportMarker, crucial
   case kind
   of TypevarY:
-    discard semLocalType(c, n)
+    discard semLocalType(c, n, InGenericConstraint)
     wantDot c, n
   of ParamY, LetY, VarY, CursorY, ResultY, FldY, EfldY:
     let beforeType = c.dest.len
