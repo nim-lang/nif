@@ -127,6 +127,7 @@ type
     HighX = "high"
     LowX = "low"
     TypeofX = "typeof"
+    UnpackX = "unpack"
 
   TypeKind* = enum
     NoType
@@ -195,6 +196,7 @@ type
     RoS = "ro"
     RestrictS = "restrict"
     PragmasS = "pragmas"
+    UnpackFlatS = "unpackflat"
 
   CallConv* = enum
     NoCallConv

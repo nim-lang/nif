@@ -296,7 +296,7 @@ template copyIntoUnchecked*(dest: var TokenBuf; tag: string; info: PackedLineInf
   dest.addToken ParRi, 0'u32, info
 
 proc parse*(r: var Stream; dest: var TokenBuf;
-            parentInfo: PackedLineInfo): bool =
+            parentInfo: PackedLineInfo) =
   r.parents[0] = parentInfo
   while true:
     let tok = r.next()

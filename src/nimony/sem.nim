@@ -345,6 +345,7 @@ proc sameTrees(a, b: TypeCursor): bool =
     if isAtom: return true
     inc a
     inc b
+  return false
 
 proc typeToCursor(c: var SemContext; buf: TokenBuf; start: int): TypeCursor =
   let key = typeToCanon(buf, start)
@@ -2180,7 +2181,7 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
        EqX, NeqX, LeX, LtX, CastX, ConvX, SufX, RangeX, RangesX,
        HderefX, HaddrX, OconvX, HconvX, OchoiceX, CchoiceX,
        TupleConstrX, SetX,
-       CompilesX, DeclaredX, DefinedX, HighX, LowX, TypeofX, AshrX:
+       CompilesX, DeclaredX, DefinedX, HighX, LowX, TypeofX, AshrX, UnpackX:
       # XXX To implement
       takeToken c, it.n
       wantParRi c, it.n

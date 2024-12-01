@@ -48,17 +48,17 @@ proc expandTemplateImpl(c: var SemContext; dest: var TokenBuf;
       dest.add body
     of ParLe:
       let forStmt = asForStmt(body)
-      if forStmt.kind == ForS and forStmt.iter.tag == UnpackT:
-        assert forStmt.vars.tag == UnpackIntoFlatT
-        var arg = c.firstVarargMatch
+      if forStmt.kind == ForS and forStmt.iter.exprKind == UnpackX:
+        assert forStmt.vars.substructureKind == UnpackFlatS
+        var arg = e.firstVarargMatch
         var fv = forStmt.vars
         inc fv
         inc fv
         let vid = fv.symId
         if arg.kind notin {DotToken, ParRi}:
           while arg.kind != ParRi:
-            c.formalParams[vid] = arg
-            expandTemplateImpl dest, c, forStmt.body, inferred
+            e.formalParams[vid] = arg
+            expandTemplateImpl c, dest, e, forStmt.body
             skip arg
 
         skip body
@@ -79,7 +79,8 @@ proc expandTemplate*(c: var SemContext; dest: var TokenBuf;
   var e = ExpansionContext(
     newVars: initTable[SymId, SymId](),
     formalParams: initTable[SymId, Cursor](),
-    firstVarargMatch: firstVarargMatch)
+    firstVarargMatch: firstVarargMatch,
+    inferred: inferred)
 
   var a = args
   var f = templ.params
@@ -92,4 +93,4 @@ proc expandTemplate*(c: var SemContext; dest: var TokenBuf;
       skip a
       skip f
 
-  expandTemplateImpl c, dest, e, templ.body, inferred
+  expandTemplateImpl c, dest, e, templ.body

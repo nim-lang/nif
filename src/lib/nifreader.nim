@@ -476,6 +476,7 @@ proc startsWith*(r: Reader; prefix: string): bool =
     if p >= r.eof or ^p != prefix[i]: return false
     inc p
     inc i
+  return false
 
 proc processDirectives*(r: var Reader): DirectivesResult =
   template handleSubstitutionPair(r: var Reader; valid: set[TokenKind]; subs: typed) =

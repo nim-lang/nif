@@ -97,7 +97,7 @@ proc tryLoadSym*(s: SymId): LoadResult =
       else:
         m.stream.r.jumpTo entry.offset
         var buf = createTokenBuf(30)
-        discard nifcursors.parse(m.stream, buf, entry.info)
+        nifcursors.parse(m.stream, buf, entry.info)
         let decl = cursorAt(buf, 0)
         prog.mem[s] = ensureMove(buf)
         result = LoadResult(status: LacksNothing, decl: decl)
