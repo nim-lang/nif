@@ -2210,12 +2210,14 @@ proc semcheck*(infile, outfile: string; config: sink NifConfig; moduleFlags: set
     routine: SemRoutine(kind: NoSym))
   c.currentScope = Scope(tab: initTable[StrId, seq[Sym]](), up: nil, kind: ToplevelScope)
 
-  semStmt c, n
-  #if n.kind != EofToken:
-  #  quit "Internal error: file not processed completely"
+  assert n == "stmts"
+  takeToken c, n
+  while n.kind != ParRi:
+    semStmt c, n
   instantiateGenerics c
   for _, val in mpairs(c.instantiatedTypes):
     c.dest.copyTree beginRead(val)
+  wantParRi c, n
   if reportErrors(c) == 0:
     writeOutput c, outfile
   else:
