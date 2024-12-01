@@ -60,8 +60,10 @@ type
     globals, locals: Table[string, int]
     types: BuiltinTypes
     typeMem: Table[string, TokenBuf]
+    instantiatedTypes: OrderedTable[string, TokenBuf]
     thisModuleSuffix: string
     processedModules: HashSet[string]
+    usedTypevars: int
     #fieldsCache: Table[SymId, Table[StrId, ObjField]]
 
 # -------------- symbol lookups -------------------------------------
@@ -272,6 +274,14 @@ proc buildErr*(c: var SemContext; info: PackedLineInfo; msg: string) =
     for instFrom in items(c.instantiatedFrom):
       c.dest.add toToken(UnknownToken, 0'u32, instFrom)
     c.dest.add toToken(StringLit, pool.strings.getOrIncl(msg), info)
+
+proc buildLocalErr*(dest: var TokenBuf; info: PackedLineInfo; msg: string) =
+  when defined(debug):
+    writeStackTrace()
+    echo infoToStr(info) & " Error: " & msg
+    quit msg
+  dest.buildTree ErrT, info:
+    dest.add toToken(StringLit, pool.strings.getOrIncl(msg), info)
 
 # -------------------------- type handling ---------------------------
 
@@ -802,6 +812,15 @@ proc declareResult(c: var SemContext; info: PackedLineInfo): SymId =
 
 # -------------------- generics ---------------------------------
 
+proc newSymId(c: var SemContext; s: SymId): SymId =
+  var isGlobal = false
+  var name = extractBasename(pool.syms[s], isGlobal)
+  if isGlobal:
+    c.makeGlobalSym(name)
+  else:
+    c.makeLocalSym(name)
+  result = pool.syms.getOrIncl(name)
+
 type
   SubsContext = object
     newVars: Table[SymId, SymId]
@@ -827,13 +846,7 @@ proc subs(c: var SemContext; dest: var TokenBuf; sc: var SubsContext; body: Curs
           dest.add n # keep Symbol as it was
     of SymbolDef:
       let s = n.symId
-      var isGlobal = false
-      var name = extractBasename(pool.syms[s], isGlobal)
-      if isGlobal:
-        c.makeGlobalSym(name)
-      else:
-        c.makeLocalSym(name)
-      let newDef = pool.syms.getOrIncl(name)
+      let newDef = newSymId(c, s)
       sc.newVars[s] = newDef
       dest.add toToken(SymbolDef, newDef, n.info)
     of ParLe:
@@ -937,7 +950,7 @@ type
 
 proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {})
 
-proc semSymUse(c: var SemContext; s: SymId): Sym =
+proc fetchSym(c: var SemContext; s: SymId): Sym =
   # yyy find a better solution
   var name = pool.syms[s]
   extractBasename name
@@ -1218,7 +1231,7 @@ proc semCall(c: var SemContext; it: var Item) =
     inc f
     while f.kind != ParRi:
       if f.kind == Symbol:
-        let s = semSymUse(c, f.symId)
+        let s = fetchSym(c, f.symId)
         var candidate = Item(n: f, typ: c.types.autoType)
         fetchType c, candidate, s
         m.add createMatch()
@@ -1466,7 +1479,7 @@ proc semIdentImpl(c: var SemContext; n: var Cursor; ident: StrId): Sym =
     let sym = c.dest[insertPos+1].symId
     c.dest.shrink insertPos
     c.dest.add toToken(Symbol, sym, info)
-    result = semSymUse(c, sym)
+    result = fetchSym(c, sym)
   else:
     result = Sym(kind: if count == 0: NoSym else: CchoiceY)
 
@@ -1497,6 +1510,7 @@ proc semTypeSym(c: var SemContext; s: Sym; info: PackedLineInfo) =
   if s.kind in {TypeY, TypevarY}:
     let res = tryLoadSym(s.name)
     maybeInlineMagic c, res
+    if s.kind == TypevarY: inc c.usedTypevars
   else:
     c.buildErr info, "type name expected, but got: " & pool.syms[s.name]
 
@@ -1534,6 +1548,93 @@ proc semConceptType(c: var SemContext; n: var Cursor) =
   # XXX implement me
   takeTree c, n
 
+proc instGenericType(c: var SemContext; dest: var TokenBuf; info: PackedLineInfo;
+                     origin, targetSym: SymId; decl: TypeDecl; args: Cursor) =
+  #[
+  What we need to do is rather simple: A generic instantiation is
+  the typical (type :Name ex generic_params pragmas body) tuple but
+  this time the generic_params list the used `Invoke` construct for the
+  instantiation.
+  ]#
+  var inferred = initTable[SymId, Cursor]()
+  var err = 0
+  dest.buildTree TypeS, info:
+    dest.add toToken(SymbolDef, targetSym, info)
+    dest.addDotToken() # export
+    dest.buildTree InvokeT, info:
+      dest.add toToken(Symbol, origin, info)
+      var a = args
+      var typevars = decl.typevars
+      inc typevars
+      while a.kind != ParRi and typevars.kind != ParRi:
+        var tv = typevars
+        assert tv == "typevar"
+        inc tv
+        assert tv.kind == SymbolDef
+        inferred[tv.symId] = a
+        takeTree dest, a
+        skip typevars
+      if a.kind != ParRi:
+        err = -1
+      elif typevars.kind != ParRi:
+        err = 1
+    # take the pragmas from the origin:
+    dest.copyTree decl.pragmas
+    if err == 0:
+      var sc = SubsContext(params: addr inferred)
+      subs(c, dest, sc, decl.body)
+    elif err == 1:
+      dest.buildLocalErr info, "too few generic arguments provided"
+    else:
+      dest.buildLocalErr info, "too many generic arguments provided"
+
+proc semInvoke(c: var SemContext; n: var Cursor) =
+  let typeStart = c.dest.len
+  let info = n.info
+  takeToken c, n # copy `at`
+  semLocalTypeImpl c, n, InLocalDecl
+
+  var headId: SymId
+  var decl = default TypeDecl
+  var ok = false
+  if c.dest[typeStart+1].kind == Symbol:
+    headId = c.dest[typeStart+1].symId
+    decl = getTypeSection(headId)
+    if decl.kind != TypeY:
+      c.buildErr info, "cannot attempt to instantiate a non-type"
+    if decl.typevars != "typevars":
+      c.buildErr info, "cannot attempt to instantiate a concrete type"
+    else:
+      ok = true
+  else:
+    c.buildErr info, "cannot attempt to instantiate a non-type"
+
+  var genericArgs = 0
+  swap c.usedTypevars, genericArgs
+  let beforeArgs = c.dest.len
+  while n.kind != ParRi:
+    semLocalTypeImpl c, n, AllowValues
+  swap c.usedTypevars, genericArgs
+  wantParRi c, n
+  if genericArgs == 0 and ok:
+    # we have to be eager in generic type instantiations so that type-checking
+    # can do its job properly:
+    let key = typeToCanon(c.dest, typeStart)
+    if c.instantiatedTypes.hasKey(key):
+      let typeDecl = cursorAt(c.instantiatedTypes[key], 1)
+      assert typeDecl.kind == SymbolDef
+      c.dest.shrink typeStart
+      c.dest.add toToken(Symbol, typeDecl.symId, info)
+    else:
+      let targetSym = newSymId(c, headId)
+      var args = cursorAt(c.dest, beforeArgs)
+      var instance = createTokenBuf(30)
+      instGenericType c, instance, info, headId, targetSym, decl, args
+      c.dest.endRead()
+      c.instantiatedTypes[key] = ensureMove(instance)
+      c.dest.shrink typeStart
+      c.dest.add toToken(Symbol, targetSym, info)
+
 proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext) =
   let info = n.info
   case n.kind
@@ -1541,7 +1642,7 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
     let s = semIdent(c, n)
     semTypeSym c, s, info
   of Symbol:
-    let s = semSymUse(c, n.symId)
+    let s = fetchSym(c, n.symId)
     inc n
     semTypeSym c, s, info
   of ParLe:
@@ -1566,12 +1667,6 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
       takeToken c, n
       semLocalTypeImpl c, n, context
       semLocalTypeImpl c, n, context
-      wantParRi c, n
-    of InvokeT:
-      takeToken c, n
-      semLocalTypeImpl c, n, context
-      while n.kind != ParRi:
-        semLocalTypeImpl c, n, AllowValues
       wantParRi c, n
     of TupleT:
       takeToken c, n
@@ -1628,8 +1723,10 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
       var ignored = default CrucialPragma
       semPragmas c, n, ignored, ProcY
       wantParRi c, n
+    of InvokeT:
+      semInvoke c, n
   of DotToken:
-    if context == InReturnTypeDecl:
+    if context in {InReturnTypeDecl, InGenericConstraint}:
       takeToken c, n
     else:
       c.buildErr info, "not a type"
@@ -1668,7 +1765,7 @@ proc semLocal(c: var SemContext; n: var Cursor; kind: SymKind) =
     exportMarkerBecomesNifTag c, beforeExportMarker, crucial
   case kind
   of TypevarY:
-    discard semLocalType(c, n)
+    discard semLocalType(c, n, InGenericConstraint)
     wantDot c, n
   of ParamY, LetY, VarY, CursorY, ResultY, FldY, EfldY:
     let beforeType = c.dest.len
@@ -1759,6 +1856,12 @@ proc semProc(c: var SemContext; it: var Item; kind: SymKind) =
     buildErr c, it.n.info, "TR pattern not implemented"
     skip it.n
   c.routine = createSemRoutine(kind, c.routine)
+  # 'break' and 'continue' are valid in a template regardless of whether we
+  # really have a loop or not:
+  if kind == TemplateY:
+    inc c.routine.inLoop
+    inc c.routine.inGeneric
+
   try:
     c.openScope() # open parameter scope
     semGenericParams c, it.n
@@ -1898,6 +2001,10 @@ proc semReturn(c: var SemContext; it: var Item) =
     takeToken c, it.n
   else:
     var a = Item(n: it.n, typ: c.routine.returnType)
+    # `return` within a template refers to the caller, so
+    # we allow any type here:
+    if c.routine.kind == TemplateY:
+      a.typ = c.types.autoType
     semExpr c, a
     it.n = a.n
   wantParRi c, it.n
@@ -1925,11 +2032,6 @@ proc semTypeSection(c: var SemContext; n: var Cursor) =
   let beforeExportMarker = c.dest.len
   wantExportMarker c, n # 1
 
-  var crucial = default CrucialPragma
-  semPragmas c, n, crucial, TypeY # 2
-  if crucial.magic.len > 0:
-    exportMarkerBecomesNifTag c, beforeExportMarker, crucial
-
   var isGeneric: bool
   if n.kind == DotToken:
     takeToken c, n
@@ -1938,6 +2040,11 @@ proc semTypeSection(c: var SemContext; n: var Cursor) =
     openScope c
     semGenericParams c, n
     isGeneric = true
+
+  var crucial = default CrucialPragma
+  semPragmas c, n, crucial, TypeY # 2
+  if crucial.magic.len > 0:
+    exportMarkerBecomesNifTag c, beforeExportMarker, crucial
 
   if n.kind == DotToken:
     takeToken c, n
@@ -1971,7 +2078,7 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
     let s = semIdent(c, it.n)
     semExprSym c, it, s, flags
   of Symbol:
-    let s = semSymUse(c, it.n.symId)
+    let s = fetchSym(c, it.n.symId)
     inc it.n
     semExprSym c, it, s, flags
   of ParLe:
@@ -1993,6 +2100,8 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
         semProc c, it, ConverterY
       of MethodS:
         semProc c, it, MethodY
+      of TemplateS:
+        semProc c, it, TemplateY
       of MacroS:
         semProc c, it, MacroY
       of WhileS: semWhile c, it
@@ -2019,7 +2128,7 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
         producesVoid c, info, it.typ
       of BlockS:
         semBlock c, it
-      of ForS, CaseS, TemplateS:
+      of ForS, CaseS:
         discard "XXX to implement"
     of FalseX, TrueX:
       combineType c, it.n.info, it.typ, c.types.boolType
@@ -2101,10 +2210,14 @@ proc semcheck*(infile, outfile: string; config: sink NifConfig; moduleFlags: set
     routine: SemRoutine(kind: NoSym))
   c.currentScope = Scope(tab: initTable[StrId, seq[Sym]](), up: nil, kind: ToplevelScope)
 
-  semStmt c, n
-  #if n.kind != EofToken:
-  #  quit "Internal error: file not processed completely"
+  assert n == "stmts"
+  takeToken c, n
+  while n.kind != ParRi:
+    semStmt c, n
   instantiateGenerics c
+  for _, val in mpairs(c.instantiatedTypes):
+    c.dest.copyTree beginRead(val)
+  wantParRi c, n
   if reportErrors(c) == 0:
     writeOutput c, outfile
   else:
