@@ -59,7 +59,7 @@ type
     importTab: Iface
     globals, locals: Table[string, int]
     types: BuiltinTypes
-    typeMem: Table[string, TokenBuf]
+    typeMem, instantiatedTypes: Table[string, TokenBuf]
     thisModuleSuffix: string
     processedModules: HashSet[string]
     usedTypevars: int
@@ -273,6 +273,14 @@ proc buildErr*(c: var SemContext; info: PackedLineInfo; msg: string) =
     for instFrom in items(c.instantiatedFrom):
       c.dest.add toToken(UnknownToken, 0'u32, instFrom)
     c.dest.add toToken(StringLit, pool.strings.getOrIncl(msg), info)
+
+proc buildLocalErr*(dest: var TokenBuf; info: PackedLineInfo; msg: string) =
+  when defined(debug):
+    writeStackTrace()
+    echo infoToStr(info) & " Error: " & msg
+    quit msg
+  dest.buildTree ErrT, info:
+    dest.add toToken(StringLit, pool.strings.getOrIncl(msg), info)
 
 # -------------------------- type handling ---------------------------
 
@@ -803,6 +811,15 @@ proc declareResult(c: var SemContext; info: PackedLineInfo): SymId =
 
 # -------------------- generics ---------------------------------
 
+proc newSymId(c: var SemContext; s: SymId): SymId =
+  var isGlobal = false
+  var name = extractBasename(pool.syms[s], isGlobal)
+  if isGlobal:
+    c.makeGlobalSym(name)
+  else:
+    c.makeLocalSym(name)
+  result = pool.syms.getOrIncl(name)
+
 type
   SubsContext = object
     newVars: Table[SymId, SymId]
@@ -828,13 +845,7 @@ proc subs(c: var SemContext; dest: var TokenBuf; sc: var SubsContext; body: Curs
           dest.add n # keep Symbol as it was
     of SymbolDef:
       let s = n.symId
-      var isGlobal = false
-      var name = extractBasename(pool.syms[s], isGlobal)
-      if isGlobal:
-        c.makeGlobalSym(name)
-      else:
-        c.makeLocalSym(name)
-      let newDef = pool.syms.getOrIncl(name)
+      let newDef = newSymId(c, s)
       sc.newVars[s] = newDef
       dest.add toToken(SymbolDef, newDef, n.info)
     of ParLe:
@@ -1536,31 +1547,91 @@ proc semConceptType(c: var SemContext; n: var Cursor) =
   # XXX implement me
   takeTree c, n
 
-proc getGenericHead(c: var SemContext; typeStart: int): SymId =
-  result = SymId(0)
-  if c.dest[typeStart].kind == Symbol:
-    result = c.dest[typeStart].symId
-    let sym = fetchSym(c, result)
-    if sym.kind != TypeY: result = SymId(0)
+proc instGenericType(c: var SemContext; dest: var TokenBuf; info: PackedLineInfo;
+                     origin, targetSym: SymId; decl: TypeDecl; args: Cursor) =
+  #[
+  What we need to do is rather simple: A generic instantiation is
+  the typical (type :Name ex generic_params pragmas body) tuple but
+  this time the generic_params list the used `Invoke` construct for the
+  instantiation.
+  ]#
+  var inferred = initTable[SymId, Cursor]()
+  var err = 0
+  dest.buildTree TypeS, info:
+    dest.add toToken(SymbolDef, targetSym, info)
+    dest.addDotToken() # export
+    dest.buildTree InvokeT, info:
+      dest.add toToken(Symbol, origin, info)
+      var a = args
+      var typevars = decl.typevars
+      while a.kind != ParRi and typevars.kind != ParRi:
+        var tv = typevars
+        assert tv == "typevar"
+        inc tv
+        assert tv.kind == SymbolDef
+        inferred[tv.symId] = a
+        takeTree dest, a
+        skip typevars
+      if a.kind != ParRi:
+        err = -1
+      elif typevars.kind != ParRi:
+        err = 1
+    # take the pragmas from the origin:
+    dest.copyTree decl.pragmas
+    if err == 0:
+      var sc = SubsContext(params: addr inferred)
+      subs(c, dest, sc, decl.body)
+    elif err == 1:
+      dest.buildLocalErr info, "too few generic arguments provided"
+    else:
+      dest.buildLocalErr info, "too many generic arguments provided"
 
-proc semInvoke(c: var SemContext; n: var Cursor; context: TypeDeclContext) =
+proc semInvoke(c: var SemContext; n: var Cursor) =
   let typeStart = c.dest.len
+  let info = n.info
   takeToken c, n # copy `at`
-  semLocalTypeImpl c, n, context
-  let head = getGenericHead(c, typeStart+1)
-  if head == SymId(0):
-    c.buildErr n.info, "cannot attempt to instantiate a concrete type"
+  semLocalTypeImpl c, n, InLocalDecl
+
+  var headId: SymId
+  var decl = default TypeDecl
+  var ok = false
+  if c.dest[typeStart+1].kind == Symbol:
+    headId = c.dest[typeStart+1].symId
+    decl = getTypeSection(headId)
+    if decl.kind != TypeY:
+      c.buildErr info, "cannot attempt to instantiate a non-type"
+    if decl.typevars != "typevars":
+      c.buildErr info, "cannot attempt to instantiate a concrete type"
+    else:
+      ok = true
+  else:
+    c.buildErr info, "cannot attempt to instantiate a non-type"
+
   var genericArgs = 0
   swap c.usedTypevars, genericArgs
+  let beforeArgs = c.dest.len
   while n.kind != ParRi:
     semLocalTypeImpl c, n, AllowValues
   swap c.usedTypevars, genericArgs
   wantParRi c, n
-  if genericArgs == 0:
+  if genericArgs == 0 and ok:
     # we have to be eager in generic type instantiations so that type-checking
     # can do its job properly:
-    #c.dest.shrink typeStart
-    echo "Yes"
+    let key = typeToCanon(c.dest, typeStart)
+    if c.instantiatedTypes.hasKey(key):
+      let typeDecl = cursorAt(c.instantiatedTypes[key], 1)
+      assert typeDecl.kind == SymbolDef
+      c.dest.shrink typeStart
+      c.dest.add toToken(Symbol, typeDecl.symId, info)
+    else:
+      let targetSym = newSymId(c, headId)
+      var args = cursorAt(c.dest, beforeArgs)
+      var instance = createTokenBuf(30)
+      instGenericType c, instance, info, headId, targetSym, decl, args
+      c.dest.endRead()
+      c.instantiatedTypes[key] = ensureMove(instance)
+      c.dest.shrink typeStart
+      c.dest.add toToken(Symbol, targetSym, info)
 
 proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext) =
   let info = n.info
@@ -1651,7 +1722,7 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
       semPragmas c, n, ignored, ProcY
       wantParRi c, n
     of InvokeT:
-      semInvoke c, n, context
+      semInvoke c, n
   of DotToken:
     if context in {InReturnTypeDecl, InGenericConstraint}:
       takeToken c, n
