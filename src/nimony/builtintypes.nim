@@ -37,7 +37,7 @@ proc createBuiltinTypes*(): BuiltinTypes =
   result.mem.addParRi() # 11
 
   result.mem.add tagToken"f" # 12
-  result.mem.add toToken(IntLit, minusOne, NoLineInfo) # 13
+  result.mem.add toToken(IntLit, pool.integers.getOrIncl(64), NoLineInfo) # 13
   result.mem.addParRi() # 14
 
   result.mem.add tagToken"c" # 15
