@@ -868,6 +868,8 @@ proc subs(c: var SemContext; dest: var TokenBuf; sc: var SubsContext; body: Curs
     if isAtom: break
     inc n
 
+include templates
+
 proc produceInvoke(c: var SemContext; dest: var TokenBuf; req: InstRequest;
                    typeVars: Cursor; info: PackedLineInfo) =
   dest.buildTree InvokeT, info:

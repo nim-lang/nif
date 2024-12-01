@@ -6,50 +6,49 @@
 
 ## This module implements the template expansion mechanism.
 
-import std / tables
-
-import nifreader, nifstreams, nifcursors, decls, programs
-import ".." / specs / tags
+# included from sem.nim
 
 type
   ExpansionContext = object
     newVars: Table[SymId, SymId]
     formalParams, typevars: Table[SymId, Cursor]
     firstVarargMatch: Cursor
+    inferred: ptr Table[SymId, Cursor]
 
-proc expandTemplateImpl(dest: var TokenBuf; c: var ExpansionContext; body: Cursor;
-                        inferred: Table[SymId, Cursor]) =
+proc expandTemplateImpl(c: var SemContext; dest: var TokenBuf;
+                        e: var ExpansionContext; body: Cursor) =
   var nested = 0
   var body = body
+  let isAtom = body.kind != ParLe
   while true:
     case body.kind
     of UnknownToken, EofToken, DotToken, Ident:
       dest.add body
     of Symbol:
       let s = body.symId
-      let arg = c.formalParams.getOrDefault(s)
+      let arg = e.formalParams.getOrDefault(s)
       if arg != default(Cursor):
         dest.addSubtree arg
       else:
-        let nv = c.newVars.getOrDefault(s)
+        let nv = e.newVars.getOrDefault(s)
         if nv != SymId(0):
           dest.add toToken(Symbol, nv, body.info)
         else:
-          let tv = inferred.getOrDefault(s)
+          let tv = e.inferred[].getOrDefault(s)
           if tv != default(Cursor):
             dest.addSubtree tv
           else:
             dest.add body # keep Symbol as it was
     of SymbolDef:
       let s = body.symId
-      let newDef = freshSym(s)
-      c.newVars[s] = newDef
+      let newDef = newSymId(c, s)
+      e.newVars[s] = newDef
       dest.add toToken(SymbolDef, newDef, body.info)
     of StringLit, CharLit, IntLit, UIntLit, FloatLit:
       dest.add body
     of ParLe:
       let forStmt = asForStmt(body)
-      if forStmt.tag == ForT and forStmt.iter.tag == UnpackT:
+      if forStmt.kind == ForS and forStmt.iter.tag == UnpackT:
         assert forStmt.vars.tag == UnpackIntoFlatT
         var arg = c.firstVarargMatch
         var fv = forStmt.vars
@@ -69,13 +68,15 @@ proc expandTemplateImpl(dest: var TokenBuf; c: var ExpansionContext; body: Curso
     of ParRi:
       dest.add body
       if nested == 0: break
+    if isAtom: break
     inc body
 
-proc expandTemplate*(dest: var TokenBuf; templateDecl, args, firstVarargMatch: Cursor;
-                    inferred: Table[SymId, Cursor]) =
+proc expandTemplate*(c: var SemContext; dest: var TokenBuf;
+                     templateDecl, args, firstVarargMatch: Cursor;
+                     inferred: ptr Table[SymId, Cursor]) =
   var templ = asRoutine(templateDecl)
 
-  var c = ExpansionContext(
+  var e = ExpansionContext(
     newVars: initTable[SymId, SymId](),
     formalParams: initTable[SymId, Cursor](),
     firstVarargMatch: firstVarargMatch)
@@ -87,8 +88,8 @@ proc expandTemplate*(dest: var TokenBuf; templateDecl, args, firstVarargMatch: C
       var param = f
       inc param
       assert param.kind == SymbolDef
-      c.formalParams[param.symId] = a
+      e.formalParams[param.symId] = a
       skip a
       skip f
 
-  expandTemplateImpl dest, c, templ.body, inferred
+  expandTemplateImpl c, dest, e, templ.body, inferred
