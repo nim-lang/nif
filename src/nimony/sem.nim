@@ -2120,6 +2120,14 @@ proc semTypedArithmetic(c: var SemContext; it: var Item) =
   semExpr c, it
   wantParRi c, it.n
 
+proc semCmp(c: var SemContext; it: var Item) =
+  let info = it.n.info
+  takeToken c, it.n
+  semExpr c, it
+  semExpr c, it
+  wantParRi c, it.n
+  combineType c, info, it.typ, c.types.boolType
+
 proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
   case it.n.kind
   of IntLit:
@@ -2221,8 +2229,10 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
       semDot c, it, AlsoTryDotCall
     of AshrX, AddX, SubX, MulX, DivX, ModX, ShrX, ShlX, BitandX, BitorX, BitxorX, BitnotX:
       semTypedArithmetic c, it
+    of EqX, NeqX, LeX, LtX:
+      semCmp c, it
     of AconstrX, AtX, DerefX, PatX, AddrX, NilX, NegX, SizeofX, OconstrX, KvX,
-       EqX, NeqX, LeX, LtX, CastX, ConvX, SufX, RangeX, RangesX,
+       CastX, ConvX, SufX, RangeX, RangesX,
        HderefX, HaddrX, OconvX, HconvX, OchoiceX, CchoiceX,
        TupleConstrX, SetX,
        CompilesX, DeclaredX, DefinedX, HighX, LowX, TypeofX, UnpackX:
