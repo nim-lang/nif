@@ -1467,8 +1467,6 @@ type
     bits: int
 
 proc semPragma(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; kind: SymKind) =
-  if n == "kv":
-    inc n
   let pk = pragmaKind(n)
   case pk
   of NoPragma:
@@ -1518,7 +1516,12 @@ proc semPragmas(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; ki
   elif n == "pragmas":
     takeToken c, n
     while n.kind != ParRi:
+      let isKeyValue = n == "kv"
+      if isKeyValue:
+        inc n
       semPragma c, n, crucial, kind
+      if isKeyValue:
+        wantParRi c, n
     wantParRi c, n
   else:
     buildErr c, n.info, "expected '.' or 'pragmas'"
