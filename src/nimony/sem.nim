@@ -1467,19 +1467,17 @@ type
     bits: int
 
 proc semPragma(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; kind: SymKind) =
-  if n == "kv":
-    inc n
   let pk = pragmaKind(n)
   case pk
   of NoPragma:
     if kind.isRoutine and (let cc = callConvKind(n); cc != NoCallConv):
       c.dest.add toToken(ParLe, pool.tags.getOrIncl($cc), n.info)
       inc n
-      wantParRi c, n
+      c.dest.addParRi()
     else:
       buildErr c, n.info, "expected pragma"
       inc n
-      wantParRi c, n
+      c.dest.addParRi()
       #skip n
   of Magic:
     c.dest.add toToken(ParLe, pool.tags.getOrIncl($pk), n.info)
@@ -1495,18 +1493,18 @@ proc semPragma(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; kin
       takeToken c, n
     else:
       buildErr c, n.info, "`magic` pragma takes a string literal"
-    wantParRi c, n
+    c.dest.addParRi()
   of ImportC, ImportCpp, ExportC, Header:
     c.dest.add toToken(ParLe, pool.tags.getOrIncl($pk), n.info)
     inc n
     if n.kind != ParRi:
       semConstStrExpr c, n
-    wantParRi c, n
+    c.dest.addParRi()
   of Align, Bits:
     c.dest.add toToken(ParLe, pool.tags.getOrIncl($pk), n.info)
     inc n
     semConstIntExpr c, n
-    wantParRi c, n
+    c.dest.addParRi()
   of Nodecl, Selectany, Threadvar, Globalvar, Discardable, Noreturn:
     c.dest.add toToken(ParLe, pool.tags.getOrIncl($pk), n.info)
     c.dest.addParRi()
@@ -1518,7 +1516,12 @@ proc semPragmas(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; ki
   elif n == "pragmas":
     takeToken c, n
     while n.kind != ParRi:
+      let isKeyValue = n == "kv"
+      if isKeyValue:
+        inc n
       semPragma c, n, crucial, kind
+      if isKeyValue:
+        skip n # skips ')'
     wantParRi c, n
   else:
     buildErr c, n.info, "expected '.' or 'pragmas'"
