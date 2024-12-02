@@ -64,9 +64,11 @@ proc expandTemplateImpl(c: var SemContext; dest: var TokenBuf;
         skip body
         unsafeDec body
       else:
+        dest.add body
         inc nested
     of ParRi:
       dest.add body
+      dec nested
       if nested == 0: break
     if isAtom: break
     inc body

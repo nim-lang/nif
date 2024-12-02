@@ -1234,7 +1234,7 @@ proc semTemplateCall(c: var SemContext; it: var Item; fn: Cursor; beforeCall: in
   let s = fetchSym(c, fnId)
   let res = declToCursor(c, s)
   if res.status == LacksNothing:
-    let args = cursorAt(c.dest, beforeCall+1)
+    let args = cursorAt(c.dest, beforeCall+2)
     let firstVarargMatch = default(Cursor)
     # XXX implement varargs here
     expandTemplate(c, expandedInto, res.decl, args, firstVarargMatch, inferred)
@@ -1297,17 +1297,20 @@ proc semCall(c: var SemContext; it: var Item) =
     c.addFn fn.n, args
     c.dest.add m[idx].args
     combineType c, callNode.info, it.typ, m[idx].returnType
+    wantParRi c, it.n
     if fn.kind == TemplateY:
       semTemplateCall c, it, fn.n, beforeCall, addr m[idx].inferred
   elif idx == -2:
     buildErr c, callNode.info, "ambiguous call"
+    wantParRi c, it.n
   elif m.len > 0:
     # use the first error for now
     # XXX Improve error messages here
     c.dest.add m[0].args
+    wantParRi c, it.n
   else:
     buildErr c, callNode.info, "undeclared identifier"
-  wantParRi c, it.n
+    wantParRi c, it.n
 
 proc sameIdent(sym: SymId; str: StrId): bool =
   # XXX speed this up by using the `fieldCache` idea
@@ -2109,6 +2112,13 @@ proc semTypeSection(c: var SemContext; n: var Cursor) =
   wantParRi c, n
   publish c, delayed.s.name, declStart
 
+proc semTypedArithmetic(c: var SemContext; it: var Item) =
+  takeToken c, it.n
+  semLocalTypeImpl c, it.n, InLocalDecl
+  semExpr c, it
+  semExpr c, it
+  wantParRi c, it.n
+
 proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
   case it.n.kind
   of IntLit:
@@ -2208,12 +2218,13 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
       semCall c, it
     of DotX:
       semDot c, it, AlsoTryDotCall
+    of AshrX, AddX, SubX, MulX, DivX, ModX, ShrX, ShlX, BitandX, BitorX, BitxorX, BitnotX:
+      semTypedArithmetic c, it
     of AconstrX, AtX, DerefX, PatX, AddrX, NilX, NegX, SizeofX, OconstrX, KvX,
-       AddX, SubX, MulX, DivX, ModX, ShrX, ShlX, BitandX, BitorX, BitxorX, BitnotX,
        EqX, NeqX, LeX, LtX, CastX, ConvX, SufX, RangeX, RangesX,
        HderefX, HaddrX, OconvX, HconvX, OchoiceX, CchoiceX,
        TupleConstrX, SetX,
-       CompilesX, DeclaredX, DefinedX, HighX, LowX, TypeofX, AshrX, UnpackX:
+       CompilesX, DeclaredX, DefinedX, HighX, LowX, TypeofX, UnpackX:
       # XXX To implement
       takeToken c, it.n
       wantParRi c, it.n
