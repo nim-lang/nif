@@ -1225,7 +1225,29 @@ proc addFn(c: var SemContext; fn: Cursor; args: openArray[Item]) =
   if not inlinedMagic:
     c.dest.addSubtree fn
 
+proc semTemplateCall(c: var SemContext; it: var Item; fn: Cursor; beforeCall: int;
+                    inferred: ptr Table[SymId, Cursor]) =
+  var expandedInto = createTokenBuf(30)
+  assert fn.kind == Symbol
+  let fnId = fn.symId
+
+  let s = fetchSym(c, fnId)
+  let res = declToCursor(c, s)
+  if res.status == LacksNothing:
+    let args = cursorAt(c.dest, beforeCall+1)
+    let firstVarargMatch = default(Cursor)
+    # XXX implement varargs here
+    expandTemplate(c, expandedInto, res.decl, args, firstVarargMatch, inferred)
+    endRead(c.dest)
+    shrink c.dest, beforeCall
+    it.n = cursorAt(expandedInto, 0)
+    it.typ = c.types.autoType
+    semExpr c, it
+  else:
+    c.buildErr it.n.info, "could not load symbol: " & pool.syms[fnId] & "; errorCode: " & $res.status
+
 proc semCall(c: var SemContext; it: var Item) =
+  let beforeCall = c.dest.len
   let callNode = it.n
   inc it.n
   var dest = createTokenBuf(16)
@@ -1254,7 +1276,7 @@ proc semCall(c: var SemContext; it: var Item) =
     while f.kind != ParRi:
       if f.kind == Symbol:
         let s = fetchSym(c, f.symId)
-        var candidate = Item(n: f, typ: fetchType(c, f, s))
+        var candidate = Item(n: f, typ: fetchType(c, f, s), kind: s.kind)
         m.add createMatch()
         sigmatch(m[^1], candidate, args, emptyNode())
       else:
@@ -1271,10 +1293,12 @@ proc semCall(c: var SemContext; it: var Item) =
 
   c.dest.add callNode
   if idx >= 0:
-    let fn = m[idx].fn.n
-    c.addFn fn, args
+    let fn = m[idx].fn
+    c.addFn fn.n, args
     c.dest.add m[idx].args
     combineType c, callNode.info, it.typ, m[idx].returnType
+    if fn.kind == TemplateY:
+      semTemplateCall c, it, fn.n, beforeCall, addr m[idx].inferred
   elif idx == -2:
     buildErr c, callNode.info, "ambiguous call"
   elif m.len > 0:
@@ -1393,6 +1417,8 @@ proc semBreak(c: var SemContext; it: var Item) =
     else:
       var a = Item(n: it.n, typ: c.types.voidType)
       semExpr(c, a)
+      if a.kind != LabelY:
+        buildErr c, it.n.info, "`break` needs a block label"
       it.n = a.n
   wantParRi c, it.n
   producesVoid c, info, it.typ
@@ -1929,6 +1955,7 @@ proc semStmtsExpr(c: var SemContext; it: var Item) =
   wantParRi c, it.n
 
 proc semExprSym(c: var SemContext; it: var Item; s: Sym; flags: set[SemFlag]) =
+  it.kind = s.kind
   if s.kind == NoSym:
     c.buildErr it.n.info, "undeclared identifier"
     it.typ = c.types.autoType

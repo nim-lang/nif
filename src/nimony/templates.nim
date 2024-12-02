@@ -85,6 +85,8 @@ proc expandTemplate*(c: var SemContext; dest: var TokenBuf;
   var a = args
   var f = templ.params
   if f.kind != DotToken:
+    assert f == "params"
+    inc f
     while f.kind != ParRi and a.kind != ParRi:
       var param = f
       inc param
