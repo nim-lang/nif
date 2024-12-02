@@ -22,9 +22,10 @@ proc addParLe*(dest: var TokenBuf; kind: TypeKind|SymKind|ExprKind|StmtKind; inf
 type
   Item* = object
     n*, typ*: Cursor
+    kind*: SymKind
 
   Match* = object
-    inferred: Table[SymId, Cursor]
+    inferred*: Table[SymId, Cursor]
     tvars: HashSet[SymId]
     fn*: Item
     args*, typeArgs*: TokenBuf

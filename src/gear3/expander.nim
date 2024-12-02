@@ -627,7 +627,7 @@ proc importSymbol(e: var EContext; s: SymId) =
       error e, "undeclared identifier: " & nifName
     m.stream.r.jumpTo entry.offset
     var buf = createTokenBuf(30)
-    discard nifcursors.parse(m.stream, buf, entry.info)
+    nifcursors.parse(m.stream, buf, entry.info)
     var c = beginRead(buf)
     e.dest.add tagToken("imp", c.info)
     traverseStmt e, c, TraverseSig

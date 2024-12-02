@@ -35,6 +35,7 @@ proc startsWith*(s: StringView; prefix: string): bool =
     if i >= prefixLen: return true
     if i >= sLen or s[i] != prefix[i]: return false
     inc(i)
+  return false
 
 proc add*(s: var string; b: StringView) =
   let l = s.len
