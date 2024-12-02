@@ -60,3 +60,6 @@ proc foo_block* =
       break lab
     block lab2:
       break late
+
+proc testPragmaInline*() {.inline.} =
+  let data = 1
