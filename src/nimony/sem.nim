@@ -1272,7 +1272,8 @@ proc semCall(c: var SemContext; it: var Item) =
 
   c.dest.add callNode
   if idx >= 0:
-    c.addFn m[idx].fn.n, args
+    let fn = m[idx].fn.n
+    c.addFn fn, args
     c.dest.add m[idx].args
     combineType c, callNode.info, it.typ, m[idx].returnType
   elif idx == -2:
@@ -1914,14 +1915,19 @@ proc semProc(c: var SemContext; it: var Item; kind: SymKind) =
   producesVoid c, info, it.typ
   publish c, symId, declStart
 
-proc semStmts(c: var SemContext; it: var Item) =
-  var info = it.n.info
+proc isLastSon(n: Cursor): bool =
+  var n = n
+  skip n
+  result = n.kind == ParRi
+
+proc semStmtsExpr(c: var SemContext; it: var Item) =
   takeToken c, it.n
   while it.n.kind != ParRi:
-    info = it.n.info
-    semStmt c, it.n
+    if not isLastSon(it.n):
+      semStmt c, it.n
+    else:
+      semExpr c, it
   wantParRi c, it.n
-  producesVoid c, info, it.typ
 
 proc semExprSym(c: var SemContext; it: var Item; s: Sym; flags: set[SemFlag]) =
   if s.kind == NoSym:
@@ -2130,7 +2136,7 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
       of CursorS: semLocal c, it, CursorY
       of ResultS: semLocal c, it, ResultY
       of ConstS: semLocal c, it, ConstY
-      of StmtsS: semStmts c, it
+      of StmtsS: semStmtsExpr c, it
       of BreakS: semBreak c, it
       of ContinueS: semContinue c, it
       of CallS, CmdS: semCall c, it
