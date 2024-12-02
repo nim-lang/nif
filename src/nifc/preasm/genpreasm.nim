@@ -53,7 +53,7 @@ proc closeScope(c: var GeneratedCode) =
 proc initGeneratedCode*(m: sink Module; intmSize: int): GeneratedCode =
   result = GeneratedCode(m: m, intmSize: intmSize)
 
-proc error(m: Module; msg: string; tree: PackedTree[NifcKind]; n: NodePos) =
+proc error(m: Module; msg: string; tree: PackedTree[NifcKind]; n: NodePos) {.noreturn.} =
   when defined(debug):
     writeStackTrace()
   write stdout, "[Error] "

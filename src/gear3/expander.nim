@@ -52,7 +52,7 @@ proc load(e: var EContext; suffix: string): NifModule =
   else:
     result = e.mods[suffix]
 
-proc error(e: var EContext; msg: string; c: Cursor) =
+proc error(e: var EContext; msg: string; c: Cursor) {.noreturn.} =
   write stdout, "[Error] "
   write stdout, msg
   writeLine stdout, toString(c)
@@ -60,7 +60,7 @@ proc error(e: var EContext; msg: string; c: Cursor) =
     echo getStackTrace()
   quit 1
 
-proc error(e: var EContext; msg: string) =
+proc error(e: var EContext; msg: string) {.noreturn.} =
   write stdout, "[Error] "
   write stdout, msg
   when defined(debug):
