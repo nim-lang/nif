@@ -1157,25 +1157,25 @@ template skipToParams(n) =
   skip n # skip pattern
   skip n # skip generics
 
-proc fetchType(c: var SemContext; it: var Item; s: Sym) =
+proc fetchType(c: var SemContext; n: Cursor; s: Sym): TypeCursor =
   if s.kind == NoSym:
-    c.buildErr it.n.info, "undeclared identifier"
-    it.typ = c.types.autoType
+    c.buildErr n.info, "undeclared identifier"
+    result = c.types.autoType
   else:
     let res = declToCursor(c, s)
     if res.status == LacksNothing:
-      var n = res.decl
+      var d = res.decl
       if s.kind.isLocal:
-        skipToLocalType n
+        skipToLocalType d
       elif s.kind.isRoutine:
-        skipToParams n
+        skipToParams d
       else:
         # XXX enum field, object field?
         assert false, "not implemented"
-      it.typ = n
+      result = d
     else:
-      c.buildErr it.n.info, "could not load symbol: " & pool.syms[s.name] & "; errorCode: " & $res.status
-      it.typ = c.types.autoType
+      c.buildErr n.info, "could not load symbol: " & pool.syms[s.name] & "; errorCode: " & $res.status
+      result = c.types.autoType
 
 proc pickBestMatch(c: var SemContext; m: openArray[Match]): int =
   result = -1
@@ -1254,8 +1254,7 @@ proc semCall(c: var SemContext; it: var Item) =
     while f.kind != ParRi:
       if f.kind == Symbol:
         let s = fetchSym(c, f.symId)
-        var candidate = Item(n: f, typ: c.types.autoType)
-        fetchType c, candidate, s
+        var candidate = Item(n: f, typ: fetchType(c, f, s))
         m.add createMatch()
         sigmatch(m[^1], candidate, args, emptyNode())
       else:
