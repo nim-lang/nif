@@ -1240,9 +1240,10 @@ proc semTemplateCall(c: var SemContext; it: var Item; fn: Cursor; beforeCall: in
     expandTemplate(c, expandedInto, res.decl, args, firstVarargMatch, inferred)
     endRead(c.dest)
     shrink c.dest, beforeCall
-    it.n = cursorAt(expandedInto, 0)
-    it.typ = c.types.autoType
-    semExpr c, it
+    var a = Item(n: cursorAt(expandedInto, 0), typ: c.types.autoType)
+    semExpr c, a
+    it.typ = a.typ
+    it.kind = a.kind
   else:
     c.buildErr it.n.info, "could not load symbol: " & pool.syms[fnId] & "; errorCode: " & $res.status
 
