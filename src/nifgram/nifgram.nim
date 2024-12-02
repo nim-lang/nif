@@ -30,7 +30,7 @@ type
     declaredVar, collectInto, flipVar: string
     specTags, foundTags: OrderedTable[string, int] # maps to the arity for more checking
 
-proc error(c: var Context; msg: string) =
+proc error(c: var Context; msg: string) {.noreturn.} =
   #writeStackTrace()
   quit "[Error] in RULE " & c.currentRule & "(" & $c.r.line & "): " & msg
 

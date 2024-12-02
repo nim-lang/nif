@@ -144,7 +144,7 @@ proc writeTokenSeq(f: var CppFile; s: seq[Token]; c: GeneratedCode) =
     else:
       write f, c.tokens[x]
 
-proc error(m: Module; msg: string; tree: PackedTree[NifcKind]; n: NodePos) =
+proc error(m: Module; msg: string; tree: PackedTree[NifcKind]; n: NodePos) {.noreturn.} =
   write stdout, "[Error] "
   write stdout, msg
   writeLine stdout, toString(tree, n, m)
