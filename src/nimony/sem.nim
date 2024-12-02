@@ -1521,7 +1521,7 @@ proc semPragmas(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; ki
         inc n
       semPragma c, n, crucial, kind
       if isKeyValue:
-        wantParRi c, n
+        skip n # skips ')'
     wantParRi c, n
   else:
     buildErr c, n.info, "expected '.' or 'pragmas'"
