@@ -1563,8 +1563,10 @@ proc semTypeSym(c: var SemContext; s: Sym; info: PackedLineInfo) =
     let res = tryLoadSym(s.name)
     maybeInlineMagic c, res
     if s.kind == TypevarY: inc c.usedTypevars
-  else:
+  elif s.kind != NoSym:
     c.buildErr info, "type name expected, but got: " & pool.syms[s.name]
+  else:
+    c.buildErr info, "unknown type name"
 
 proc semParams(c: var SemContext; n: var Cursor)
 proc semLocal(c: var SemContext; n: var Cursor; kind: SymKind)
