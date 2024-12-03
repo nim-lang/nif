@@ -127,7 +127,8 @@ proc genProcTypePragma(c: var GeneratedCode; types: TypeGraph; n: NodePos; isVar
   # ProcTypePragma ::= CallingConvention | (varargs) | Attribute
   case types[n].kind
   of CallingConventions:
-    c.add " __" & $types[n].kind
+    if types[n].kind != NodeclC:
+      c.add " __" & $types[n].kind
   of VarargsC:
     isVarargs = true
   of AttrC:
