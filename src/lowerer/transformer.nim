@@ -5,7 +5,6 @@ include nifprelude
 import nifindexes
 import ".." / nimony / [nimony_model]
 
-
 type
   Context* = object
     dest*: TokenBuf
@@ -16,6 +15,18 @@ type
     moduleSyms: HashSet[SymId] # thisModule: ModuleId
     loopBody: TokenBuf
 
+    declaredSyms: HashSet[SymId]
+    requires: seq[SymId]
+
+    iterdecls: Table[SymId, TokenBuf]
+
+
+proc demand(e: var Context; s: SymId) =
+  if not e.declaredSyms.contains(s):
+    e.requires.add s
+
+proc offer(e: var Context; s: SymId) =
+  e.declaredSyms.incl s
 
 proc transformStmt*(e: var Context; c: var Cursor; dest: var TokenBuf)
 
@@ -60,6 +71,12 @@ proc extract(e: var Context; c: var Cursor; dest: var TokenBuf) =
       if nested == 0:
         inc c
         break
+    of SymbolDef:
+      e.dest.add c
+      e.offer c.symId
+    of Symbol:
+      e.dest.add c
+      e.demand c.symId
     else:
       dest.add c
     inc c
@@ -112,6 +129,7 @@ proc collectIterCalls(e: var Context; c: var Cursor): (SymId, seq[SymId], seq[To
   result = default((SymId, seq[SymId], seq[TokenBuf]))
   inc c # skips `call`
   result[0] = getSymDef(e, c)
+  e.demand result[0]
   result[1] = getIteratorParams(e, c)
   e.loop(c):
     var dest = createTokenBuf()
@@ -184,6 +202,7 @@ proc inlineLoopBody(e: var Context; c: var Cursor; mapping: Table[SymId, SymId])
       e.dest.add toToken(Symbol, s, c.info)
     else:
       want e, c
+      e.demand s
   of ParLe:
     case c.stmtKind
     of BreakS:
@@ -302,11 +321,13 @@ proc inlineIteratorBody(e: var Context; c: var Cursor) =
     extract(e, c, e.dest)
 
 proc inlineIterator(e: var Context; c: var Cursor) =
-  let (_, params, values) = e.iterCalls
+  let (name, params, values) = e.iterCalls
   for i in 0..<params.len:
     createDecl(e, c, params[i], values[i], "let")
 
-  inlineIteratorBody(e, c)
+  var tok = e.iterdecls[name]
+  var body = beginRead(tok)
+  inlineIteratorBody(e, body)
 
 proc transformForStmt(e: var Context; c: var Cursor) =
   #[ Transforming a `for` statement is quite involved. We have:
