@@ -983,7 +983,7 @@ proc fetchSym(c: var SemContext; s: SymId): Sym =
 
 proc semBoolExpr(c: var SemContext; it: var Item) =
   semExpr c, it
-  if classifyType(c, it.typ) != BoolT:
+  if classifyType(c, it.typ) notin {BoolT, AutoT}:
     buildErr c, it.n.info, "expected `bool` but got: " & typeToString(it.typ)
 
 proc semConstStrExpr(c: var SemContext; n: var Cursor) =
