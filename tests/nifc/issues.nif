@@ -135,7 +135,7 @@
   )
 
   (type :MyObject.aligned . (object .
-    (fld :a1 (pragmas (align 8)) (bool))))
+    (fld :a1.c (pragmas (align +8)) (bool))))
 
   (proc :foo.sizealignoffset . . . (stmts
     (call assert.c (eq (sizeof (i +32)) +4))
