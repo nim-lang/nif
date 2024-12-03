@@ -156,6 +156,13 @@
     (call assert.c (eq (suf +18446744073709551615u "u64") +18446744073709551615u))
   ))
 
+  (type :FooProc.cdecl . (proctype . (params) (i +32) (pragmas (cdecl))))
+  (type :FooProc.stdcall . (proctype . (params) (i +32) (pragmas (stdcall))))
+  (type :FooProc.safecall . (proctype . (params) (i +32) (pragmas (safecall))))
+  (type :FooProc.fastcall . (proctype . (params) (i +32) (pragmas (fastcall))))
+  (type :FooProc.noconv . (proctype . (params) (i +32) (pragmas (noconv))))
+  (type :FooProc.member . (proctype . (params) (i +32) (pragmas (member))))
+
   (proc :foo.inline . (i +32) (pragmas (inline)) (stmts
     (ret +1)
   ))
@@ -250,6 +257,12 @@
     (call foo.fastcall)
     (call foo.noconv)
     (call foo.member)
+    (var :foovar.cdecl . FooProc.cdecl foo.cdecl)
+    (var :foovar.stdcall . FooProc.stdcall foo.stdcall)
+    (var :foovar.safecall . FooProc.safecall foo.safecall)
+    (var :foovar.fastcall . FooProc.fastcall foo.fastcall)
+    (var :foovar.noconv . FooProc.noconv foo.noconv)
+    (var :foovar.member . FooProc.member foo.member)
 
     (var :x.c . (i +8) (suf +12 "i8"))
     (discard x.c)

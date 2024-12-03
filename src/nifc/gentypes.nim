@@ -126,9 +126,9 @@ template integralBits(types: TypeGraph; t: TypeId): string =
 proc genProcTypePragma(c: var GeneratedCode; types: TypeGraph; n: NodePos; isVarargs: var bool) =
   # ProcTypePragma ::= CallingConvention | (varargs) | Attribute
   case types[n].kind
-  of CallingConventions:
-    if types[n].kind != NodeclC:
-      c.add " __" & $types[n].kind
+  of CallingConventions - {NoconvC, MemberC}:
+    c.add " __" & $types[n].kind
+  of NoconvC, MemberC: discard
   of VarargsC:
     isVarargs = true
   of AttrC:
