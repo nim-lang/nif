@@ -1594,7 +1594,6 @@ proc semObjectType(c: var SemContext; n: var Cursor) =
 
 proc semEnumType(c: var SemContext; n: var Cursor) =
   takeToken c, n
-  wantDot c, n
   while n.substructureKind == EfldS:
     semLocal(c, n, EfldY)
   wantParRi c, n

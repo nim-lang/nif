@@ -423,7 +423,6 @@ proc toNif*(n, parent: PNode; c: var TranslationContext) =
       relLineInfo(it, n, c)
 
       c.b.addTree("efld")
-      relLineInfo(it, n, c)
 
       toNif name, it, c
       c.b.addEmpty # export marker
