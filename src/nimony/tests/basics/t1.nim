@@ -6,6 +6,11 @@ type
   float* {.magic: Float.}
   string* {.magic: String.}
 
+  Color* = enum
+    red = 0, blue = 1
+
+  bool* {.magic: Bool.} = enum ## Built-in boolean type.
+    false = 0, true = 1
 
 proc `+`*(x, y: int): int {.magic: "AddI".}
 
