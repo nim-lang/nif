@@ -1598,9 +1598,41 @@ proc semEnumType(c: var SemContext; n: var Cursor) =
     semLocal(c, n, EfldY)
   wantParRi c, n
 
+proc declareConceptSelf(c: var SemContext; info: PackedLineInfo) =
+  let name = pool.strings.getOrIncl("Self")
+  let result = identToSym(c, name, TypevarY)
+  let s = Sym(kind: TypevarY, name: result,
+              pos: c.dest.len)
+  discard c.currentScope.addNonOverloadable(name, s)
+  let declStart = c.dest.len
+  buildTree c.dest, TypevarY, info:
+    c.dest.add toToken(SymbolDef, result, info) # name
+    c.dest.addDotToken() # export marker
+    c.dest.addDotToken() # pragmas
+    c.dest.addDotToken() # typ
+    c.dest.addDotToken() # value
+  publish c, result, declStart
+
 proc semConceptType(c: var SemContext; n: var Cursor) =
-  # XXX implement me
-  takeTree c, n
+  takeToken c, n
+  wantDot c, n
+  wantDot c, n
+  declareConceptSelf c, n.info
+  skip n # skip dot or previous `Self` declaration
+  if n != "stmts":
+    error "(stmts) expected, but got: ", n
+  takeToken c, n
+  withNewScope c:
+    while true:
+      let k = n.symKind
+      if k in {ProcY, FuncY, IterY, TemplateY, MacroY, ConverterY, MethodY}:
+        var it = Item(n: n, typ: c.types.voidType)
+        semProc(c, it, k)
+        n = it.n
+      else:
+        break
+  wantParRi c, n
+  wantParRi c, n
 
 proc instGenericType(c: var SemContext; dest: var TokenBuf; info: PackedLineInfo;
                      origin, targetSym: SymId; decl: TypeDecl; args: Cursor) =
