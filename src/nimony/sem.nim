@@ -1247,6 +1247,19 @@ proc semTemplateCall(c: var SemContext; it: var Item; fn: Cursor; beforeCall: in
   else:
     c.buildErr it.n.info, "could not load symbol: " & pool.syms[fnId] & "; errorCode: " & $res.status
 
+type
+  FnCandidates = object
+    a: seq[Item]
+    s: HashSet[SymId]
+
+proc addUnique(c: var FnCandidates; x: Item) =
+  assert x.n.kind == Symbol
+  if not containsOrIncl(c.s, x.n.symId):
+    c.a.add x
+
+proc maybeAddConceptMethods(c: var SemContext; fn: Item; typ: TypeCursor; cands: var FnCandidates) =
+  discard
+
 proc semCall(c: var SemContext; it: var Item) =
   let beforeCall = c.dest.len
   let callNode = it.n
@@ -1258,10 +1271,16 @@ proc semCall(c: var SemContext; it: var Item) =
   it.n = fn.n
   var args: seq[Item] = @[]
   var argIndexes: seq[int] = @[]
+  var candidates = default FnCandidates
   while it.n.kind != ParRi:
     var arg = Item(n: it.n, typ: c.types.autoType)
     argIndexes.add c.dest.len
     semExpr c, arg
+    # scope extension: If the type is Typevar and it has attached
+    # a concept, use the concepts symbols too:
+    if arg.typ.kind == Symbol:
+      maybeAddConceptMethods c, fn, arg.typ, candidates
+    echo "type of arg is: ", toString arg.typ
     it.n = arg.n
     args.add arg
   assert args.len == argIndexes.len
@@ -1278,6 +1297,7 @@ proc semCall(c: var SemContext; it: var Item) =
       if f.kind == Symbol:
         let s = fetchSym(c, f.symId)
         var candidate = Item(n: f, typ: fetchType(c, f, s), kind: s.kind)
+
         m.add createMatch()
         sigmatch(m[^1], candidate, args, emptyNode())
       else:
