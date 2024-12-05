@@ -2133,6 +2133,39 @@ proc semTypedUnaryArithmetic(c: var SemContext; it: var Item) =
   semExpr c, it
   wantParRi c, it.n
 
+proc semArrayConstr(c: var SemContext, it: var Item) =
+  takeToken c, it.n
+  if it.n.kind == ParRi:
+    # empty array
+    if it.typ.typeKind in {AutoT, VoidT}:
+      buildErr c, it.n.info, "empty array needs a specified type"
+    wantParRi c, it.n
+    return
+  var elem = Item(n: it.n, typ: c.types.autoType)
+  case it.typ.typeKind
+  of ArrayT: # , SeqT, OpenArrayT
+    var arr = it.typ
+    inc arr
+    skip arr # index
+    elem.typ = arr
+  of AutoT: discard
+  else:
+    buildErr c, it.n.info, "invalid expected type for array constructor: " & typeToString(it.typ)
+  # XXX index types, 
+  semExpr c, elem
+  var count = 1
+  while elem.n.kind != ParRi:
+    semExpr c, elem
+    inc count
+  it.n = elem.n
+  wantParRi c, it.n
+  let start = c.dest.len
+  c.dest.buildTree ArrayT, it.n.info:
+    c.dest.add toToken(IntLit, count, it.n.info)
+    c.dest.addSubtree elem.typ
+  combineType c, it.n.info, it.typ, typeToCursor(c, start)
+  c.dest.shrink start
+
 proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
   case it.n.kind
   of IntLit:
@@ -2236,7 +2269,9 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
       semTypedBinaryArithmetic c, it
     of BitnotX, NegX:
       semTypedUnaryArithmetic c, it
-    of AconstrX, AtX, DerefX, PatX, AddrX, NilX, SizeofX, OconstrX, KvX,
+    of AconstrX:
+      semArrayConstr c, it
+    of AtX, DerefX, PatX, AddrX, NilX, SizeofX, OconstrX, KvX,
        EqX, NeqX, LeX, LtX, CastX, ConvX, SufX, RangeX, RangesX,
        HderefX, HaddrX, OconvX, HconvX, OchoiceX, CchoiceX,
        TupleConstrX, SetX,
