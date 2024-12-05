@@ -984,8 +984,10 @@ proc fetchSym(c: var SemContext; s: SymId): Sym =
   else:
     result = Sym(kind: NoSym, name: s, pos: InvalidPos)
 
-proc semBoolExpr(c: var SemContext; it: var Item) =
+proc semBoolExpr(c: var SemContext; n: var Cursor) =
+  var it = Item(n: n, typ: c.types.autoType)
   semExpr c, it
+  n = it.n
   if classifyType(c, it.typ) != BoolT:
     buildErr c, it.n.info, "expected `bool` but got: " & typeToString(it.typ)
 
@@ -1444,7 +1446,7 @@ proc semDot(c: var SemContext; it: var Item; mode: DotExprMode) =
 proc semWhile(c: var SemContext; it: var Item) =
   let info = it.n.info
   takeToken c, it.n
-  semBoolExpr c, it
+  semBoolExpr c, it.n
   inc c.routine.inLoop
   withNewScope c:
     semStmt c, it.n
@@ -2130,7 +2132,7 @@ proc semIf(c: var SemContext; it: var Item) =
   if it.n.substructureKind == ElifS:
     while it.n.substructureKind == ElifS:
       takeToken c, it.n
-      semBoolExpr c, it
+      semBoolExpr c, it.n
       withNewScope c:
         semStmt c, it.n
       wantParRi c, it.n
@@ -2307,13 +2309,13 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
       wantParRi c, it.n
     of AndX, OrX:
       takeToken c, it.n
-      semBoolExpr c, it
-      semBoolExpr c, it
+      semBoolExpr c, it.n
+      semBoolExpr c, it.n
       wantParRi c, it.n
     of NotX:
       c.dest.add it.n
       takeToken c, it.n
-      semBoolExpr c, it
+      semBoolExpr c, it.n
       wantParRi c, it.n
     of ParX:
       takeToken c, it.n
