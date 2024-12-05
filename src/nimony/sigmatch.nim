@@ -119,7 +119,11 @@ proc matchesConstraint(m: var Match; f: var Cursor; a: Cursor): bool =
   if f.kind == DotToken:
     result = true
   elif a.kind == Symbol:
-    result = matchesConstraint(m, f, typeImpl(a.symId))
+    let res = tryLoadSym(a.symId)
+    assert res.status == LacksNothing
+    var typevar = asTypevar(res.decl)
+    assert typevar.kind == TypevarY
+    result = matchesConstraint(m, f, typevar.typ)
   elif f.kind == ParLe:
     if f.typeKind == OrT:
       inc f
