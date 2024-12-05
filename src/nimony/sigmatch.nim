@@ -134,13 +134,22 @@ proc matchesConstraint(m: var Match; f: var Cursor; a: Cursor): bool =
       if f.kind == ParRi: inc f
 
 proc matchesConstraint(m: var Match; f: SymId; a: Cursor): bool =
-  var f = typeImpl(f)
-  result = matchesConstraint(m, f, a)
+  let res = tryLoadSym(f)
+  assert res.status == LacksNothing
+  var typevar = asTypevar(res.decl)
+  assert typevar.kind == TypevarY
+  result = matchesConstraint(m, typevar.typ, a)
+
+proc isTypevar(s: SymId): bool =
+  let res = tryLoadSym(s)
+  assert res.status == LacksNothing
+  let typevar = asTypevar(res.decl)
+  result = typevar.kind == TypevarY
 
 proc linearMatch(m: var Match; f, a: var Cursor) =
   var nested = 0
   while true:
-    if f.kind == Symbol and m.tvars.contains(f.symId):
+    if f.kind == Symbol and isTypevar(f.symId):
       # type vars are specal:
       let fs = f.symId
       if m.inferred.contains(fs):
@@ -210,8 +219,7 @@ proc singleArg(m: var Match; f: var Cursor; arg: Item)
 proc matchSymbol(m: var Match; f: Cursor; arg: Item) =
   let a = skipModifier(arg.typ)
   let fs = f.symId
-  if m.tvars.contains(fs):
-    # it is a type var we own
+  if isTypevar(fs):
     if m.inferred.contains(fs):
       typevarRematch(m, fs, m.inferred[fs], a)
     elif matchesConstraint(m, fs, a):

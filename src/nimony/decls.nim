@@ -39,6 +39,9 @@ proc asLocal*(c: Cursor): Local =
     skip c
     result.val = c
 
+proc asTypevar*(c: Cursor): Local {.inline.} =
+  result = asLocal(c)
+
 type
   Routine* = object
     kind*: SymKind
