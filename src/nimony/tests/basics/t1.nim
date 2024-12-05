@@ -74,3 +74,7 @@ proc foo_block* =
 
 proc testPragmaInline*() {.inline.} =
   let data = 1
+
+proc createData(): tuple[a: int, b: string] =
+  var s: tuple[a: int, b: string]
+  result = s
