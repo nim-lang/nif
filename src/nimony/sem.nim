@@ -146,6 +146,9 @@ proc addSymUse(dest: var TokenBuf; s: Sym; info: PackedLineInfo) =
 proc addSymUse(dest: var TokenBuf; s: SymId; info: PackedLineInfo) =
   dest.add toToken(Symbol, s, info)
 
+const
+  RoutineKinds = {ProcY, FuncY, IterY, TemplateY, MacroY, ConverterY, MethodY}
+
 proc buildSymChoiceForDot(c: var SemContext; identifier: StrId; info: PackedLineInfo) =
   var count = 0
   let oldLen = c.dest.len
@@ -1247,18 +1250,60 @@ proc semTemplateCall(c: var SemContext; it: var Item; fn: Cursor; beforeCall: in
   else:
     c.buildErr it.n.info, "could not load symbol: " & pool.syms[fnId] & "; errorCode: " & $res.status
 
+proc sameIdent(sym: SymId; str: StrId): bool =
+  # XXX speed this up by using the `fieldCache` idea
+  var name = pool.syms[sym]
+  extractBasename(name)
+  result = pool.strings.getOrIncl(name) == str
+
+proc sameIdent(a, b: SymId): bool =
+  # XXX speed this up by using the `fieldCache` idea
+  var x = pool.syms[a]
+  extractBasename(x)
+  var y = pool.syms[b]
+  extractBasename(y)
+  result = x == y
+
 type
   FnCandidates = object
     a: seq[Item]
     s: HashSet[SymId]
 
 proc addUnique(c: var FnCandidates; x: Item) =
-  assert x.n.kind == Symbol
+  assert x.n.kind == SymbolDef
   if not containsOrIncl(c.s, x.n.symId):
     c.a.add x
 
-proc maybeAddConceptMethods(c: var SemContext; fn: Item; typ: TypeCursor; cands: var FnCandidates) =
-  discard
+proc maybeAddConceptMethods(c: var SemContext; fn, typevar: SymId; cands: var FnCandidates) =
+  let res = tryLoadSym(typevar)
+  assert res.status == LacksNothing
+  let local = asLocal(res.decl)
+  if local.kind == TypevarY and local.typ.kind == Symbol:
+    let concpt = local.typ.symId
+    let section = getTypeSection concpt
+
+    var ops = section.body
+    inc ops  # (concept
+    skip ops # .
+    skip ops # .
+    skip ops #   (typevar Self ...)
+    if ops == "stmts":
+      inc ops
+      while ops.kind != ParRi:
+        let sk = ops.symKind
+        if sk in RoutineKinds:
+          var prc = ops
+          inc prc # (proc
+          if prc.kind == SymbolDef and sameIdent(fn, prc.symId):
+            var d = ops
+            skipToParams d
+            cands.addUnique Item(n: prc, typ: d, kind: sk)
+        skip ops
+
+proc considerTypeboundOps(c: var SemContext; m: var seq[Match]; candidates: FnCandidates; args: openArray[Item]) =
+  for candidate in candidates.a:
+    m.add createMatch()
+    sigmatch(m[^1], candidate, args, emptyNode())
 
 proc semCall(c: var SemContext; it: var Item) =
   let beforeCall = c.dest.len
@@ -1268,6 +1313,7 @@ proc semCall(c: var SemContext; it: var Item) =
   swap c.dest, dest
   var fn = Item(n: it.n, typ: c.types.autoType)
   semExpr(c, fn, {KeepMagics})
+  let fnId = if c.dest[0].kind == Symbol: c.dest[0].symId else: SymId(0)
   it.n = fn.n
   var args: seq[Item] = @[]
   var argIndexes: seq[int] = @[]
@@ -1278,9 +1324,8 @@ proc semCall(c: var SemContext; it: var Item) =
     semExpr c, arg
     # scope extension: If the type is Typevar and it has attached
     # a concept, use the concepts symbols too:
-    if arg.typ.kind == Symbol:
-      maybeAddConceptMethods c, fn, arg.typ, candidates
-    echo "type of arg is: ", toString arg.typ
+    if fnId != SymId(0) and arg.typ.kind == Symbol:
+      maybeAddConceptMethods c, fnId, arg.typ.symId, candidates
     it.n = arg.n
     args.add arg
   assert args.len == argIndexes.len
@@ -1303,6 +1348,7 @@ proc semCall(c: var SemContext; it: var Item) =
       else:
         buildErr c, fn.n.info, "`choice` node does not contain `symbol`"
       inc f
+    considerTypeboundOps(c, m, candidates, args)
   elif fn.n.kind == Ident:
     # error should have been given above already:
     # buildErr c, fn.n.info, "attempt to call undeclared routine"
@@ -1310,6 +1356,7 @@ proc semCall(c: var SemContext; it: var Item) =
   else:
     m.add createMatch()
     sigmatch(m[^1], fn, args, emptyNode())
+    considerTypeboundOps(c, m, candidates, args)
   let idx = pickBestMatch(c, m)
 
   c.dest.add callNode
@@ -1332,12 +1379,6 @@ proc semCall(c: var SemContext; it: var Item) =
   else:
     buildErr c, callNode.info, "undeclared identifier"
     wantParRi c, it.n
-
-proc sameIdent(sym: SymId; str: StrId): bool =
-  # XXX speed this up by using the `fieldCache` idea
-  var name = pool.syms[sym]
-  extractBasename(name)
-  result = pool.strings.getOrIncl(name) == str
 
 proc findObjField(t: Cursor; name: StrId; level = 0): ObjField =
   assert t == "object"
@@ -1387,6 +1428,7 @@ proc semDot(c: var SemContext; it: var Item; mode: DotExprMode) =
           c.dest.add toToken(Symbol, field.sym, info)
           c.dest.add toToken(IntLit, pool.integers.getOrIncl(field.level), info)
           combineType c, info, it.typ, field.typ
+          it.kind = FldY
           isMatch = true
         else:
           c.buildErr it.n.info, "undeclared field: " & pool.strings[fieldName]
@@ -1645,7 +1687,7 @@ proc semConceptType(c: var SemContext; n: var Cursor) =
   withNewScope c:
     while true:
       let k = n.symKind
-      if k in {ProcY, FuncY, IterY, TemplateY, MacroY, ConverterY, MethodY}:
+      if k in RoutineKinds:
         var it = Item(n: n, typ: c.types.voidType)
         semProc(c, it, k)
         n = it.n
