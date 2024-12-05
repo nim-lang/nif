@@ -2151,7 +2151,7 @@ proc semArrayConstr(c: var SemContext, it: var Item) =
   of AutoT: discard
   else:
     buildErr c, it.n.info, "invalid expected type for array constructor: " & typeToString(it.typ)
-  # XXX index types, 
+  # XXX index types, `index: value` etc not implemented
   semExpr c, elem
   var count = 1
   while elem.n.kind != ParRi:
