@@ -12,6 +12,12 @@ type
   bool* {.magic: Bool.} = enum ## Built-in boolean type.
     false = 0, true = 1
 
+  Student* = object
+    id: int
+    name: string
+
+  Data* = tuple[a: int, b: string]
+
 proc `+`*(x, y: int): int {.magic: "AddI".}
 
 proc foo(x: int; y: string): int =

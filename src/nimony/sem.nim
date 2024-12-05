@@ -1592,6 +1592,14 @@ proc semObjectType(c: var SemContext; n: var Cursor) =
       semLocal(c, n, FldY)
   wantParRi c, n
 
+proc semTupleType(c: var SemContext; n: var Cursor) =
+  takeToken c, n
+  # tuple fields:
+  withNewScope c:
+    while n.substructureKind == FldS:
+      semLocal(c, n, FldY)
+  wantParRi c, n
+
 proc semEnumType(c: var SemContext; n: var Cursor) =
   takeToken c, n
   while n.substructureKind == EfldS:
@@ -1721,10 +1729,7 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
       semLocalTypeImpl c, n, context
       wantParRi c, n
     of TupleT:
-      takeToken c, n
-      while n.kind != ParRi:
-        semLocalTypeImpl c, n, context
-      wantParRi c, n
+      semTupleType c, n
     of ArrayT:
       takeToken c, n
       semLocalTypeImpl c, n, AllowValues
