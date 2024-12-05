@@ -2115,10 +2115,16 @@ proc semTypeSection(c: var SemContext; n: var Cursor) =
   wantParRi c, n
   publish c, delayed.s.name, declStart
 
-proc semTypedArithmetic(c: var SemContext; it: var Item) =
+proc semTypedBinaryArithmetic(c: var SemContext; it: var Item) =
   takeToken c, it.n
   semLocalTypeImpl c, it.n, InLocalDecl
   semExpr c, it
+  semExpr c, it
+  wantParRi c, it.n
+
+proc semTypedUnaryArithmetic(c: var SemContext; it: var Item) =
+  takeToken c, it.n
+  semLocalTypeImpl c, it.n, InLocalDecl
   semExpr c, it
   wantParRi c, it.n
 
@@ -2221,9 +2227,11 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
       semCall c, it
     of DotX:
       semDot c, it, AlsoTryDotCall
-    of AshrX, AddX, SubX, MulX, DivX, ModX, ShrX, ShlX, BitandX, BitorX, BitxorX, BitnotX:
-      semTypedArithmetic c, it
-    of AconstrX, AtX, DerefX, PatX, AddrX, NilX, NegX, SizeofX, OconstrX, KvX,
+    of AshrX, AddX, SubX, MulX, DivX, ModX, ShrX, ShlX, BitandX, BitorX, BitxorX:
+      semTypedBinaryArithmetic c, it
+    of BitnotX, NegX:
+      semTypedUnaryArithmetic c, it
+    of AconstrX, AtX, DerefX, PatX, AddrX, NilX, SizeofX, OconstrX, KvX,
        EqX, NeqX, LeX, LtX, CastX, ConvX, SufX, RangeX, RangesX,
        HderefX, HaddrX, OconvX, HconvX, OchoiceX, CchoiceX,
        TupleConstrX, SetX,
