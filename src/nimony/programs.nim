@@ -57,7 +57,7 @@ proc loadInterface*(suffix: string; importTab: var Iface) =
     let symId = pool.syms.getOrIncl(k)
     importTab.mgetOrPut(strId, @[]).add symId
 
-proc error*(msg: string; c: Cursor) =
+proc error*(msg: string; c: Cursor) {.noreturn.} =
   write stdout, "[Error] "
   write stdout, msg
   writeLine stdout, toString(c, false)
@@ -65,7 +65,7 @@ proc error*(msg: string; c: Cursor) =
     echo getStackTrace()
   quit 1
 
-proc error*(msg: string) =
+proc error*(msg: string) {.noreturn.} =
   write stdout, "[Error] "
   write stdout, msg
   when defined(debug):

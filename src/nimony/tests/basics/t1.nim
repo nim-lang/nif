@@ -6,6 +6,17 @@ type
   float* {.magic: Float.}
   string* {.magic: String.}
 
+  Color* = enum
+    red = 0, blue = 1
+
+  bool* {.magic: Bool.} = enum ## Built-in boolean type.
+    false = 0, true = 1
+
+  Student* = object
+    id: int
+    name: string
+
+  Data* = tuple[a: int, b: string]
 
 proc `+`*(x, y: int): int {.magic: "AddI".}
 
@@ -60,3 +71,12 @@ proc foo_block* =
       break lab
     block lab2:
       break late
+
+proc testPragmaInline*() {.inline.} =
+  let data = 1
+
+proc createData(): tuple[a: int, b: string] =
+  var s: tuple[a: int, b: string]
+  result = s
+
+var x = [1, 2, 3]

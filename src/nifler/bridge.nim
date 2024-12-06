@@ -423,7 +423,6 @@ proc toNif*(n, parent: PNode; c: var TranslationContext) =
       relLineInfo(it, n, c)
 
       c.b.addTree("efld")
-      relLineInfo(it, n, c)
 
       toNif name, it, c
       c.b.addEmpty # export marker
@@ -533,6 +532,15 @@ proc toNif*(n, parent: PNode; c: var TranslationContext) =
     else:
       toNif(last, n, c)
     c.b.endTree()
+
+  of nkTupleTy:
+    c.section = "fld"
+    relLineInfo(n, parent, c)
+    c.b.addTree(nodeKindTranslation(n.kind))
+    for i in 0..<n.len:
+      toNif(n[i], n, c)
+    c.b.endTree()
+
   else:
     relLineInfo(n, parent, c)
     c.b.addTree(nodeKindTranslation(n.kind))

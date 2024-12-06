@@ -82,7 +82,7 @@ proc isTag(c: var Context; tag: TagId): bool =
   else:
     result = false
 
-proc error(c: var Context; msg: string) =
+proc error(c: var Context; msg: string) {.noreturn.} =
   if c.current.info.isValid:
     let (f, line, col) = unpack(pool.man, c.current.info)
     echo "[Error] ", pool.files[f] & "(" & $line & ", " & $col & "): " & msg

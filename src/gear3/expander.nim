@@ -52,7 +52,7 @@ proc load(e: var EContext; suffix: string): NifModule =
   else:
     result = e.mods[suffix]
 
-proc error(e: var EContext; msg: string; c: Cursor) =
+proc error(e: var EContext; msg: string; c: Cursor) {.noreturn.} =
   write stdout, "[Error] "
   write stdout, msg
   writeLine stdout, toString(c)
@@ -60,7 +60,7 @@ proc error(e: var EContext; msg: string; c: Cursor) =
     echo getStackTrace()
   quit 1
 
-proc error(e: var EContext; msg: string) =
+proc error(e: var EContext; msg: string) {.noreturn.} =
   write stdout, "[Error] "
   write stdout, msg
   when defined(debug):
@@ -155,6 +155,27 @@ type
     IsTypeBody
     IsPointerOf
 
+proc traverseType(e: var EContext; c: var Cursor; flags: set[TypeFlag] = {})
+
+proc traverseTupleField(e: var EContext; c: var Cursor; flags: set[TypeFlag] = {}) =
+  e.dest.add c # fld
+  inc c
+
+  expectSymdef(e, c)
+  let (s, sinfo) = getSymDef(e, c)
+  e.dest.add toToken(SymbolDef, s, sinfo)
+  e.offer s
+
+  skipExportMarker e, c
+
+  inc c # pragmas: must be empty
+  e.dest.addDotToken()
+
+  traverseType e, c, flags
+
+  inc c # skips value
+  wantParRi e, c
+
 proc traverseType(e: var EContext; c: var Cursor; flags: set[TypeFlag] = {}) =
   case c.kind
   of DotToken:
@@ -202,7 +223,15 @@ proc traverseType(e: var EContext; c: var Cursor; flags: set[TypeFlag] = {}) =
       inc c
       traverseType e, c, flags
       skipParRi e, c
-    of ObjectT, TupleT, EnumT, VoidT, StringT, VarargsT, NilT, ConceptT,
+    of TupleT:
+      inc c
+      e.dest.add tagToken("object", c.info)
+      e.dest.addDotToken()
+      while c.substructureKind == FldS:
+        traverseTupleField(e, c, flags)
+
+      wantParRi e, c
+    of ObjectT, EnumT, VoidT, StringT, VarargsT, NilT, ConceptT,
        IterT, InvokeT, SetT:
       error e, "unimplemented type: ", c
   else:

@@ -127,7 +127,7 @@ proc genProcTypePragma(c: var GeneratedCode; types: TypeGraph; n: NodePos; isVar
   # ProcTypePragma ::= CallingConvention | (varargs) | Attribute
   case types[n].kind
   of CallingConventions:
-    c.add " __" & $types[n].kind
+    discard "already handled"
   of VarargsC:
     isVarargs = true
   of AttrC:
@@ -254,17 +254,38 @@ proc genType(c: var GeneratedCode; types: TypeGraph; t: TypeId; name = "") =
     c.add BracketRi
   of ProctypeC:
     let decl = asProcType(types, t)
-    if types[decl.returnType].kind == Empty:
-      c.add "void"
-    else:
-      genType c, types, decl.returnType
-    c.add Space
-    c.add ParLe
+    var lastCallConv = Empty
+    if types[decl.pragmas].kind == PragmasC:
+      for ch in sons(types, decl.pragmas):
+        case types[ch].kind
+        of CallingConventions:
+          lastCallConv = types[ch].kind
+        else:
+          discard
     var isVarargs = false
-    genProcTypePragmas c, types, decl.pragmas, isVarargs
-    c.add Star # "(*fn)"
-    maybeAddName(c, name)
-    c.add ParRi
+    if lastCallConv != Empty:
+      c.add CallingConvToStr[lastCallConv]
+      c.add "_PTR"
+      c.add ParLe
+      if types[decl.returnType].kind == Empty:
+        c.add "void"
+      else:
+        genType c, types, decl.returnType
+      c.add Comma
+      genProcTypePragmas c, types, decl.pragmas, isVarargs
+      maybeAddName(c, name)
+      c.add ParRi
+    else:
+      if types[decl.returnType].kind == Empty:
+        c.add "void"
+      else:
+        genType c, types, decl.returnType
+      c.add Space
+      c.add ParLe
+      genProcTypePragmas c, types, decl.pragmas, isVarargs
+      c.add Star # "(*fn)"
+      maybeAddName(c, name)
+      c.add ParRi
     c.add ParLe
     var i = 0
     for ch in sons(types, decl.params):

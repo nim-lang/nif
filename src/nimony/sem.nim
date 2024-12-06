@@ -1553,19 +1553,17 @@ type
     bits: int
 
 proc semPragma(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; kind: SymKind) =
-  if n == "kv":
-    inc n
   let pk = pragmaKind(n)
   case pk
   of NoPragma:
     if kind.isRoutine and (let cc = callConvKind(n); cc != NoCallConv):
       c.dest.add toToken(ParLe, pool.tags.getOrIncl($cc), n.info)
       inc n
-      wantParRi c, n
+      c.dest.addParRi()
     else:
       buildErr c, n.info, "expected pragma"
       inc n
-      wantParRi c, n
+      c.dest.addParRi()
       #skip n
   of Magic:
     c.dest.add toToken(ParLe, pool.tags.getOrIncl($pk), n.info)
@@ -1581,18 +1579,18 @@ proc semPragma(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; kin
       takeToken c, n
     else:
       buildErr c, n.info, "`magic` pragma takes a string literal"
-    wantParRi c, n
+    c.dest.addParRi()
   of ImportC, ImportCpp, ExportC, Header:
     c.dest.add toToken(ParLe, pool.tags.getOrIncl($pk), n.info)
     inc n
     if n.kind != ParRi:
       semConstStrExpr c, n
-    wantParRi c, n
+    c.dest.addParRi()
   of Align, Bits:
     c.dest.add toToken(ParLe, pool.tags.getOrIncl($pk), n.info)
     inc n
     semConstIntExpr c, n
-    wantParRi c, n
+    c.dest.addParRi()
   of Nodecl, Selectany, Threadvar, Globalvar, Discardable, Noreturn:
     c.dest.add toToken(ParLe, pool.tags.getOrIncl($pk), n.info)
     c.dest.addParRi()
@@ -1604,7 +1602,12 @@ proc semPragmas(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; ki
   elif n == "pragmas":
     takeToken c, n
     while n.kind != ParRi:
+      let isKeyValue = n == "kv"
+      if isKeyValue:
+        inc n
       semPragma c, n, crucial, kind
+      if isKeyValue:
+        skip n # skips ')'
     wantParRi c, n
   else:
     buildErr c, n.info, "expected '.' or 'pragmas'"
@@ -1677,9 +1680,16 @@ proc semObjectType(c: var SemContext; n: var Cursor) =
       semLocal(c, n, FldY)
   wantParRi c, n
 
+proc semTupleType(c: var SemContext; n: var Cursor) =
+  takeToken c, n
+  # tuple fields:
+  withNewScope c:
+    while n.substructureKind == FldS:
+      semLocal(c, n, FldY)
+  wantParRi c, n
+
 proc semEnumType(c: var SemContext; n: var Cursor) =
   takeToken c, n
-  wantDot c, n
   while n.substructureKind == EfldS:
     semLocal(c, n, EfldY)
   wantParRi c, n
@@ -1839,10 +1849,7 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
       semLocalTypeImpl c, n, context
       wantParRi c, n
     of TupleT:
-      takeToken c, n
-      while n.kind != ParRi:
-        semLocalTypeImpl c, n, context
-      wantParRi c, n
+      semTupleType c, n
     of ArrayT:
       takeToken c, n
       semLocalTypeImpl c, n, AllowValues
@@ -2233,7 +2240,7 @@ proc semTypeSection(c: var SemContext; n: var Cursor) =
   wantParRi c, n
   publish c, delayed.s.name, declStart
 
-proc semTypedArithmetic(c: var SemContext; it: var Item) =
+proc semTypedBinaryArithmetic(c: var SemContext; it: var Item) =
   takeToken c, it.n
   semLocalTypeImpl c, it.n, InLocalDecl
   semExpr c, it
@@ -2262,6 +2269,45 @@ proc literalB(c: var SemContext; it: var Item; literalType: TypeCursor) =
   let expected = it.typ
   it.typ = literalType
   commonType c, it, beforeExpr, expected
+
+proc semTypedUnaryArithmetic(c: var SemContext; it: var Item) =
+  takeToken c, it.n
+  semLocalTypeImpl c, it.n, InLocalDecl
+  semExpr c, it
+  wantParRi c, it.n
+
+proc semArrayConstr(c: var SemContext, it: var Item) =
+  takeToken c, it.n
+  if it.n.kind == ParRi:
+    # empty array
+    if it.typ.typeKind in {AutoT, VoidT}:
+      buildErr c, it.n.info, "empty array needs a specified type"
+    wantParRi c, it.n
+    return
+  var elem = Item(n: it.n, typ: c.types.autoType)
+  case it.typ.typeKind
+  of ArrayT: # , SeqT, OpenArrayT
+    var arr = it.typ
+    inc arr
+    skip arr # index
+    elem.typ = arr
+  of AutoT: discard
+  else:
+    buildErr c, it.n.info, "invalid expected type for array constructor: " & typeToString(it.typ)
+  # XXX index types, `index: value` etc not implemented
+  semExpr c, elem
+  var count = 1
+  while elem.n.kind != ParRi:
+    semExpr c, elem
+    inc count
+  it.n = elem.n
+  wantParRi c, it.n
+  let start = c.dest.len
+  c.dest.buildTree ArrayT, it.n.info:
+    c.dest.add toToken(IntLit, count, it.n.info)
+    c.dest.addSubtree elem.typ
+  combineType c, it.n.info, it.typ, typeToCursor(c, start)
+  c.dest.shrink start
 
 proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
   case it.n.kind
@@ -2353,11 +2399,15 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
       semCall c, it
     of DotX:
       semDot c, it, AlsoTryDotCall
-    of AshrX, AddX, SubX, MulX, DivX, ModX, ShrX, ShlX, BitandX, BitorX, BitxorX, BitnotX:
-      semTypedArithmetic c, it
     of EqX, NeqX, LeX, LtX:
       semCmp c, it
-    of AconstrX, AtX, DerefX, PatX, AddrX, NilX, NegX, SizeofX, OconstrX, KvX,
+    of AshrX, AddX, SubX, MulX, DivX, ModX, ShrX, ShlX, BitandX, BitorX, BitxorX:
+      semTypedBinaryArithmetic c, it
+    of BitnotX, NegX:
+      semTypedUnaryArithmetic c, it
+    of AconstrX:
+      semArrayConstr c, it
+    of AtX, DerefX, PatX, AddrX, NilX, SizeofX, OconstrX, KvX,
        CastX, ConvX, SufX, RangeX, RangesX,
        HderefX, HaddrX, OconvX, HconvX, OchoiceX, CchoiceX,
        TupleConstrX, SetX,

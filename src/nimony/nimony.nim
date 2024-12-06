@@ -51,12 +51,13 @@ proc requiresTool(tool, src: string; forceRebuild: bool) =
     nimexec("c -d:release " & src)
     moveFile src.changeFileExt(ExeExt), t
 
-proc processSingleModule(nimFile: string; config: sink NifConfig; moduleFlags: set[ModuleFlag]) =
+proc processSingleModule(nimFile: string; config: sink NifConfig; moduleFlags: set[ModuleFlag]; forceRebuild: bool) =
   let nifler = findTool("nifler")
   let name = moduleSuffix(nimFile, config.paths)
   let src = "nifcache" / name & ".1.nif"
   let dest = "nifcache" / name & ".2.nif"
-  exec quoteShell(nifler) & " --portablePaths p " & quoteShell(nimFile) & " " &
+  let toforceRebuild = if forceRebuild: " -f " else: ""
+  exec quoteShell(nifler) & " --portablePaths p " & toforceRebuild & quoteShell(nimFile) & " " &
     quoteShell(src)
   if fileExists(src):
     semcheck(src, dest, ensureMove config, moduleFlags)
@@ -115,7 +116,7 @@ proc handleCmdLine() =
     createDir("nifcache")
     requiresTool "nifler", "src/nifler/nifler.nim", forceRebuild
     requiresTool "nifc", "src/nifc/nifc.nim", forceRebuild
-    processSingleModule(args[0].addFileExt(".nim"), config, moduleFlags)
+    processSingleModule(args[0].addFileExt(".nim"), config, moduleFlags, forceRebuild)
 
 when isMainModule:
   handleCmdLine()
