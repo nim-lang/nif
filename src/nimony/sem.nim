@@ -1401,7 +1401,8 @@ proc semCall(c: var SemContext; it: var Item) =
     if fn.kind == TemplateY:
       if c.templateInstCounter <= MaxNestedTemplates:
         inc c.templateInstCounter
-        semTemplateCall c, it, fn.n, beforeCall, addr m[idx].inferred
+        withErrorContext c, callNode.info:
+          semTemplateCall c, it, fn.n, beforeCall, addr m[idx].inferred
         dec c.templateInstCounter
       else:
         buildErr c, callNode.info, "recursion limit exceeded for template expansions"
