@@ -66,6 +66,18 @@ proc skip*(c: var Cursor) =
       elif c.kind == ParLe: inc nested
   inc c
 
+proc skipToEnd*(c: var Cursor) =
+  var nested = 0
+  while true:
+    if c.kind == ParRi:
+      if nested == 0:
+        inc c
+        break
+      dec nested
+    elif c.kind == ParLe:
+      inc nested
+    inc c
+
 type
   Storage = ptr UncheckedArray[PackedToken]
   TokenBuf* = object

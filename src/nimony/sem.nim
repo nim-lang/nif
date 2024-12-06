@@ -721,7 +721,11 @@ proc commonType(c: var SemContext; it: var Item; argBegin: int; expected: TypeCu
   typematch m, expected, arg
   endRead(c.dest)
   if m.err:
-    c.typeMismatch info, it.typ, expected
+    when defined(debug):
+      shrink c.dest, argBegin
+      c.dest.add m.args
+    else:
+      c.typeMismatch info, it.typ, expected
   else:
     shrink c.dest, argBegin
     c.dest.add m.args
