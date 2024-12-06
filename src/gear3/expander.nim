@@ -415,13 +415,20 @@ proc traverseTypeDecl(e: var EContext; c: var Cursor) =
   let vinfo = c.info
   e.add "type", vinfo
   inc c
-  let (s, _) = getSymDef(e, c)
+  let (s, sinfo) = getSymDef(e, c)
   let oldOwner = setOwner(e, s)
+
+  e.dest.add toToken(SymbolDef, s, sinfo)
+  e.offer s
+
   skipExportMarker e, c
   let isGeneric = c.kind != DotToken
   skip c # generic parameters
 
   let prag = parsePragmas(e, c)
+
+  e.dest.addDotToken() # adds pragmas
+
   traverseType e, c, {IsTypeBody}
   wantParRi e, c
   swap dst, e.dest
