@@ -1390,9 +1390,10 @@ proc semCall(c: var SemContext; it: var Item) =
     let fn = m[idx].fn
     c.addFn fn.n, args
     c.dest.add m[idx].args
-    combineType c, callNode.info, it.typ, m[idx].returnType
-    # XXX use commonType here!
     wantParRi c, it.n
+    let expected = it.typ
+    it.typ = m[idx].returnType
+    commonType c, it, beforeCall, expected
     if fn.kind == TemplateY:
       semTemplateCall c, it, fn.n, beforeCall, addr m[idx].inferred
   elif idx == -2:
