@@ -146,6 +146,9 @@ proc addSymUse(dest: var TokenBuf; s: Sym; info: PackedLineInfo) =
 proc addSymUse(dest: var TokenBuf; s: SymId; info: PackedLineInfo) =
   dest.add toToken(Symbol, s, info)
 
+const
+  RoutineKinds = {ProcY, FuncY, IterY, TemplateY, MacroY, ConverterY, MethodY}
+
 proc buildSymChoiceForDot(c: var SemContext; identifier: StrId; info: PackedLineInfo) =
   var count = 0
   let oldLen = c.dest.len
@@ -705,6 +708,30 @@ proc combineType(c: var SemContext; info: PackedLineInfo; dest: var Cursor; src:
   else:
     c.typeMismatch info, src, dest
 
+proc commonType(c: var SemContext; it: var Item; argBegin: int; expected: TypeCursor) =
+  if typeKind(expected) == AutoT:
+    return
+  elif typeKind(it.typ) == AutoT:
+    it.typ = expected
+    return
+
+  let info = it.n.info
+  var m = createMatch()
+  var arg = Item(n: cursorAt(c.dest, argBegin), typ: it.typ)
+  typematch m, expected, arg
+  endRead(c.dest)
+  if m.err:
+    when defined(debug):
+      shrink c.dest, argBegin
+      c.dest.add m.args
+    else:
+      c.typeMismatch info, it.typ, expected
+  else:
+    shrink c.dest, argBegin
+    c.dest.add m.args
+    if m.usesConversion:
+      it.typ = expected
+
 proc producesVoid(c: var SemContext; info: PackedLineInfo; dest: var Cursor) =
   if typeKind(dest) in {AutoT, VoidT}:
     combineType c, info, dest, c.types.voidType
@@ -981,8 +1008,10 @@ proc fetchSym(c: var SemContext; s: SymId): Sym =
   else:
     result = Sym(kind: NoSym, name: s, pos: InvalidPos)
 
-proc semBoolExpr(c: var SemContext; it: var Item) =
+proc semBoolExpr(c: var SemContext; n: var Cursor) =
+  var it = Item(n: n, typ: c.types.autoType)
   semExpr c, it
+  n = it.n
   if classifyType(c, it.typ) != BoolT:
     buildErr c, it.n.info, "expected `bool` but got: " & typeToString(it.typ)
 
@@ -1247,6 +1276,61 @@ proc semTemplateCall(c: var SemContext; it: var Item; fn: Cursor; beforeCall: in
   else:
     c.buildErr it.n.info, "could not load symbol: " & pool.syms[fnId] & "; errorCode: " & $res.status
 
+proc sameIdent(sym: SymId; str: StrId): bool =
+  # XXX speed this up by using the `fieldCache` idea
+  var name = pool.syms[sym]
+  extractBasename(name)
+  result = pool.strings.getOrIncl(name) == str
+
+proc sameIdent(a, b: SymId): bool =
+  # XXX speed this up by using the `fieldCache` idea
+  var x = pool.syms[a]
+  extractBasename(x)
+  var y = pool.syms[b]
+  extractBasename(y)
+  result = x == y
+
+type
+  FnCandidates = object
+    a: seq[Item]
+    s: HashSet[SymId]
+
+proc addUnique(c: var FnCandidates; x: Item) =
+  assert x.n.kind == SymbolDef
+  if not containsOrIncl(c.s, x.n.symId):
+    c.a.add x
+
+proc maybeAddConceptMethods(c: var SemContext; fn, typevar: SymId; cands: var FnCandidates) =
+  let res = tryLoadSym(typevar)
+  assert res.status == LacksNothing
+  let local = asLocal(res.decl)
+  if local.kind == TypevarY and local.typ.kind == Symbol:
+    let concpt = local.typ.symId
+    let section = getTypeSection concpt
+
+    var ops = section.body
+    inc ops  # (concept
+    skip ops # .
+    skip ops # .
+    skip ops #   (typevar Self ...)
+    if ops == "stmts":
+      inc ops
+      while ops.kind != ParRi:
+        let sk = ops.symKind
+        if sk in RoutineKinds:
+          var prc = ops
+          inc prc # (proc
+          if prc.kind == SymbolDef and sameIdent(fn, prc.symId):
+            var d = ops
+            skipToParams d
+            cands.addUnique Item(n: prc, typ: d, kind: sk)
+        skip ops
+
+proc considerTypeboundOps(c: var SemContext; m: var seq[Match]; candidates: FnCandidates; args: openArray[Item]) =
+  for candidate in candidates.a:
+    m.add createMatch()
+    sigmatch(m[^1], candidate, args, emptyNode())
+
 proc semCall(c: var SemContext; it: var Item) =
   let beforeCall = c.dest.len
   let callNode = it.n
@@ -1255,13 +1339,19 @@ proc semCall(c: var SemContext; it: var Item) =
   swap c.dest, dest
   var fn = Item(n: it.n, typ: c.types.autoType)
   semExpr(c, fn, {KeepMagics})
+  let fnId = if c.dest[0].kind == Symbol: c.dest[0].symId else: SymId(0)
   it.n = fn.n
   var args: seq[Item] = @[]
   var argIndexes: seq[int] = @[]
+  var candidates = default FnCandidates
   while it.n.kind != ParRi:
     var arg = Item(n: it.n, typ: c.types.autoType)
     argIndexes.add c.dest.len
     semExpr c, arg
+    # scope extension: If the type is Typevar and it has attached
+    # a concept, use the concepts symbols too:
+    if fnId != SymId(0) and arg.typ.kind == Symbol:
+      maybeAddConceptMethods c, fnId, arg.typ.symId, candidates
     it.n = arg.n
     args.add arg
   assert args.len == argIndexes.len
@@ -1278,11 +1368,13 @@ proc semCall(c: var SemContext; it: var Item) =
       if f.kind == Symbol:
         let s = fetchSym(c, f.symId)
         var candidate = Item(n: f, typ: fetchType(c, f, s), kind: s.kind)
+
         m.add createMatch()
         sigmatch(m[^1], candidate, args, emptyNode())
       else:
         buildErr c, fn.n.info, "`choice` node does not contain `symbol`"
       inc f
+    considerTypeboundOps(c, m, candidates, args)
   elif fn.n.kind == Ident:
     # error should have been given above already:
     # buildErr c, fn.n.info, "attempt to call undeclared routine"
@@ -1290,6 +1382,7 @@ proc semCall(c: var SemContext; it: var Item) =
   else:
     m.add createMatch()
     sigmatch(m[^1], fn, args, emptyNode())
+    considerTypeboundOps(c, m, candidates, args)
   let idx = pickBestMatch(c, m)
 
   c.dest.add callNode
@@ -1297,8 +1390,10 @@ proc semCall(c: var SemContext; it: var Item) =
     let fn = m[idx].fn
     c.addFn fn.n, args
     c.dest.add m[idx].args
-    combineType c, callNode.info, it.typ, m[idx].returnType
     wantParRi c, it.n
+    let expected = it.typ
+    it.typ = m[idx].returnType
+    commonType c, it, beforeCall, expected
     if fn.kind == TemplateY:
       semTemplateCall c, it, fn.n, beforeCall, addr m[idx].inferred
   elif idx == -2:
@@ -1312,12 +1407,6 @@ proc semCall(c: var SemContext; it: var Item) =
   else:
     buildErr c, callNode.info, "undeclared identifier"
     wantParRi c, it.n
-
-proc sameIdent(sym: SymId; str: StrId): bool =
-  # XXX speed this up by using the `fieldCache` idea
-  var name = pool.syms[sym]
-  extractBasename(name)
-  result = pool.strings.getOrIncl(name) == str
 
 proc findObjField(t: Cursor; name: StrId; level = 0): ObjField =
   assert t == "object"
@@ -1367,6 +1456,8 @@ proc semDot(c: var SemContext; it: var Item; mode: DotExprMode) =
           c.dest.add toToken(Symbol, field.sym, info)
           c.dest.add toToken(IntLit, pool.integers.getOrIncl(field.level), info)
           combineType c, info, it.typ, field.typ
+          # XXX use commonType here
+          it.kind = FldY
           isMatch = true
         else:
           c.buildErr it.n.info, "undeclared field: " & pool.strings[fieldName]
@@ -1382,7 +1473,7 @@ proc semDot(c: var SemContext; it: var Item; mode: DotExprMode) =
 proc semWhile(c: var SemContext; it: var Item) =
   let info = it.n.info
   takeToken c, it.n
-  semBoolExpr c, it
+  semBoolExpr c, it.n
   inc c.routine.inLoop
   withNewScope c:
     semStmt c, it.n
@@ -1566,8 +1657,10 @@ proc semTypeSym(c: var SemContext; s: Sym; info: PackedLineInfo) =
     let res = tryLoadSym(s.name)
     maybeInlineMagic c, res
     if s.kind == TypevarY: inc c.usedTypevars
-  else:
+  elif s.kind != NoSym:
     c.buildErr info, "type name expected, but got: " & pool.syms[s.name]
+  else:
+    c.buildErr info, "unknown type name"
 
 proc semParams(c: var SemContext; n: var Cursor)
 proc semLocal(c: var SemContext; n: var Cursor; kind: SymKind)
@@ -1606,9 +1699,41 @@ proc semEnumType(c: var SemContext; n: var Cursor) =
     semLocal(c, n, EfldY)
   wantParRi c, n
 
+proc declareConceptSelf(c: var SemContext; info: PackedLineInfo) =
+  let name = pool.strings.getOrIncl("Self")
+  let result = identToSym(c, name, TypevarY)
+  let s = Sym(kind: TypevarY, name: result,
+              pos: c.dest.len)
+  discard c.currentScope.addNonOverloadable(name, s)
+  let declStart = c.dest.len
+  buildTree c.dest, TypevarY, info:
+    c.dest.add toToken(SymbolDef, result, info) # name
+    c.dest.addDotToken() # export marker
+    c.dest.addDotToken() # pragmas
+    c.dest.addDotToken() # typ
+    c.dest.addDotToken() # value
+  publish c, result, declStart
+
 proc semConceptType(c: var SemContext; n: var Cursor) =
-  # XXX implement me
-  takeTree c, n
+  takeToken c, n
+  wantDot c, n
+  wantDot c, n
+  declareConceptSelf c, n.info
+  skip n # skip dot or previous `Self` declaration
+  if n != "stmts":
+    error "(stmts) expected, but got: ", n
+  takeToken c, n
+  withNewScope c:
+    while true:
+      let k = n.symKind
+      if k in RoutineKinds:
+        var it = Item(n: n, typ: c.types.voidType)
+        semProc(c, it, k)
+        n = it.n
+      else:
+        break
+  wantParRi c, n
+  wantParRi c, n
 
 proc instGenericType(c: var SemContext; dest: var TokenBuf; info: PackedLineInfo;
                      origin, targetSym: SymId; decl: TypeDecl; args: Cursor) =
@@ -2041,7 +2166,7 @@ proc semIf(c: var SemContext; it: var Item) =
   if it.n.substructureKind == ElifS:
     while it.n.substructureKind == ElifS:
       takeToken c, it.n
-      semBoolExpr c, it
+      semBoolExpr c, it.n
       withNewScope c:
         semStmt c, it.n
       wantParRi c, it.n
@@ -2127,6 +2252,29 @@ proc semTypedBinaryArithmetic(c: var SemContext; it: var Item) =
   semExpr c, it
   wantParRi c, it.n
 
+proc semCmp(c: var SemContext; it: var Item) =
+  let beforeExpr = c.dest.len
+  takeToken c, it.n
+  semExpr c, it
+  semExpr c, it
+  wantParRi c, it.n
+  commonType c, it, beforeExpr, c.types.boolType
+
+proc literal(c: var SemContext; it: var Item; literalType: TypeCursor) =
+  let beforeExpr = c.dest.len
+  takeToken c, it.n
+  let expected = it.typ
+  it.typ = literalType
+  commonType c, it, beforeExpr, expected
+
+proc literalB(c: var SemContext; it: var Item; literalType: TypeCursor) =
+  let beforeExpr = c.dest.len
+  takeToken c, it.n
+  wantParRi c, it.n
+  let expected = it.typ
+  it.typ = literalType
+  commonType c, it, beforeExpr, expected
+
 proc semTypedUnaryArithmetic(c: var SemContext; it: var Item) =
   takeToken c, it.n
   semLocalTypeImpl c, it.n, InLocalDecl
@@ -2169,20 +2317,15 @@ proc semArrayConstr(c: var SemContext, it: var Item) =
 proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
   case it.n.kind
   of IntLit:
-    combineType c, it.n.info, it.typ, c.types.intType
-    takeToken c, it.n
+    literal c, it, c.types.intType
   of UIntLit:
-    combineType c, it.n.info, it.typ, c.types.uintType
-    takeToken c, it.n
+    literal c, it, c.types.uintType
   of FloatLit:
-    combineType c, it.n.info, it.typ, c.types.floatType
-    takeToken c, it.n
+    literal c, it, c.types.floatType
   of StringLit:
-    combineType c, it.n.info, it.typ, c.types.stringType
-    takeToken c, it.n
+    literal c, it, c.types.stringType
   of CharLit:
-    combineType c, it.n.info, it.typ, c.types.charType
-    takeToken c, it.n
+    literal c, it, c.types.charType
   of Ident:
     let s = semIdent(c, it.n)
     semExprSym c, it, s, flags
@@ -2240,22 +2383,18 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
       of ForS, CaseS:
         discard "XXX to implement"
     of FalseX, TrueX:
-      combineType c, it.n.info, it.typ, c.types.boolType
-      takeToken c, it.n
-      wantParRi c, it.n
+      literalB c, it, c.types.boolType
     of InfX, NegInfX, NanX:
-      combineType c, it.n.info, it.typ, c.types.floatType
-      takeToken c, it.n
-      wantParRi c, it.n
+      literalB c, it, c.types.floatType
     of AndX, OrX:
       takeToken c, it.n
-      semBoolExpr c, it
-      semBoolExpr c, it
+      semBoolExpr c, it.n
+      semBoolExpr c, it.n
       wantParRi c, it.n
     of NotX:
       c.dest.add it.n
       takeToken c, it.n
-      semBoolExpr c, it
+      semBoolExpr c, it.n
       wantParRi c, it.n
     of ParX:
       takeToken c, it.n
@@ -2265,6 +2404,8 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
       semCall c, it
     of DotX:
       semDot c, it, AlsoTryDotCall
+    of EqX, NeqX, LeX, LtX:
+      semCmp c, it
     of AshrX, AddX, SubX, MulX, DivX, ModX, ShrX, ShlX, BitandX, BitorX, BitxorX:
       semTypedBinaryArithmetic c, it
     of BitnotX, NegX:
@@ -2272,7 +2413,7 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
     of AconstrX:
       semArrayConstr c, it
     of AtX, DerefX, PatX, AddrX, NilX, SizeofX, OconstrX, KvX,
-       EqX, NeqX, LeX, LtX, CastX, ConvX, SufX, RangeX, RangesX,
+       CastX, ConvX, SufX, RangeX, RangesX,
        HderefX, HaddrX, OconvX, HconvX, OchoiceX, CchoiceX,
        TupleConstrX, SetX,
        CompilesX, DeclaredX, DefinedX, HighX, LowX, TypeofX, UnpackX:

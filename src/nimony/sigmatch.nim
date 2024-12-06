@@ -118,29 +118,72 @@ proc matchesConstraint(m: var Match; f: var Cursor; a: Cursor): bool =
   result = false
   if f.kind == DotToken:
     result = true
+    inc f
   elif a.kind == Symbol:
-    result = matchesConstraint(m, f, typeImpl(a.symId))
-  elif f.kind == ParLe:
-    if f.typeKind == OrT:
+    let res = tryLoadSym(a.symId)
+    assert res.status == LacksNothing
+    var typevar = asTypevar(res.decl)
+    if typevar.kind == TypevarY:
+      result = matchesConstraint(m, f, typevar.typ)
+  elif f.kind == Symbol:
+    let res = tryLoadSym(f.symId)
+    assert res.status == LacksNothing
+    var typeImpl = asTypeDecl(res.decl)
+    if typeImpl.kind == TypeY:
+      result = matchesConstraint(m, typeImpl.body, a)
+    inc f
+  else:
+    case f.typeKind
+    of NotT:
+      inc f
+      if not matchesConstraint(m, f, a):
+        result = true
+      if f.kind != ParRi: result = false
+      skipToEnd f
+    of AndT:
+      inc f
+      result = true
+      while f.kind != ParRi:
+        if not matchesConstraint(m, f, a):
+          result = false
+          break
+      skipToEnd f
+    of OrT:
       inc f
       while f.kind != ParRi:
         if matchesConstraint(m, f, a):
           result = true
           break
-      if f.kind == ParRi: inc f
-    elif a.kind == ParLe:
+      skipToEnd f
+    of ConceptT:
+      # XXX Use some algorithm here that can cache the result
+      # so that it can remember e.g. "int fulfils Fibable". For
+      # now this should be good enough for our purposes:
+      result = true
+      skip f
+    elif f.kind == ParLe and a.kind == ParLe:
       result = f.tagId == a.tagId
       inc f
-      if f.kind == ParRi: inc f
+      if f.kind != ParRi: result = false
+      skipToEnd f
 
 proc matchesConstraint(m: var Match; f: SymId; a: Cursor): bool =
-  var f = typeImpl(f)
-  result = matchesConstraint(m, f, a)
+  let res = tryLoadSym(f)
+  assert res.status == LacksNothing
+  var typevar = asTypevar(res.decl)
+  assert typevar.kind == TypevarY
+  result = matchesConstraint(m, typevar.typ, a)
+
+proc isTypevar(s: SymId): bool =
+  let res = tryLoadSym(s)
+  assert res.status == LacksNothing
+  let typevar = asTypevar(res.decl)
+  result = typevar.kind == TypevarY
 
 proc linearMatch(m: var Match; f, a: var Cursor) =
   var nested = 0
   while true:
-    if f.kind == Symbol and m.tvars.contains(f.symId):
+    if f.kind == Symbol and isTypevar(f.symId):
       # type vars are specal:
       let fs = f.symId
       if m.inferred.contains(fs):
@@ -210,8 +253,7 @@ proc singleArg(m: var Match; f: var Cursor; arg: Item)
 proc matchSymbol(m: var Match; f: Cursor; arg: Item) =
   let a = skipModifier(arg.typ)
   let fs = f.symId
-  if m.tvars.contains(fs):
-    # it is a type var we own
+  if isTypevar(fs):
     if m.inferred.contains(fs):
       typevarRematch(m, fs, m.inferred[fs], a)
     elif matchesConstraint(m, fs, a):
@@ -352,6 +394,33 @@ proc singleArg(m: var Match; f: var Cursor; arg: Item) =
     while m.opened > 0:
       m.args.addParRi()
       dec m.opened
+
+proc typematch*(m: var Match; formal: Cursor; arg: Item) =
+  var f = formal
+  singleArg m, f, arg
+
+type
+  TypeRelation* = enum
+    NoMatch
+    ConvertibleMatch
+    GenericMatch
+    EqualMatch
+
+proc typecheck*(formal: Cursor; arg: Item): TypeRelation =
+  var f = formal
+  var m = createMatch()
+  singleArg m, f, arg
+  if m.err:
+    result = NoMatch
+  elif m.inheritanceCosts + m.intCosts > 0:
+    result = ConvertibleMatch
+  elif m.inferred.len > 0:
+    result = GenericMatch
+  else:
+    result = EqualMatch
+
+proc usesConversion*(m: Match): bool {.inline.} =
+  result = m.inheritanceCosts + m.intCosts > 0
 
 proc sigmatchLoop(m: var Match; f: var Cursor; args: openArray[Item]) =
   var i = 0
