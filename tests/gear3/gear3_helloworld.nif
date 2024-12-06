@@ -1,6 +1,15 @@
 (.nif24)
 
 (stmts
+  (type ~6 :Data.0.tesg7afhq1 x . . 2
+    (tuple 6
+    (fld :a.0.tesg7afhq1 . . ~14,~9
+      (i -1) .) 14
+
+    (fld :b.0.tesg7afhq1 . . ~22,~6
+      (i -1) .)))
+
+
   (var :x . . (i +32) +12)
   (var :y . . (i +32) +12)
 
