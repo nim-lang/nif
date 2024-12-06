@@ -365,6 +365,33 @@ proc singleArg(m: var Match; f: var Cursor; arg: Item) =
       m.args.addParRi()
       dec m.opened
 
+proc typematch*(m: var Match; formal: Cursor; arg: Item) =
+  var f = formal
+  singleArg m, f, arg
+
+type
+  TypeRelation* = enum
+    NoMatch
+    ConvertibleMatch
+    GenericMatch
+    EqualMatch
+
+proc typecheck*(formal: Cursor; arg: Item): TypeRelation =
+  var f = formal
+  var m = createMatch()
+  singleArg m, f, arg
+  if m.err:
+    result = NoMatch
+  elif m.inheritanceCosts + m.intCosts > 0:
+    result = ConvertibleMatch
+  elif m.inferred.len > 0:
+    result = GenericMatch
+  else:
+    result = EqualMatch
+
+proc usesConversion*(m: Match): bool {.inline.} =
+  result = m.inheritanceCosts + m.intCosts > 0
+
 proc sigmatchLoop(m: var Match; f: var Cursor; args: openArray[Item]) =
   var i = 0
   while i < args.len and f.kind != ParRi:

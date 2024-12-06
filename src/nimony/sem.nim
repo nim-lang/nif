@@ -708,6 +708,26 @@ proc combineType(c: var SemContext; info: PackedLineInfo; dest: var Cursor; src:
   else:
     c.typeMismatch info, src, dest
 
+proc commonType(c: var SemContext; it: var Item; argBegin: int; expected: TypeCursor) =
+  if typeKind(expected) == AutoT:
+    return
+  elif typeKind(it.typ) == AutoT:
+    it.typ = expected
+    return
+
+  let info = it.n.info
+  var m = createMatch()
+  var arg = Item(n: cursorAt(c.dest, argBegin), typ: it.typ)
+  typematch m, expected, arg
+  endRead(c.dest)
+  if m.err:
+    c.typeMismatch info, it.typ, expected
+  else:
+    shrink c.dest, argBegin
+    c.dest.add m.args
+    if m.usesConversion:
+      it.typ = expected
+
 proc producesVoid(c: var SemContext; info: PackedLineInfo; dest: var Cursor) =
   if typeKind(dest) in {AutoT, VoidT}:
     combineType c, info, dest, c.types.voidType
@@ -1367,6 +1387,7 @@ proc semCall(c: var SemContext; it: var Item) =
     c.addFn fn.n, args
     c.dest.add m[idx].args
     combineType c, callNode.info, it.typ, m[idx].returnType
+    # XXX use commonType here!
     wantParRi c, it.n
     if fn.kind == TemplateY:
       semTemplateCall c, it, fn.n, beforeCall, addr m[idx].inferred
@@ -1430,6 +1451,7 @@ proc semDot(c: var SemContext; it: var Item; mode: DotExprMode) =
           c.dest.add toToken(Symbol, field.sym, info)
           c.dest.add toToken(IntLit, pool.integers.getOrIncl(field.level), info)
           combineType c, info, it.typ, field.typ
+          # XXX use commonType here
           it.kind = FldY
           isMatch = true
         else:
@@ -2219,30 +2241,40 @@ proc semTypedArithmetic(c: var SemContext; it: var Item) =
   wantParRi c, it.n
 
 proc semCmp(c: var SemContext; it: var Item) =
-  let info = it.n.info
+  let beforeExpr = c.dest.len
   takeToken c, it.n
   semExpr c, it
   semExpr c, it
   wantParRi c, it.n
-  combineType c, info, it.typ, c.types.boolType
+  commonType c, it, beforeExpr, c.types.boolType
+
+proc literal(c: var SemContext; it: var Item; literalType: TypeCursor) =
+  let beforeExpr = c.dest.len
+  takeToken c, it.n
+  let expected = it.typ
+  it.typ = literalType
+  commonType c, it, beforeExpr, expected
+
+proc literalB(c: var SemContext; it: var Item; literalType: TypeCursor) =
+  let beforeExpr = c.dest.len
+  takeToken c, it.n
+  wantParRi c, it.n
+  let expected = it.typ
+  it.typ = literalType
+  commonType c, it, beforeExpr, expected
 
 proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
   case it.n.kind
   of IntLit:
-    combineType c, it.n.info, it.typ, c.types.intType
-    takeToken c, it.n
+    literal c, it, c.types.intType
   of UIntLit:
-    combineType c, it.n.info, it.typ, c.types.uintType
-    takeToken c, it.n
+    literal c, it, c.types.uintType
   of FloatLit:
-    combineType c, it.n.info, it.typ, c.types.floatType
-    takeToken c, it.n
+    literal c, it, c.types.floatType
   of StringLit:
-    combineType c, it.n.info, it.typ, c.types.stringType
-    takeToken c, it.n
+    literal c, it, c.types.stringType
   of CharLit:
-    combineType c, it.n.info, it.typ, c.types.charType
-    takeToken c, it.n
+    literal c, it, c.types.charType
   of Ident:
     let s = semIdent(c, it.n)
     semExprSym c, it, s, flags
@@ -2300,13 +2332,9 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
       of ForS, CaseS:
         discard "XXX to implement"
     of FalseX, TrueX:
-      combineType c, it.n.info, it.typ, c.types.boolType
-      takeToken c, it.n
-      wantParRi c, it.n
+      literalB c, it, c.types.boolType
     of InfX, NegInfX, NanX:
-      combineType c, it.n.info, it.typ, c.types.floatType
-      takeToken c, it.n
-      wantParRi c, it.n
+      literalB c, it, c.types.floatType
     of AndX, OrX:
       takeToken c, it.n
       semBoolExpr c, it.n
