@@ -27,6 +27,9 @@ type
 proc createSemRoutine(kind: SymKind; parent: SemRoutine): SemRoutine =
   result = SemRoutine(kind: kind, parent: parent, resId: SymId(0))
 
+const
+  MaxNestedTemplates = 100
+
 type
   ImportedModule = object
     iface: Iface
@@ -64,6 +67,7 @@ type
     thisModuleSuffix: string
     processedModules: HashSet[string]
     usedTypevars: int
+    templateInstCounter: int
     #fieldsCache: Table[SymId, Table[StrId, ObjField]]
 
 # -------------- symbol lookups -------------------------------------
@@ -1395,7 +1399,12 @@ proc semCall(c: var SemContext; it: var Item) =
     it.typ = m[idx].returnType
     commonType c, it, beforeCall, expected
     if fn.kind == TemplateY:
-      semTemplateCall c, it, fn.n, beforeCall, addr m[idx].inferred
+      if c.templateInstCounter <= MaxNestedTemplates:
+        inc c.templateInstCounter
+        semTemplateCall c, it, fn.n, beforeCall, addr m[idx].inferred
+        dec c.templateInstCounter
+      else:
+        buildErr c, callNode.info, "recursion limit exceeded for template expansions"
   elif idx == -2:
     buildErr c, callNode.info, "ambiguous call"
     wantParRi c, it.n
