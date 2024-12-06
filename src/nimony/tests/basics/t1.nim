@@ -78,3 +78,5 @@ proc testPragmaInline*() {.inline.} =
 proc createData(): tuple[a: int, b: string] =
   var s: tuple[a: int, b: string]
   result = s
+
+var x = [1, 2, 3]
