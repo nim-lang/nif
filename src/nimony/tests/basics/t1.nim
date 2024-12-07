@@ -79,6 +79,27 @@ proc createData(): tuple[a: int, b: string] =
   var s: tuple[a: int, b: string]
   result = s
 
+proc `==`*(x, y: int): bool {.magic: "EqI".}
+
+proc ifExpr(): int =
+  let x =
+    if 1 == 1:
+      123
+    else:
+      456
+  let y =
+    if 1 == 2:
+      "abc"
+    elif 1 == 3:
+      return
+    else:
+      "def"
+  result =
+    if 0 == 1:
+      x
+    else:
+      789
+
 var x = [1, 2, 3]
 let u8 = 3'u8
 let y = {1'u8, u8, 5'u8, 7'u8..9'u8}

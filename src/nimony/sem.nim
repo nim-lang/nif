@@ -708,6 +708,114 @@ proc combineType(c: var SemContext; info: PackedLineInfo; dest: var Cursor; src:
   else:
     c.typeMismatch info, src, dest
 
+proc implicitlyDiscardable(n: Cursor, noreturnOnly = false): bool =
+  template checkBranch(branch) =
+    if not implicitlyDiscardable(branch, noreturnOnly):
+      return false
+
+  var it = n
+  #const
+  #  skipForDiscardable = {nkStmtList, nkStmtListExpr,
+  #    nkOfBranch, nkElse, nkFinally, nkExceptBranch,
+  #    nkElifBranch, nkElifExpr, nkElseExpr, nkBlockStmt, nkBlockExpr,
+  #    nkHiddenStdConv, nkHiddenSubConv, nkHiddenDeref}
+  while it.kind == ParLe and stmtKind(it) in {StmtsS, BlockS}:
+    inc it
+    var last = it
+    while true:
+      skip it
+      if it.kind == ParRi:
+        it = last
+        break
+      else:
+        last = it
+
+  if it.kind != ParLe: return false
+  case stmtKind(it)
+  of IfS:
+    inc it
+    while it.kind != ParRi:
+      case it.substructureKind
+      of ElifS:
+        inc it
+        skip it # condition
+        checkBranch(it)
+        skip it
+        skipParRi it
+      of ElseS:
+        inc it
+        checkBranch(it)
+        skip it
+        skipParRi it
+      else:
+        error "illformed AST: `elif` or `else` inside `if` expected, got ", it
+    # all branches are discardable
+    result = true
+  of CaseS:
+    inc it
+    while it.kind != ParRi:
+      case it.substructureKind
+      of OfS:
+        inc it
+        skip it # ranges
+        checkBranch(it)
+        skip it
+        skipParRi it
+      of ElifS:
+        inc it
+        skip it # condition
+        checkBranch(it)
+        skip it
+        skipParRi it
+      of ElseS:
+        inc it
+        checkBranch(it)
+        skip it
+        skipParRi it
+      else:
+        error "illformed AST: `of`, `elif` or `else` inside `case` expected, got ", it
+    # all branches are discardable
+    result = true
+  #of TryS:
+  #  checkBranch(it[0])
+  #  for i in 1 ..< it.len:
+  #    let branch = it[i]
+  #    if branch.kind != nkFinally:
+  #      checkBranch(branch[^1])
+  #  # all branches are discardable
+  #  result = true
+  of CallS, CmdS:
+    inc it
+    if it.kind == Symbol:
+      let sym = tryLoadSym(it.symId)
+      if sym.status == LacksNothing:
+        var decl = sym.decl
+        if isRoutine(symKind(decl)):
+          inc decl
+          skip decl # name
+          skip decl # exported
+          skip decl # pattern
+          skip decl # typevars
+          skip decl # params
+          skip decl # retType
+          # decl should now be pragmas:
+          inc decl
+          let accepted =
+            if noreturnOnly: {NoReturn}
+            else: {Discardable, NoReturn}
+          while decl.kind != ParRi:
+            if pragmaKind(decl) in accepted:
+              return true
+            skip decl
+    result = false
+  of RetS, BreakS, ContinueS: # XXX also `raise`
+    result = true
+  else:
+    result = false
+
+proc isNoReturn(n: Cursor): bool {.inline.} =
+  result = implicitlyDiscardable(n, noreturnOnly = true)
+
 proc commonType(c: var SemContext; it: var Item; argBegin: int; expected: TypeCursor) =
   if typeKind(expected) == AutoT:
     return
@@ -718,7 +826,12 @@ proc commonType(c: var SemContext; it: var Item; argBegin: int; expected: TypeCu
   let info = it.n.info
   var m = createMatch()
   var arg = Item(n: cursorAt(c.dest, argBegin), typ: it.typ)
-  typematch m, expected, arg
+  if typeKind(arg.typ) == VoidT and isNoReturn(arg.n):
+    # noreturn allowed in expression context
+    # maybe use sem flags to restrict this to statement branches
+    discard
+  else:
+    typematch m, expected, arg
   endRead(c.dest)
   if m.err:
     when defined(debug):
@@ -737,6 +850,13 @@ proc producesVoid(c: var SemContext; info: PackedLineInfo; dest: var Cursor) =
     combineType c, info, dest, c.types.voidType
   else:
     c.typeMismatch info, c.types.voidType, dest
+
+proc producesNoReturn(c: var SemContext; info: PackedLineInfo; dest: var Cursor) =
+  if typeKind(dest) in {AutoT, VoidT}:
+    combineType c, info, dest, c.types.voidType
+  else:
+    # allowed in expression context
+    discard
 
 proc getFile(c: var SemContext; info: PackedLineInfo): string =
   let (fid, _, _) = unpack(pool.man, info)
@@ -1050,108 +1170,6 @@ proc semProcBody(c: var SemContext; itB: var Item) =
       c.dest.insert prefix, beforeBodyPos
       c.dest.addParRi()
   itB.n = it.n
-
-proc implicitlyDiscardable(n: Cursor): bool =
-  template checkBranch(branch) =
-    if not implicitlyDiscardable(branch):
-      return false
-
-  var it = n
-  #const
-  #  skipForDiscardable = {nkStmtList, nkStmtListExpr,
-  #    nkOfBranch, nkElse, nkFinally, nkExceptBranch,
-  #    nkElifBranch, nkElifExpr, nkElseExpr, nkBlockStmt, nkBlockExpr,
-  #    nkHiddenStdConv, nkHiddenSubConv, nkHiddenDeref}
-  while it.kind == ParLe and stmtKind(it) in {StmtsS, BlockS}:
-    inc it
-    var last = it
-    while true:
-      skip it
-      if it.kind == ParRi:
-        it = last
-        break
-      else:
-        last = it
-
-  if it.kind != ParLe: return false
-  case stmtKind(it)
-  of IfS:
-    inc it
-    while it.kind != ParRi:
-      case it.substructureKind
-      of ElifS:
-        inc it
-        skip it # condition
-        checkBranch(it)
-        skip it
-        skipParRi it
-      of ElseS:
-        inc it
-        checkBranch(it)
-        skip it
-        skipParRi it
-      else:
-        error "illformed AST: `elif` or `else` inside `if` expected, got ", it
-    # all branches are discardable
-    result = true
-  of CaseS:
-    inc it
-    while it.kind != ParRi:
-      case it.substructureKind
-      of OfS:
-        inc it
-        skip it # ranges
-        checkBranch(it)
-        skip it
-        skipParRi it
-      of ElifS:
-        inc it
-        skip it # condition
-        checkBranch(it)
-        skip it
-        skipParRi it
-      of ElseS:
-        inc it
-        checkBranch(it)
-        skip it
-        skipParRi it
-      else:
-        error "illformed AST: `of`, `elif` or `else` inside `case` expected, got ", it
-    # all branches are discardable
-    result = true
-  #of TryS:
-  #  checkBranch(it[0])
-  #  for i in 1 ..< it.len:
-  #    let branch = it[i]
-  #    if branch.kind != nkFinally:
-  #      checkBranch(branch[^1])
-  #  # all branches are discardable
-  #  result = true
-  of CallS, CmdS:
-    inc it
-    if it.kind == Symbol:
-      let sym = tryLoadSym(it.symId)
-      if sym.status == LacksNothing:
-        var decl = sym.decl
-        if isRoutine(symKind(decl)):
-          inc decl
-          skip decl # name
-          skip decl # exported
-          skip decl # pattern
-          skip decl # typevars
-          skip decl # params
-          skip decl # retType
-          # decl should now be pragmas:
-          inc decl
-          while decl.kind != ParRi:
-            if pragmaKind(decl) in {Discardable, NoReturn}:
-              return true
-            skip decl
-    result = false
-  of RetS, BreakS, ContinueS: # XXX also `raise`
-    result = true
-  else:
-    result = false
 
 proc semStmt(c: var SemContext; n: var Cursor) =
   let info = n.info
@@ -1516,7 +1534,7 @@ proc semBreak(c: var SemContext; it: var Item) =
         buildErr c, it.n.info, "`break` needs a block label"
       it.n = a.n
   wantParRi c, it.n
-  producesVoid c, info, it.typ
+  producesNoReturn c, info, it.typ
 
 proc semContinue(c: var SemContext; it: var Item) =
   let info = it.n.info
@@ -1526,7 +1544,7 @@ proc semContinue(c: var SemContext; it: var Item) =
   else:
     wantDot c, it.n
   wantParRi c, it.n
-  producesVoid c, info, it.typ
+  producesNoReturn c, info, it.typ
 
 proc wantExportMarker(c: var SemContext; n: var Cursor) =
   if n.kind == DotToken:
@@ -2160,6 +2178,28 @@ proc semDiscard(c: var SemContext; it: var Item) =
   wantParRi c, it.n
   producesVoid c, info, it.typ
 
+proc semStmtBranch(c: var SemContext; it: var Item) =
+  # handle statements that could be expressions
+  case classifyType(c, it.typ)
+  of AutoT:
+    semExpr c, it
+  of VoidT:
+    # performs discard check:
+    semStmt c, it.n
+  else:
+    var ex = Item(n: it.n, typ: it.typ)
+    let start = c.dest.len
+    semExpr c, ex
+    # this is handled by commonType, since it has to be done deeply:
+    #if classifyType(c, ex.typ) == VoidT:
+    #  # allow statement in expression context if it is noreturn
+    #  let ignore = isNoReturn(cursorAt(c.dest, start))
+    #  endRead(c.dest)
+    #  if not ignore:
+    #    typeMismatch(c, it.n.info, ex.typ, it.typ)
+    commonType(c, ex, start, it.typ)
+    it.n = ex.n
+
 proc semIf(c: var SemContext; it: var Item) =
   let info = it.n.info
   takeToken c, it.n
@@ -2168,17 +2208,18 @@ proc semIf(c: var SemContext; it: var Item) =
       takeToken c, it.n
       semBoolExpr c, it.n
       withNewScope c:
-        semStmt c, it.n
+        semStmtBranch c, it
       wantParRi c, it.n
   else:
     buildErr c, it.n.info, "illformed AST: `elif` inside `if` expected"
   if it.n.substructureKind == ElseS:
     takeToken c, it.n
     withNewScope c:
-      semStmt c, it.n
+      semStmtBranch c, it
     wantParRi c, it.n
   wantParRi c, it.n
-  producesVoid c, info, it.typ
+  if typeKind(it.typ) == AutoT:
+    producesVoid c, info, it.typ
 
 proc semReturn(c: var SemContext; it: var Item) =
   let info = it.n.info
@@ -2196,7 +2237,7 @@ proc semReturn(c: var SemContext; it: var Item) =
     semExpr c, a
     it.n = a.n
   wantParRi c, it.n
-  producesVoid c, info, it.typ
+  producesNoReturn c, info, it.typ
 
 proc semYield(c: var SemContext; it: var Item) =
   let info = it.n.info
