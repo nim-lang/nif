@@ -176,6 +176,28 @@ proc traverseTupleField(e: var EContext; c: var Cursor; flags: set[TypeFlag] = {
   inc c # skips value
   wantParRi e, c
 
+proc traverseEnumField(e: var EContext; c: var Cursor; flags: set[TypeFlag] = {}): TokenBuf =
+  e.dest.add c # efld
+  inc c
+
+  expectSymdef(e, c)
+  let (s, sinfo) = getSymDef(e, c)
+  e.dest.add toToken(SymbolDef, s, sinfo)
+  e.offer s
+
+  skipExportMarker e, c
+
+  skip c # pragmas: must be empty
+
+  result = createTokenBuf()
+
+  swap(e.dest, result)
+  traverseType e, c, flags
+  swap(result, e.dest)
+
+  traverseExpr e, c
+  wantParRi e, c
+
 proc traverseType(e: var EContext; c: var Cursor; flags: set[TypeFlag] = {}) =
   case c.kind
   of DotToken:
@@ -231,7 +253,23 @@ proc traverseType(e: var EContext; c: var Cursor; flags: set[TypeFlag] = {}) =
         traverseTupleField(e, c, flags)
 
       wantParRi e, c
-    of ObjectT, EnumT, VoidT, StringT, VarargsT, NilT, ConceptT,
+    of EnumT:
+      e.dest.add c
+      inc c
+
+      var fields = createTokenBuf()
+      var commonType = createTokenBuf()
+
+      swap(e.dest, fields)
+      while c.substructureKind == EfldS:
+        commonType = traverseEnumField(e, c, flags)
+      swap(fields, e.dest)
+
+      e.dest.add commonType
+      e.dest.add fields
+
+      wantParRi e, c
+    of ObjectT, VoidT, StringT, VarargsT, NilT, ConceptT,
        IterT, InvokeT, SetT:
       error e, "unimplemented type: ", c
   else:

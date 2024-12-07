@@ -9,6 +9,15 @@
     (fld :b.0.tesg7afhq1 . . ~22,~6
       (i -1) .)))
 
+ (type ~6 :Color.0.tesg7afhq1 . . . 2
+  (enum ,1
+   (efld ~6 :Red.0.tesg7afhq1 . .
+    (i -1) +0) 10,1
+   (efld ~7 :Blue.0.tesg7afhq1 . .
+    (i -1) +1) 21,1
+   (efld ~8 :Green.0.tesg7afhq1 . .
+    (i -1) +2)))
+
 
   (var :x . . (i +32) +12)
   (var :y . . (i +32) +12)
