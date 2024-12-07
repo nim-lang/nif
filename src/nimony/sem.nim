@@ -2314,6 +2314,80 @@ proc semArrayConstr(c: var SemContext, it: var Item) =
   combineType c, it.n.info, it.typ, typeToCursor(c, start)
   c.dest.shrink start
 
+proc isRangeNode(c: var SemContext; n: Cursor): bool =
+  var n = n
+  if n.exprKind notin {CallX, InfixX}:
+    return false
+  inc n
+  let name = getIdent(c, n)
+  result = name != StrId(0) and pool.strings[name] == ".."
+
+proc semSetConstr(c: var SemContext, it: var Item) =
+  takeToken c, it.n
+  if it.n.kind == ParRi:
+    # empty set
+    if it.typ.typeKind in {AutoT, VoidT}:
+      buildErr c, it.n.info, "empty set needs a specified type"
+    wantParRi c, it.n
+    return
+  var elem = Item(n: it.n, typ: c.types.autoType)
+  case it.typ.typeKind
+  of SetT:
+    var t = it.typ
+    inc t
+    elem.typ = t
+  of AutoT: discard
+  else:
+    buildErr c, it.n.info, "invalid expected type for set constructor: " & typeToString(it.typ)
+  while elem.n.kind != ParRi:
+    if isRangeNode(c, elem.n):
+      inc elem.n # call tag
+      skip elem.n # `..`
+      c.dest.buildTree RangeX, elem.n.info:
+        semExpr c, elem
+        semExpr c, elem
+      inc elem.n # right paren of call
+    elif elem.n.exprKind == RangeX:
+      skip elem.n # resem elements?
+    else:
+      semExpr c, elem
+    # XXX check if elem.typ is too big
+  it.n = elem.n
+  wantParRi c, it.n
+  let start = c.dest.len
+  c.dest.buildTree SetT, it.n.info:
+    c.dest.addSubtree elem.typ
+  combineType c, it.n.info, it.typ, typeToCursor(c, start)
+  c.dest.shrink start
+
+proc semSuf(c: var SemContext, it: var Item) =
+  takeToken c, it.n
+  var num = Item(n: it.n, typ: c.types.autoType)
+  semExpr c, num
+  it.n = num.n
+  if it.n.kind != StringLit:
+    c.buildErr it.n.info, "string literal expected for suf"
+    skip it.n
+    return
+  case pool.strings[it.n.litId]
+  of "i": it.typ = c.types.intType
+  of "i8": it.typ = c.types.int8Type
+  of "i16": it.typ = c.types.int16Type
+  of "i32": it.typ = c.types.int32Type
+  of "i64": it.typ = c.types.int64Type
+  of "u": it.typ = c.types.uintType
+  of "u8": it.typ = c.types.uint8Type
+  of "u16": it.typ = c.types.uint16Type
+  of "u32": it.typ = c.types.uint32Type
+  of "u64": it.typ = c.types.uint64Type
+  of "f": it.typ = c.types.floatType
+  of "f32": it.typ = c.types.float32Type
+  of "f64": it.typ = c.types.float64Type
+  else:
+    c.buildErr it.n.info, "unknown suffix: " & pool.strings[it.n.litId]
+  takeToken c, it.n # suffix
+  wantParRi c, it.n # right paren
+
 proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
   case it.n.kind
   of IntLit:
@@ -2412,10 +2486,14 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
       semTypedUnaryArithmetic c, it
     of AconstrX:
       semArrayConstr c, it
+    of SetX:
+      semSetConstr c, it
+    of SufX:
+      semSuf c, it
     of AtX, DerefX, PatX, AddrX, NilX, SizeofX, OconstrX, KvX,
-       CastX, ConvX, SufX, RangeX, RangesX,
+       CastX, ConvX, RangeX, RangesX,
        HderefX, HaddrX, OconvX, HconvX, OchoiceX, CchoiceX,
-       TupleConstrX, SetX,
+       TupleConstrX,
        CompilesX, DeclaredX, DefinedX, HighX, LowX, TypeofX, UnpackX:
       # XXX To implement
       takeToken c, it.n
