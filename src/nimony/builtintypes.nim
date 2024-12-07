@@ -11,6 +11,9 @@ type
     mem: TokenBuf
     autoType*, stringType*, intType*, uintType*, floatType*, boolType*, charType*: Cursor
     voidType*, nilType*: Cursor
+    int8Type*, int16Type*, int32Type*, int64Type*: Cursor
+    uint8Type*, uint16Type*, uint32Type*, uint64Type*: Cursor
+    float32Type*, float64Type*: Cursor
 
 proc tagToken(tag: string; info: PackedLineInfo = NoLineInfo): PackedToken {.inline.} =
   toToken(ParLe, pool.tags.getOrIncl(tag), info)
@@ -49,6 +52,26 @@ proc createBuiltinTypes*(): BuiltinTypes =
   result.mem.add tagToken"nilt" # 19
   result.mem.addParRi() # 20
 
+  template addBitsType(tag: string, bits: int) =
+    # adds 3
+    result.mem.add tagToken(tag) # +1
+    result.mem.add toToken(IntLit, pool.integers.getOrIncl(bits), NoLineInfo) # +2
+    result.mem.addParRi() # +3
+  
+  addBitsType "i", 8 # 21
+  addBitsType "i", 16 # 24
+  addBitsType "i", 32 # 27
+  addBitsType "i", 64 # 30
+  
+  addBitsType "u", 8 # 33
+  addBitsType "u", 16 # 36
+  addBitsType "u", 32 # 39
+  addBitsType "u", 64 # 42
+
+  addBitsType "f", 32 # 45
+  addBitsType "f", 64 # 48
+  # next would be 51
+
   result.mem.freeze()
 
   result.autoType = result.mem.cursorAt(0)
@@ -60,3 +83,13 @@ proc createBuiltinTypes*(): BuiltinTypes =
   result.charType = result.mem.cursorAt(15)
   result.voidType = result.mem.cursorAt(18)
   result.nilType = result.mem.cursorAt(19)
+  result.int8Type = result.mem.cursorAt(21)
+  result.int16Type = result.mem.cursorAt(24)
+  result.int32Type = result.mem.cursorAt(27)
+  result.int64Type = result.mem.cursorAt(30)
+  result.uint8Type = result.mem.cursorAt(33)
+  result.uint16Type = result.mem.cursorAt(36)
+  result.uint32Type = result.mem.cursorAt(39)
+  result.uint64Type = result.mem.cursorAt(42)
+  result.float32Type = result.mem.cursorAt(45)
+  result.float64Type = result.mem.cursorAt(48)
