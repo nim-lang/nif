@@ -182,6 +182,11 @@ proc symId*(n: PackedToken): SymId {.inline.} =
   assert n.kind in {Symbol, SymbolDef}
   SymId(n.uoperand)
 
+proc setSymId*(dest: var PackedToken; sym: SymId) {.inline.} =
+  let k = dest.kind
+  assert k in {Symbol, SymbolDef}
+  dest.x = toX(k, uint32 sym)
+
 proc intId*(n: PackedToken): IntId {.inline.} =
   assert n.kind == IntLit
   IntId(n.uoperand)

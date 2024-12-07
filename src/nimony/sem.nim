@@ -37,10 +37,15 @@ type
   InstRequest* = object
     origin*: SymId
     targetSym*: SymId
-    targetType*: TypeCursor
+    #targetType*: TypeCursor
     #typeParams*: seq[TypeCursor]
     inferred*: Table[SymId, Cursor]
     requestFrom*: seq[PackedLineInfo]
+
+  ProcInstance = object
+    targetSym: SymId
+    procType: TypeCursor
+    returnType: TypeCursor
 
   ProgramContext = ref object # shared for every `SemContext`
     config: NifConfig
@@ -64,6 +69,7 @@ type
     types: BuiltinTypes
     typeMem: Table[string, TokenBuf]
     instantiatedTypes: OrderedTable[string, SymId]
+    instantiatedProcs: OrderedTable[string, ProcInstance]
     thisModuleSuffix: string
     processedModules: HashSet[string]
     usedTypevars: int
@@ -1233,8 +1239,8 @@ when false:
     semExpr c, it
     swap c.dest, result
 
-proc addFn(c: var SemContext; fn: Cursor; args: openArray[Item]) =
-  var inlinedMagic = false
+proc addFn(c: var SemContext; fn: Cursor; args: openArray[Item]): bool =
+  result = false
   if fn.kind == Symbol:
     let res = tryLoadSym(fn.symId)
     if res.status == LacksNothing:
@@ -1243,7 +1249,7 @@ proc addFn(c: var SemContext; fn: Cursor; args: openArray[Item]) =
       if n.kind == SymbolDef:
         inc n # skip the SymbolDef
         if n.kind == ParLe:
-          inlinedMagic = true
+          result = true
           # ^ export marker position has a `(`? If so, it is a magic!
           copyKeepLineInfo c.dest[c.dest.len-1], n.load # overwrite the `(call` node with the magic itself
           inc n
@@ -1255,7 +1261,7 @@ proc addFn(c: var SemContext; fn: Cursor; args: openArray[Item]) =
             inc n
           if n.kind != ParRi:
             error "broken `magic`: expected ')', but got: ", n
-  if not inlinedMagic:
+  if not result:
     c.dest.addSubtree fn
 
 proc semTemplateCall(c: var SemContext; it: var Item; fn: Cursor; beforeCall: int;
@@ -1335,6 +1341,50 @@ proc considerTypeboundOps(c: var SemContext; m: var seq[Match]; candidates: FnCa
     m.add createMatch()
     sigmatch(m[^1], candidate, args, emptyNode())
 
+proc requestRoutineInstance(c: var SemContext; origin: SymId; m: var Match;
+                            info: PackedLineInfo): ProcInstance =
+  let key = typeToCanon(m.typeArgs, 0)
+  result = c.instantiatedProcs.getOrDefault(key)
+  if result.targetSym == SymId(0):
+    let targetSym = newSymId(c, origin)
+    var signature = createTokenBuf(30)
+    let decl = getProcDecl(origin)
+    buildTree signature, decl.kind, info:
+      signature.add toToken(SymbolDef, targetSym, info)
+      signature.addDotToken() # a generic instance is not exported
+      signature.copyTree decl.pattern
+      # InvokeT for the generic params:
+      signature.buildTree InvokeT, info:
+        signature.add toToken(Symbol, origin, info)
+        signature.add m.typeArgs
+      var sc = SubsContext(params: addr m.inferred)
+      subs(c, signature, sc, decl.params)
+      let beforeRetType = signature.len
+      subs(c, signature, sc, decl.retType)
+      subs(c, signature, sc, decl.pragmas)
+      subs(c, signature, sc, decl.effects)
+      signature.addDotToken() # no body
+
+    result = ProcInstance(targetSym: targetSym, procType: cursorAt(signature, 0),
+      returnType: cursorAt(signature, beforeRetType))
+    publish targetSym, ensureMove signature
+
+    c.instantiatedProcs[key] = result
+    var req = InstRequest(
+      origin: origin,
+      targetSym: targetSym,
+      inferred: move(m.inferred)
+    )
+    for ins in c.instantiatedFrom: req.requestFrom.add ins
+    req.requestFrom.add info
+
+    c.procRequests.add ensureMove req
+
+proc typeofCallIs(c: var SemContext; it: var Item; beforeCall: int; returnType: TypeCursor) {.inline.} =
+  let expected = it.typ
+  it.typ = returnType
+  commonType c, it, beforeCall, expected
+
 proc semCall(c: var SemContext; it: var Item) =
   let beforeCall = c.dest.len
   let callNode = it.n
@@ -1392,13 +1442,12 @@ proc semCall(c: var SemContext; it: var Item) =
   c.dest.add callNode
   if idx >= 0:
     let fn = m[idx].fn
-    c.addFn fn.n, args
+    let isMagic = c.addFn(fn.n, args)
     c.dest.add m[idx].args
     wantParRi c, it.n
-    let expected = it.typ
-    it.typ = m[idx].returnType
-    commonType c, it, beforeCall, expected
+
     if fn.kind == TemplateY:
+      typeofCallIs c, it, beforeCall, m[idx].returnType
       if c.templateInstCounter <= MaxNestedTemplates:
         inc c.templateInstCounter
         withErrorContext c, callNode.info:
@@ -1406,6 +1455,14 @@ proc semCall(c: var SemContext; it: var Item) =
         dec c.templateInstCounter
       else:
         buildErr c, callNode.info, "recursion limit exceeded for template expansions"
+    elif c.routine.inGeneric == 0 and m[idx].inferred.len > 0 and not isMagic:
+      assert fn.n.kind == Symbol
+      let inst = c.requestRoutineInstance(fn.n.symId, m[idx], callNode.info)
+      c.dest[beforeCall+1].setSymId inst.targetSym
+      typeofCallIs c, it, beforeCall, inst.returnType
+    else:
+      typeofCallIs c, it, beforeCall, m[idx].returnType
+
   elif idx == -2:
     buildErr c, callNode.info, "ambiguous call"
     wantParRi c, it.n
@@ -2004,6 +2061,8 @@ proc semGenericParams(c: var SemContext; n: var Cursor) =
     while n.kind != ParRi:
       semGenericParam c, n
     wantParRi c, n
+  elif n == $InvokeT:
+    takeTree c, n
   else:
     buildErr c, n.info, "expected '.' or 'typevars'"
 
