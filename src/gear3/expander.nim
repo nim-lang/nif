@@ -187,7 +187,7 @@ proc traverseEnumField(e: var EContext; c: var Cursor; flags: set[TypeFlag] = {}
 
   skipExportMarker e, c
 
-  inc c # pragmas: must be empty
+  skip c # pragmas: must be empty
 
   result = createTokenBuf()
 
