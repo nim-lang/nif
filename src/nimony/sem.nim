@@ -2181,10 +2181,11 @@ proc semDiscard(c: var SemContext; it: var Item) =
 proc semStmtBranch(c: var SemContext; it: var Item) =
   # handle statements that could be expressions
   case classifyType(c, it.typ)
-  of VoidT:
-    semStmt c, it.n
   of AutoT:
     semExpr c, it
+  of VoidT:
+    # performs discard check:
+    semStmt c, it.n
   else:
     var ex = Item(n: it.n, typ: it.typ)
     let start = c.dest.len
