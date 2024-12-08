@@ -2506,6 +2506,58 @@ proc semSuf(c: var SemContext, it: var Item) =
   takeToken c, it.n # suffix
   wantParRi c, it.n # right paren
 
+proc semTupleConstr(c: var SemContext, it: var Item) =
+  takeToken c, it.n
+  if it.n.kind == ParRi:
+    wantParRi c, it.n
+    combineType c, it.n.info, it.typ, c.types.emptyTupleType
+    return
+  var expected = it.typ
+  var doExpected = expected.typeKind == TupleT
+  if doExpected:
+    inc expected # skip tag, now at fields
+  let named = it.n.exprKind == KvX
+  var typ = createTokenBuf(32)
+  typ.add toToken(ParLe, pool.tags.getOrIncl($TupleT), it.n.info)
+  var i = 0
+  while it.n.kind != ParRi:
+    typ.add toToken(ParLe, pool.tags.getOrIncl($FldS), it.n.info) # start field
+    if named:
+      if it.n.exprKind != KvX:
+        c.buildErr it.n.info, "expected field name for named tuple constructor"
+      else:
+        takeToken c, it.n
+        typ.add it.n # add name
+        takeToken c, it.n
+    else:
+      typ.add toToken(Ident, pool.strings.getOrIncl("Field" & $i), it.n.info)
+      inc i
+    typ.addDotToken() # export marker
+    typ.addDotToken() # pragmas
+    var elem = Item(n: it.n, typ: c.types.autoType)
+    if doExpected:
+      let fld = asLocal(expected)
+      elem.typ = fld.typ
+      skip expected
+      if expected.kind == ParRi:
+        # happens if expected tuple type has less fields than constructor
+        doExpected = false
+    semExpr c, elem
+    it.n = elem.n
+    if named:
+      # should be KvX
+      wantParRi c, it.n
+    typ.addSubtree elem.typ # type
+    typ.addDotToken() # value
+    typ.addParRi() # end field
+  wantParRi c, it.n
+  typ.addParRi()
+  let start = c.dest.len
+  var t = typ.cursorAt(0)
+  semTupleType(c, t)
+  combineType c, it.n.info, it.typ, typeToCursor(c, start)
+  c.dest.shrink start
+
 proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
   case it.n.kind
   of IntLit:
@@ -2618,10 +2670,11 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
       semSetConstr c, it
     of SufX:
       semSuf c, it
+    of TupleConstrX:
+      semTupleConstr c, it
     of AtX, DerefX, PatX, AddrX, NilX, SizeofX, OconstrX, KvX,
        CastX, ConvX, RangeX, RangesX,
        HderefX, HaddrX, OconvX, HconvX, OchoiceX, CchoiceX,
-       TupleConstrX,
        CompilesX, DeclaredX, DefinedX, HighX, LowX, TypeofX, UnpackX:
       # XXX To implement
       takeToken c, it.n

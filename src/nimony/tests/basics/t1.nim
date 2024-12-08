@@ -103,3 +103,7 @@ proc ifExpr(): int =
 var x = [1, 2, 3]
 let u8 = 3'u8
 let y = {1'u8, u8, 5'u8, 7'u8..9'u8}
+var z = (1, "abc")
+z = (2, "def")
+var t: tuple[x: int, y: string] = (1, "abc")
+t = (x: 2, y: "def")
