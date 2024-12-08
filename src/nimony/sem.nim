@@ -2213,6 +2213,14 @@ proc semExprSym(c: var SemContext; it: var Item; s: Sym; flags: set[SemFlag]) =
       c.buildErr it.n.info, "could not load symbol: " & pool.syms[s.name] & "; errorCode: " & $res.status
       it.typ = c.types.autoType
 
+proc semLocalTypeExpr(c: var SemContext, it: var Item) =
+  let val = semLocalType(c, it.n)
+  let start = c.dest.len
+  c.dest.buildTree TypedescT, it.n.info:
+    c.dest.addSubtree val
+  it.typ = typeToCursor(c, start)
+  c.dest.shrink start
+
 proc semAsgn(c: var SemContext; it: var Item) =
   let info = it.n.info
   takeToken c, it.n
@@ -2525,7 +2533,17 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
     of NoExpr:
       case stmtKind(it.n)
       of NoStmt:
-        buildErr c, it.n.info, "expression expected"
+        case typeKind(it.n)
+        of NoType, ObjectT, EnumT, DistinctT, ConceptT:
+          buildErr c, it.n.info, "expression expected"
+        of IntT, FloatT, CharT, BoolT, UIntT, VoidT, StringT, NilT, AutoT, SymKindT,
+            PtrT, RefT, MutT, OutT, LentT, SinkT, UncheckedArrayT, SetT, StaticT, TypedescT,
+            TupleT, ArrayT, VarargsT, ProcT, IterT:
+          # every valid local type expression
+          semLocalTypeExpr c, it
+        of OrT, AndT, NotT, InvokeT:
+          # should be handled in respective expression kinds
+          discard
       of ProcS:
         semProc c, it, ProcY
       of FuncS:
