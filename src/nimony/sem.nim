@@ -2429,7 +2429,7 @@ proc semArrayConstr(c: var SemContext, it: var Item) =
   c.dest.buildTree ArrayT, it.n.info:
     c.dest.add toToken(IntLit, count, it.n.info)
     c.dest.addSubtree elem.typ
-  combineType c, it.n.info, it.typ, typeToCursor(c, start)
+  commonType c, it, start, it.typ
   c.dest.shrink start
 
 proc isRangeNode(c: var SemContext; n: Cursor): bool =
@@ -2475,7 +2475,7 @@ proc semSetConstr(c: var SemContext, it: var Item) =
   let start = c.dest.len
   c.dest.buildTree SetT, it.n.info:
     c.dest.addSubtree elem.typ
-  combineType c, it.n.info, it.typ, typeToCursor(c, start)
+  commonType c, it, start, it.typ
   c.dest.shrink start
 
 proc semSuf(c: var SemContext, it: var Item) =
@@ -2555,7 +2555,7 @@ proc semTupleConstr(c: var SemContext, it: var Item) =
   let start = c.dest.len
   var t = typ.cursorAt(0)
   semTupleType(c, t)
-  combineType c, it.n.info, it.typ, typeToCursor(c, start)
+  commonType c, it, start, it.typ
   c.dest.shrink start
 
 proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
