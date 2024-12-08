@@ -1094,13 +1094,16 @@ proc instantiateGenericType(c: var SemContext; req: InstRequest) =
     var n = beginRead(dest)
     semTypeSection c, n
 
-proc semProc(c: var SemContext; it: var Item; kind: SymKind)
+type
+  PassKind = enum checkSignatures, checkBody, checkGenericInst, checkConceptProc
+
+proc semProc(c: var SemContext; it: var Item; kind: SymKind; pass: PassKind)
 proc instantiateGenericProc(c: var SemContext; req: InstRequest) =
   var dest = createTokenBuf(40)
   withFromInfo req:
     subsGenericProc c, dest, req
     var it = Item(n: beginRead(dest), typ: c.types.autoType)
-    semProc c, it, it.n.symKind
+    semProc c, it, it.n.symKind, checkGenericInst
 
 proc instantiateGenerics(c: var SemContext) =
   while c.typeRequests.len + c.procRequests.len > 0:
@@ -1813,7 +1816,7 @@ proc semConceptType(c: var SemContext; n: var Cursor) =
       let k = n.symKind
       if k in RoutineKinds:
         var it = Item(n: n, typ: c.types.voidType)
-        semProc(c, it, k)
+        semProc(c, it, k, checkConceptProc)
         n = it.n
       else:
         break
@@ -2111,7 +2114,7 @@ proc addReturnResult(c: var SemContext; resId: SymId; info: PackedLineInfo) =
       c.dest.addSymUse resId, info
     c.dest.addParRi() # add it back
 
-proc semProc(c: var SemContext; it: var Item; kind: SymKind) =
+proc semProc(c: var SemContext; it: var Item; kind: SymKind; pass: PassKind) =
   let info = it.n.info
   let declStart = c.dest.len
   takeToken c, it.n
@@ -2149,11 +2152,26 @@ proc semProc(c: var SemContext; it: var Item; kind: SymKind) =
     publishSignature c, symId, declStart
     if it.n.kind != DotToken:
       c.openScope() # open body scope
-      let resId = declareResult(c, it.n.info)
-      semProcBody c, it
-      c.closeScope() # close body scope
-      c.closeScope() # close parameter scope
-      addReturnResult c, resId, it.n.info
+      case pass
+      of checkGenericInst:
+        semProcBody c, it
+        c.closeScope() # close body scope
+        c.closeScope() # close parameter scope
+      of checkBody:
+        let resId = declareResult(c, it.n.info)
+        semProcBody c, it
+        c.closeScope() # close body scope
+        c.closeScope() # close parameter scope
+        addReturnResult c, resId, it.n.info
+      of checkSignatures:
+        c.dest.addDotToken()
+        skip it.n
+      of checkConceptProc:
+        if it.n.kind == DotToken:
+          inc it.n
+        else:
+          c.buildErr it.n.info, "inside a `concept` a routine cannot have a body"
+          skip it.n
     else:
       takeToken c, it.n
       c.closeScope() # close parameter scope
@@ -2527,19 +2545,19 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
       of NoStmt:
         buildErr c, it.n.info, "expression expected"
       of ProcS:
-        semProc c, it, ProcY
+        semProc c, it, ProcY, checkBody
       of FuncS:
-        semProc c, it, FuncY
+        semProc c, it, FuncY, checkBody
       of IterS:
-        semProc c, it, IterY
+        semProc c, it, IterY, checkBody
       of ConverterS:
-        semProc c, it, ConverterY
+        semProc c, it, ConverterY, checkBody
       of MethodS:
-        semProc c, it, MethodY
+        semProc c, it, MethodY, checkBody
       of TemplateS:
-        semProc c, it, TemplateY
+        semProc c, it, TemplateY, checkBody
       of MacroS:
-        semProc c, it, MacroY
+        semProc c, it, MacroY, checkBody
       of WhileS: semWhile c, it
       of VarS: semLocal c, it, VarY
       of LetS: semLocal c, it, LetY
