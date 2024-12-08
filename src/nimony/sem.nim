@@ -1522,6 +1522,8 @@ type
     OrdinaryDot, AlsoTryDotCall, DotDontReportError
 
 proc semDot(c: var SemContext; it: var Item; mode: DotExprMode) =
+  let exprStart = c.dest.len
+  let expected = it.typ
   takeToken c, it.n
   var a = Item(n: it.n, typ: c.types.autoType)
   semExpr c, a
@@ -1540,8 +1542,7 @@ proc semDot(c: var SemContext; it: var Item; mode: DotExprMode) =
         if field.level >= 0:
           c.dest.add toToken(Symbol, field.sym, info)
           c.dest.add toToken(IntLit, pool.integers.getOrIncl(field.level), info)
-          combineType c, info, it.typ, field.typ
-          # XXX use commonType here
+          it.typ = field.typ # will be fit later with commonType
           it.kind = FldY
           isMatch = true
         else:
@@ -1554,6 +1555,8 @@ proc semDot(c: var SemContext; it: var Item; mode: DotExprMode) =
   if it.n.kind == IntLit:
     inc it.n
   wantParRi c, it.n
+  if isMatch:
+    commonType c, it, exprStart, expected
 
 proc semWhile(c: var SemContext; it: var Item) =
   let info = it.n.info
