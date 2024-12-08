@@ -1164,11 +1164,28 @@ proc semConstIntExpr(c: var SemContext; n: var Cursor) =
   if classifyType(c, it.typ) != IntT:
     buildErr c, it.n.info, "expected `int` but got: " & typeToString(it.typ)
 
+proc isLastSon(n: Cursor): bool =
+  var n = n
+  skip n
+  result = n.kind == ParRi
+
+proc semStmtsExprImpl(c: var SemContext; it: var Item) =
+  while it.n.kind != ParRi:
+    if not isLastSon(it.n):
+      semStmt c, it.n
+    else:
+      semExpr c, it
+  wantParRi c, it.n
+
+proc semStmtsExpr(c: var SemContext; it: var Item) =
+  takeToken c, it.n
+  semStmtsExprImpl c, it
+
 proc semProcBody(c: var SemContext; itB: var Item) =
   let beforeBodyPos = c.dest.len
   let info = itB.n.info
   var it = Item(n: itB.n, typ: c.types.autoType)
-  semExpr c, it
+  semStmtsExprImpl c, it
   if c.routine.kind == TemplateY:
     typecheck(c, info, it.typ, c.routine.returnType)
   elif classifyType(c, it.typ) == VoidT:
@@ -2154,10 +2171,16 @@ proc semProc(c: var SemContext; it: var Item; kind: SymKind; pass: PassKind) =
       c.openScope() # open body scope
       case pass
       of checkGenericInst:
+        if it.n != "stmts":
+          error "(stmts) expected, but got ", it.n
+        takeToken c, it.n
         semProcBody c, it
         c.closeScope() # close body scope
         c.closeScope() # close parameter scope
       of checkBody:
+        if it.n != "stmts":
+          error "(stmts) expected, but got ", it.n
+        takeToken c, it.n
         let resId = declareResult(c, it.n.info)
         semProcBody c, it
         c.closeScope() # close body scope
@@ -2180,20 +2203,6 @@ proc semProc(c: var SemContext; it: var Item; kind: SymKind; pass: PassKind) =
   wantParRi c, it.n
   producesVoid c, info, it.typ
   publish c, symId, declStart
-
-proc isLastSon(n: Cursor): bool =
-  var n = n
-  skip n
-  result = n.kind == ParRi
-
-proc semStmtsExpr(c: var SemContext; it: var Item) =
-  takeToken c, it.n
-  while it.n.kind != ParRi:
-    if not isLastSon(it.n):
-      semStmt c, it.n
-    else:
-      semExpr c, it
-  wantParRi c, it.n
 
 proc semExprSym(c: var SemContext; it: var Item; s: Sym; flags: set[SemFlag]) =
   it.kind = s.kind
