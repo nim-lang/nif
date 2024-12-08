@@ -448,6 +448,7 @@ iterator typeVars(fn: SymId): SymId =
     for i in 1..3:
       skip c # name, export marker, pattern
     if c.substructureKind == TypevarsS:
+      inc c
       while c.kind != ParRi:
         if c.symKind == TypeVarY:
           var tv = c
