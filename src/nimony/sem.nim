@@ -2400,6 +2400,7 @@ proc semTypedUnaryArithmetic(c: var SemContext; it: var Item) =
   wantParRi c, it.n
 
 proc semArrayConstr(c: var SemContext, it: var Item) =
+  let exprStart = c.dest.len
   takeToken c, it.n
   if it.n.kind == ParRi:
     # empty array
@@ -2425,12 +2426,14 @@ proc semArrayConstr(c: var SemContext, it: var Item) =
     inc count
   it.n = elem.n
   wantParRi c, it.n
-  let start = c.dest.len
+  let typeStart = c.dest.len
   c.dest.buildTree ArrayT, it.n.info:
     c.dest.add toToken(IntLit, count, it.n.info)
     c.dest.addSubtree elem.typ
-  commonType c, it, start, it.typ
-  c.dest.shrink start
+  let expected = it.typ
+  it.typ = typeToCursor(c, typeStart)
+  c.dest.shrink typeStart
+  commonType c, it, exprStart, expected
 
 proc isRangeNode(c: var SemContext; n: Cursor): bool =
   var n = n
@@ -2441,6 +2444,7 @@ proc isRangeNode(c: var SemContext; n: Cursor): bool =
   result = name != StrId(0) and pool.strings[name] == ".."
 
 proc semSetConstr(c: var SemContext, it: var Item) =
+  let exprStart = c.dest.len
   takeToken c, it.n
   if it.n.kind == ParRi:
     # empty set
@@ -2472,11 +2476,13 @@ proc semSetConstr(c: var SemContext, it: var Item) =
     # XXX check if elem.typ is too big
   it.n = elem.n
   wantParRi c, it.n
-  let start = c.dest.len
+  let typeStart = c.dest.len
   c.dest.buildTree SetT, it.n.info:
     c.dest.addSubtree elem.typ
-  commonType c, it, start, it.typ
-  c.dest.shrink start
+  let expected = it.typ
+  it.typ = typeToCursor(c, typeStart)
+  c.dest.shrink typeStart
+  commonType c, it, exprStart, expected
 
 proc semSuf(c: var SemContext, it: var Item) =
   takeToken c, it.n
@@ -2507,12 +2513,14 @@ proc semSuf(c: var SemContext, it: var Item) =
   wantParRi c, it.n # right paren
 
 proc semTupleConstr(c: var SemContext, it: var Item) =
+  let exprStart = c.dest.len
   takeToken c, it.n
   if it.n.kind == ParRi:
     wantParRi c, it.n
     combineType c, it.n.info, it.typ, c.types.emptyTupleType
     return
-  var expected = it.typ
+  let origExpected = it.typ
+  var expected = origExpected
   var doExpected = expected.typeKind == TupleT
   if doExpected:
     inc expected # skip tag, now at fields
@@ -2552,11 +2560,12 @@ proc semTupleConstr(c: var SemContext, it: var Item) =
     typ.addParRi() # end field
   wantParRi c, it.n
   typ.addParRi()
-  let start = c.dest.len
+  let typeStart = c.dest.len
   var t = typ.cursorAt(0)
   semTupleType(c, t)
-  commonType c, it, start, it.typ
-  c.dest.shrink start
+  it.typ = typeToCursor(c, typeStart)
+  c.dest.shrink typeStart
+  commonType c, it, exprStart, origExpected
 
 proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
   case it.n.kind
