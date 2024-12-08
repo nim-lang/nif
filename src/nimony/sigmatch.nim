@@ -384,6 +384,29 @@ proc singleArg(m: var Match; f: var Cursor; arg: Item) =
       var a = arg.typ
       linearMatch m, f, a
       expectParRi m, f
+    of TupleT:
+      var a = arg.typ
+      if a.typeKind != TupleT:
+        m.error expected(f, a)
+        skip f
+      else:
+        # skip tags:
+        inc f
+        inc a
+        while f.kind != ParRi:
+          if a.kind == ParRi:
+            # len(f) > len(a)
+            m.error expected(f, a)
+          # only the type of the field is important:
+          var ffld = asLocal(f).typ
+          var afld = asLocal(a).typ
+          linearMatch m, ffld, afld
+          # skip fields:
+          skip f
+          skip a
+        if a.kind != ParRi:
+          # len(a) > len(f)
+          m.error expected(f, a)
     else:
       m.error "BUG: unhandled type: " & pool.tags[f.tagId]
   else:
