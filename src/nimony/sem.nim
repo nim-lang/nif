@@ -489,7 +489,8 @@ proc handleSymDef(c: var SemContext; n: var Cursor; kind: SymKind): DelayedSym =
     inc n
   elif n.kind == SymbolDef:
     discard "ok, and no need to re-add it to the symbol table"
-    result = DelayedSym(status: OkExisting, info: info)
+    let s = Sym(kind: kind, name: n.symId, pos: c.dest.len)
+    result = DelayedSym(status: OkExisting, s: s, info: info)
     c.dest.add n
     inc n
   else:
@@ -510,6 +511,7 @@ proc addSym(c: var SemContext; s: DelayedSym) =
       c.buildErr s.info, "attempt to redeclare: " & pool.strings[s.lit]
 
 proc publish(c: var SemContext; s: SymId; start: int) =
+  assert s != SymId(0)
   var buf = createTokenBuf(c.dest.len - start + 1)
   for i in start..<c.dest.len:
     buf.add c.dest[i]
@@ -1423,7 +1425,7 @@ proc typeofCallIs(c: var SemContext; it: var Item; beforeCall: int; returnType: 
 
 proc semCall(c: var SemContext; it: var Item) =
   let beforeCall = c.dest.len
-  let callNode = it.n
+  let callNode = it.n.load()
   inc it.n
   var dest = createTokenBuf(16)
   swap c.dest, dest
@@ -2626,12 +2628,14 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
     let start = c.dest.len
     let s = fetchSym(c, it.n.symId)
     takeToken c, it.n
+    it.kind = s.kind
     semExprSym c, it, s, start, flags
   of ParLe:
     case exprKind(it.n)
     of QuotedX:
       let start = c.dest.len
       let s = semQuoted(c, it.n)
+      it.kind = s.kind
       semExprSym c, it, s, start, flags
     of NoExpr:
       case stmtKind(it.n)
