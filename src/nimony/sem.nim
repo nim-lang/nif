@@ -2123,7 +2123,6 @@ proc semParams(c: var SemContext; n: var Cursor) =
   if n.kind == DotToken:
     takeToken c, n
   elif n == "params":
-    inc c.routine.inGeneric
     takeToken c, n
     while n.kind != ParRi:
       semParam c, n
