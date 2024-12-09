@@ -18,6 +18,18 @@
    (efld ~8 :Green.0.tesg7afhq1 . .
     (i -1) +2)))
 
+  (type ~7 :Parent.0.tesg7afhq1 . . . 2
+  (object . ~7,1
+   (fld :core.0.tesg7afhq1 . . ~2,~6
+    (i -1) .))) 8,9
+ (type ~6 :Child.0.tesg7afhq1 . . . 2
+  (object 10 Parent.0.tesg7afhq1 ~6,1
+   (fld :id.0.tesg7afhq1 . . ~2,~9
+    (i -1) .) ~6,2
+   (fld :name.0.tesg7afhq1 . . ~2,~10
+    (i -1) .))) 4,13
+ (var :s.0.tesg7afhq1 . . 3 Child.0.tesg7afhq1 .)
+
 
   (var :x . . (i +32) +12)
   (var :y . . (i +32) +12)
