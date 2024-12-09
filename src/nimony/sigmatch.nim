@@ -24,10 +24,15 @@ type
     n*, typ*: Cursor
     kind*: SymKind
 
+  FnCandidate* = object
+    kind*: SymKind
+    sym*: SymId
+    typ*: Cursor
+
   Match* = object
     inferred*: Table[SymId, Cursor]
     tvars: HashSet[SymId]
-    fn*: Item
+    fn*: FnCandidate
     args*, typeArgs*: TokenBuf
     err*: bool
     skippedMod: TypeKind
@@ -464,13 +469,13 @@ proc collectDefaultValues(f: var Cursor): seq[Item] =
     result.add Item(n: param.val, typ: param.typ)
     skip f
 
-proc sigmatch*(m: var Match; fn: Item; args: openArray[Item];
+proc sigmatch*(m: var Match; fn: FnCandidate; args: openArray[Item];
                explicitTypeVars: Cursor) =
   m.tvars = initHashSet[SymId]()
   m.fn = fn
-  if fn.n.kind == Symbol:
+  if fn.kind in RoutineKinds:
     var e = explicitTypeVars
-    for v in typeVars(fn.n.symId):
+    for v in typeVars(fn.sym):
       m.tvars.incl v
       if e.kind != DotToken and e.kind != ParRi:
         m.inferred[v] = e
@@ -504,8 +509,8 @@ proc sigmatch*(m: var Match; fn: Item; args: openArray[Item];
     m.returnType = f # return type follows the parameters in the token stream
 
   # check all type vars have a value:
-  if not m.err and fn.n.kind == Symbol:
-    for v in typeVars(fn.n.symId):
+  if not m.err and fn.kind in RoutineKinds:
+    for v in typeVars(fn.sym):
       let inf = m.inferred.getOrDefault(v)
       if inf == default(Cursor):
         m.error "could not infer type for " & pool.syms[v]

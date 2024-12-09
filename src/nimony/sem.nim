@@ -156,9 +156,6 @@ proc addSymUse(dest: var TokenBuf; s: Sym; info: PackedLineInfo) =
 proc addSymUse(dest: var TokenBuf; s: SymId; info: PackedLineInfo) =
   dest.add toToken(Symbol, s, info)
 
-const
-  RoutineKinds = {ProcY, FuncY, IterY, TemplateY, MacroY, ConverterY, MethodY}
-
 proc buildSymChoiceForDot(c: var SemContext; identifier: StrId; info: PackedLineInfo) =
   var count = 0
   let oldLen = c.dest.len
@@ -1277,10 +1274,11 @@ when false:
     semExpr c, it
     swap c.dest, result
 
-proc addFn(c: var SemContext; fn: Cursor; args: openArray[Item]): bool =
+proc addFn(c: var SemContext; fn: FnCandidate; fnOrig: Cursor; args: openArray[Item]): bool =
   result = false
-  if fn.kind == Symbol:
-    let res = tryLoadSym(fn.symId)
+  if fn.kind in RoutineKinds:
+    assert fn.sym != SymId(0)
+    let res = tryLoadSym(fn.sym)
     if res.status == LacksNothing:
       var n = res.decl
       inc n # skip the symbol kind
@@ -1299,14 +1297,14 @@ proc addFn(c: var SemContext; fn: Cursor; args: openArray[Item]): bool =
             inc n
           if n.kind != ParRi:
             error "broken `magic`: expected ')', but got: ", n
-  if not result:
-    c.dest.addSubtree fn
+    if not result:
+      c.dest.add toToken(Symbol, fn.sym, fnOrig.info)
+  else:
+    c.dest.addSubtree fnOrig
 
-proc semTemplateCall(c: var SemContext; it: var Item; fn: Cursor; beforeCall: int;
+proc semTemplateCall(c: var SemContext; it: var Item; fnId: SymId; beforeCall: int;
                     inferred: ptr Table[SymId, Cursor]) =
   var expandedInto = createTokenBuf(30)
-  assert fn.kind == Symbol
-  let fnId = fn.symId
 
   let s = fetchSym(c, fnId)
   let res = declToCursor(c, s)
@@ -1340,12 +1338,11 @@ proc sameIdent(a, b: SymId): bool =
 
 type
   FnCandidates = object
-    a: seq[Item]
+    a: seq[FnCandidate]
     s: HashSet[SymId]
 
-proc addUnique(c: var FnCandidates; x: Item) =
-  assert x.n.kind == SymbolDef
-  if not containsOrIncl(c.s, x.n.symId):
+proc addUnique(c: var FnCandidates; x: FnCandidate) =
+  if not containsOrIncl(c.s, x.sym):
     c.a.add x
 
 proc maybeAddConceptMethods(c: var SemContext; fn, typevar: SymId; cands: var FnCandidates) =
@@ -1368,10 +1365,11 @@ proc maybeAddConceptMethods(c: var SemContext; fn, typevar: SymId; cands: var Fn
         if sk in RoutineKinds:
           var prc = ops
           inc prc # (proc
-          if prc.kind == SymbolDef and sameIdent(fn, prc.symId):
+          let sym = prc.symId
+          if prc.kind == SymbolDef and sameIdent(fn, sym):
             var d = ops
             skipToParams d
-            cands.addUnique Item(n: prc, typ: d, kind: sk)
+            cands.addUnique FnCandidate(kind: sk, sym: sym, typ: d)
         skip ops
 
 proc considerTypeboundOps(c: var SemContext; m: var seq[Match]; candidates: FnCandidates; args: openArray[Item]) =
@@ -1458,9 +1456,9 @@ proc semCall(c: var SemContext; it: var Item) =
     inc f
     while f.kind != ParRi:
       if f.kind == Symbol:
-        let s = fetchSym(c, f.symId)
-        var candidate = Item(n: f, typ: fetchType(c, f, s), kind: s.kind)
-
+        let sym = f.symId
+        let s = fetchSym(c, sym)
+        let candidate = FnCandidate(kind: s.kind, sym: sym, typ: fetchType(c, f, s))
         m.add createMatch()
         sigmatch(m[^1], candidate, args, emptyNode())
       else:
@@ -1472,24 +1470,27 @@ proc semCall(c: var SemContext; it: var Item) =
     # buildErr c, fn.n.info, "attempt to call undeclared routine"
     discard
   else:
+    # Keep in mind that proc vars are a thing:
+    let sym = if fn.n.kind == Symbol: fn.n.symId else: SymId(0)
+    let candidate = FnCandidate(kind: symKind(fn.n), sym: sym, typ: fn.typ)
     m.add createMatch()
-    sigmatch(m[^1], fn, args, emptyNode())
+    sigmatch(m[^1], candidate, args, emptyNode())
     considerTypeboundOps(c, m, candidates, args)
   let idx = pickBestMatch(c, m)
 
   c.dest.add callNode
   if idx >= 0:
-    let fn = m[idx].fn
-    let isMagic = c.addFn(fn.n, args)
+    let finalFn = m[idx].fn
+    let isMagic = c.addFn(finalFn, fn.n, args)
     c.dest.add m[idx].args
     wantParRi c, it.n
 
-    if fn.kind == TemplateY:
+    if finalFn.kind == TemplateY:
       typeofCallIs c, it, beforeCall, m[idx].returnType
       if c.templateInstCounter <= MaxNestedTemplates:
         inc c.templateInstCounter
         withErrorContext c, callNode.info:
-          semTemplateCall c, it, fn.n, beforeCall, addr m[idx].inferred
+          semTemplateCall c, it, finalFn.sym, beforeCall, addr m[idx].inferred
         dec c.templateInstCounter
       else:
         buildErr c, callNode.info, "recursion limit exceeded for template expansions"
@@ -2173,6 +2174,7 @@ proc semProc(c: var SemContext; it: var Item; kind: SymKind; pass: PassKind) =
       of checkGenericInst:
         if it.n != "stmts":
           error "(stmts) expected, but got ", it.n
+        #echo "GENERIC BODY IS ", toString(it.n)
         takeToken c, it.n
         semProcBody c, it
         c.closeScope() # close body scope
