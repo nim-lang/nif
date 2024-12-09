@@ -1033,6 +1033,7 @@ proc produceInvoke(c: var SemContext; dest: var TokenBuf; req: InstRequest;
     dest.add toToken(Symbol, req.origin, info)
     var typeVars = typeVars
     if typeVars.substructureKind == TypevarsS:
+      inc typeVars
       while typeVars.kind != ParRi:
         if typeVars.symKind == TypeVarY:
           var tv = typeVars
@@ -2181,7 +2182,6 @@ proc semProc(c: var SemContext; it: var Item; kind: SymKind; pass: PassKind) =
       of checkGenericInst:
         if it.n != "stmts":
           error "(stmts) expected, but got ", it.n
-        #echo "GENERIC BODY IS ", toString(it.n)
         takeToken c, it.n
         semProcBody c, it
         c.closeScope() # close body scope
