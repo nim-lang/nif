@@ -496,6 +496,7 @@ proc collectDefaultValues(f: var Cursor): seq[Item] =
 
 proc sigmatch*(m: var Match; fn: FnCandidate; args: openArray[Item];
                explicitTypeVars: Cursor) =
+  assert fn.kind != NoSym or fn.sym == SymId(0)
   m.tvars = initHashSet[SymId]()
   m.fn = fn
   if fn.kind in RoutineKinds:

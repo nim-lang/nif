@@ -1102,6 +1102,7 @@ proc instantiateGenericProc(c: var SemContext; req: InstRequest) =
   withFromInfo req:
     subsGenericProc c, dest, req
     var it = Item(n: beginRead(dest), typ: c.types.autoType)
+    #echo "now in generic proc: ", toString(it.n)
     semProc c, it, it.n.symKind, checkGenericInst
 
 proc instantiateGenerics(c: var SemContext) =
@@ -1431,6 +1432,7 @@ proc semCall(c: var SemContext; it: var Item) =
   swap c.dest, dest
   var fn = Item(n: it.n, typ: c.types.autoType)
   semExpr(c, fn, {KeepMagics})
+  let fnKind = fn.kind
   let fnId = if c.dest[0].kind == Symbol: c.dest[0].symId else: SymId(0)
   it.n = fn.n
   var args: seq[Item] = @[]
@@ -1474,7 +1476,7 @@ proc semCall(c: var SemContext; it: var Item) =
   else:
     # Keep in mind that proc vars are a thing:
     let sym = if fn.n.kind == Symbol: fn.n.symId else: SymId(0)
-    let candidate = FnCandidate(kind: symKind(fn.n), sym: sym, typ: fn.typ)
+    let candidate = FnCandidate(kind: fnKind, sym: sym, typ: fn.typ)
     m.add createMatch()
     sigmatch(m[^1], candidate, args, emptyNode())
     considerTypeboundOps(c, m, candidates, args)
