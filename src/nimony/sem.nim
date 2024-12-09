@@ -2625,7 +2625,7 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
   of Symbol:
     let start = c.dest.len
     let s = fetchSym(c, it.n.symId)
-    inc it.n
+    takeToken c, it.n
     semExprSym c, it, s, start, flags
   of ParLe:
     case exprKind(it.n)
