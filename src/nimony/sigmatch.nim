@@ -84,6 +84,10 @@ proc isObjectType(s: SymId): bool =
   let impl = objtypeImpl(s)
   result = impl.typeKind == ObjectT
 
+proc isTupleType(s: SymId): bool =
+  let impl = typeImpl(s)
+  result = impl.typeKind == TupleT
+
 proc isConcept(s: SymId): bool =
   #let impl = typeImpl(s)
   # XXX Model Concept in the grammar
@@ -280,6 +284,12 @@ proc matchSymbol(m: var Match; f: Cursor; arg: Item) =
         m.error expected(f, a)
       elif m.skippedMod == OutT:
         m.error "subtype relation not available for `out` parameters"
+  elif isTupleType(fs):
+    if a.kind == Symbol and a.symId == fs:
+      discard "perfect match"
+    else:
+      var impl = typeImpl(fs)
+      singleArg(m, impl, arg)
   elif isConcept(fs):
     m.error "'concept' is not implemented"
   else:
