@@ -115,6 +115,11 @@ proc expectSym(e: var EContext; c: var Cursor) =
   if c.kind != Symbol:
     error e, "expected symbol, but got: ", c
 
+proc getSym(e: var EContext; c: var Cursor): (SymId, PackedLineInfo) =
+  expectSym(e, c)
+  result = (c.symId, c.info)
+  inc c
+
 proc expectStrLit(e: var EContext; c: var Cursor) =
   if c.kind != StringLit:
     error e, "expected string literal, but got: ", c
@@ -157,7 +162,7 @@ type
 
 proc traverseType(e: var EContext; c: var Cursor; flags: set[TypeFlag] = {})
 
-proc traverseTupleField(e: var EContext; c: var Cursor; flags: set[TypeFlag] = {}) =
+proc traverseField(e: var EContext; c: var Cursor; flags: set[TypeFlag] = {}) =
   e.dest.add c # fld
   inc c
 
@@ -250,7 +255,23 @@ proc traverseType(e: var EContext; c: var Cursor; flags: set[TypeFlag] = {}) =
       e.dest.add tagToken("object", c.info)
       e.dest.addDotToken()
       while c.substructureKind == FldS:
-        traverseTupleField(e, c, flags)
+        traverseField(e, c, flags)
+
+      wantParRi e, c
+
+    of ObjectT:
+      e.dest.add c
+      inc c
+      if c.kind == DotToken:
+        e.dest.add c
+        inc c
+      else:
+        # inherited symbol
+        let (s, sinfo) = getSym(e, c)
+        e.dest.add toToken(Symbol, s, sinfo)
+        e.demand s
+      while c.substructureKind == FldS:
+        traverseField(e, c, flags)
 
       wantParRi e, c
     of EnumT:
@@ -269,7 +290,7 @@ proc traverseType(e: var EContext; c: var Cursor; flags: set[TypeFlag] = {}) =
       e.dest.add fields
 
       wantParRi e, c
-    of ObjectT, VoidT, StringT, VarargsT, NilT, ConceptT,
+    of VoidT, StringT, VarargsT, NilT, ConceptT,
        IterT, InvokeT, SetT:
       error e, "unimplemented type: ", c
   else:
