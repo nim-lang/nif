@@ -1522,6 +1522,8 @@ type
     OrdinaryDot, AlsoTryDotCall, DotDontReportError
 
 proc semDot(c: var SemContext; it: var Item; mode: DotExprMode) =
+  let exprStart = c.dest.len
+  let expected = it.typ
   takeToken c, it.n
   var a = Item(n: it.n, typ: c.types.autoType)
   semExpr c, a
@@ -1540,8 +1542,7 @@ proc semDot(c: var SemContext; it: var Item; mode: DotExprMode) =
         if field.level >= 0:
           c.dest.add toToken(Symbol, field.sym, info)
           c.dest.add toToken(IntLit, pool.integers.getOrIncl(field.level), info)
-          combineType c, info, it.typ, field.typ
-          # XXX use commonType here
+          it.typ = field.typ # will be fit later with commonType
           it.kind = FldY
           isMatch = true
         else:
@@ -1554,6 +1555,8 @@ proc semDot(c: var SemContext; it: var Item; mode: DotExprMode) =
   if it.n.kind == IntLit:
     inc it.n
   wantParRi c, it.n
+  if isMatch:
+    commonType c, it, exprStart, expected
 
 proc semWhile(c: var SemContext; it: var Item) =
   let info = it.n.info
@@ -1595,7 +1598,7 @@ proc semBreak(c: var SemContext; it: var Item) =
     if it.n.kind == DotToken:
       wantDot c, it.n
     else:
-      var a = Item(n: it.n, typ: c.types.voidType)
+      var a = Item(n: it.n, typ: c.types.autoType)
       semExpr(c, a)
       if a.kind != LabelY:
         buildErr c, it.n.info, "`break` needs a block label"
@@ -2177,8 +2180,9 @@ proc semStmtsExpr(c: var SemContext; it: var Item) =
       semExpr c, it
   wantParRi c, it.n
 
-proc semExprSym(c: var SemContext; it: var Item; s: Sym; flags: set[SemFlag]) =
+proc semExprSym(c: var SemContext; it: var Item; s: Sym; start: int; flags: set[SemFlag]) =
   it.kind = s.kind
+  let expected = it.typ
   if s.kind == NoSym:
     c.buildErr it.n.info, "undeclared identifier"
     it.typ = c.types.autoType
@@ -2187,12 +2191,13 @@ proc semExprSym(c: var SemContext; it: var Item; s: Sym; flags: set[SemFlag]) =
       c.buildErr it.n.info, "ambiguous identifier"
     it.typ = c.types.autoType
   elif s.kind in {TypeY, TypevarY}:
-    let start = c.dest.len
+    let typeStart = c.dest.len
     c.dest.buildTree TypedescT, it.n.info:
       c.dest.add toToken(Symbol, s.name, it.n.info)
       semTypeSym c, s, it.n.info
-    it.typ = typeToCursor(c, start)
-    c.dest.shrink start
+    it.typ = typeToCursor(c, typeStart)
+    c.dest.shrink typeStart
+    commonType c, it, start, expected
   else:
     let res = declToCursor(c, s)
     if KeepMagics notin flags:
@@ -2209,6 +2214,7 @@ proc semExprSym(c: var SemContext; it: var Item; s: Sym; flags: set[SemFlag]) =
         # XXX enum field?
         assert false, "not implemented"
       it.typ = n
+      commonType c, it, start, expected
     else:
       c.buildErr it.n.info, "could not load symbol: " & pool.syms[s.name] & "; errorCode: " & $res.status
       it.typ = c.types.autoType
@@ -2400,6 +2406,7 @@ proc semTypedUnaryArithmetic(c: var SemContext; it: var Item) =
   wantParRi c, it.n
 
 proc semArrayConstr(c: var SemContext, it: var Item) =
+  let exprStart = c.dest.len
   takeToken c, it.n
   if it.n.kind == ParRi:
     # empty array
@@ -2425,12 +2432,14 @@ proc semArrayConstr(c: var SemContext, it: var Item) =
     inc count
   it.n = elem.n
   wantParRi c, it.n
-  let start = c.dest.len
+  let typeStart = c.dest.len
   c.dest.buildTree ArrayT, it.n.info:
     c.dest.add toToken(IntLit, count, it.n.info)
     c.dest.addSubtree elem.typ
-  commonType c, it, start, it.typ
-  c.dest.shrink start
+  let expected = it.typ
+  it.typ = typeToCursor(c, typeStart)
+  c.dest.shrink typeStart
+  commonType c, it, exprStart, expected
 
 proc isRangeNode(c: var SemContext; n: Cursor): bool =
   var n = n
@@ -2441,6 +2450,7 @@ proc isRangeNode(c: var SemContext; n: Cursor): bool =
   result = name != StrId(0) and pool.strings[name] == ".."
 
 proc semSetConstr(c: var SemContext, it: var Item) =
+  let exprStart = c.dest.len
   takeToken c, it.n
   if it.n.kind == ParRi:
     # empty set
@@ -2472,13 +2482,16 @@ proc semSetConstr(c: var SemContext, it: var Item) =
     # XXX check if elem.typ is too big
   it.n = elem.n
   wantParRi c, it.n
-  let start = c.dest.len
+  let typeStart = c.dest.len
   c.dest.buildTree SetT, it.n.info:
     c.dest.addSubtree elem.typ
-  commonType c, it, start, it.typ
-  c.dest.shrink start
+  let expected = it.typ
+  it.typ = typeToCursor(c, typeStart)
+  c.dest.shrink typeStart
+  commonType c, it, exprStart, expected
 
 proc semSuf(c: var SemContext, it: var Item) =
+  let exprStart = c.dest.len
   takeToken c, it.n
   var num = Item(n: it.n, typ: c.types.autoType)
   semExpr c, num
@@ -2487,6 +2500,7 @@ proc semSuf(c: var SemContext, it: var Item) =
     c.buildErr it.n.info, "string literal expected for suf"
     skip it.n
     return
+  let expected = it.typ
   case pool.strings[it.n.litId]
   of "i": it.typ = c.types.intType
   of "i8": it.typ = c.types.int8Type
@@ -2505,14 +2519,18 @@ proc semSuf(c: var SemContext, it: var Item) =
     c.buildErr it.n.info, "unknown suffix: " & pool.strings[it.n.litId]
   takeToken c, it.n # suffix
   wantParRi c, it.n # right paren
+  commonType c, it, exprStart, expected
 
 proc semTupleConstr(c: var SemContext, it: var Item) =
+  let exprStart = c.dest.len
+  let origExpected = it.typ
   takeToken c, it.n
   if it.n.kind == ParRi:
     wantParRi c, it.n
-    combineType c, it.n.info, it.typ, c.types.emptyTupleType
+    it.typ = c.types.emptyTupletype
+    commonType c, it, exprStart, origExpected
     return
-  var expected = it.typ
+  var expected = origExpected
   var doExpected = expected.typeKind == TupleT
   if doExpected:
     inc expected # skip tag, now at fields
@@ -2552,11 +2570,12 @@ proc semTupleConstr(c: var SemContext, it: var Item) =
     typ.addParRi() # end field
   wantParRi c, it.n
   typ.addParRi()
-  let start = c.dest.len
+  let typeStart = c.dest.len
   var t = typ.cursorAt(0)
   semTupleType(c, t)
-  commonType c, it, start, it.typ
-  c.dest.shrink start
+  it.typ = typeToCursor(c, typeStart)
+  c.dest.shrink typeStart
+  commonType c, it, exprStart, origExpected
 
 proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
   case it.n.kind
@@ -2571,17 +2590,20 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
   of CharLit:
     literal c, it, c.types.charType
   of Ident:
+    let start = c.dest.len
     let s = semIdent(c, it.n)
-    semExprSym c, it, s, flags
+    semExprSym c, it, s, start, flags
   of Symbol:
+    let start = c.dest.len
     let s = fetchSym(c, it.n.symId)
     inc it.n
-    semExprSym c, it, s, flags
+    semExprSym c, it, s, start, flags
   of ParLe:
     case exprKind(it.n)
     of QuotedX:
+      let start = c.dest.len
       let s = semQuoted(c, it.n)
-      semExprSym c, it, s, flags
+      semExprSym c, it, s, start, flags
     of NoExpr:
       case stmtKind(it.n)
       of NoStmt:

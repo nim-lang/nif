@@ -375,7 +375,7 @@ proc singleArg(m: var Match; f: var Cursor; arg: Item) =
       else:
         linearMatch m, f, a
       expectParRi m, f
-    of ArrayT:
+    of ArrayT, SetT:
       var a = skipModifier(arg.typ)
       linearMatch m, f, a
       expectParRi m, f
@@ -385,9 +385,11 @@ proc singleArg(m: var Match; f: var Cursor; arg: Item) =
       linearMatch m, f, a
       expectParRi m, f
     of TupleT:
-      var a = arg.typ
+      let fOrig = f
+      let aOrig = arg.typ
+      var a = aOrig
       if a.typeKind != TupleT:
-        m.error expected(f, a)
+        m.error expected(fOrig, aOrig)
         skip f
       else:
         # skip tags:
@@ -396,7 +398,7 @@ proc singleArg(m: var Match; f: var Cursor; arg: Item) =
         while f.kind != ParRi:
           if a.kind == ParRi:
             # len(f) > len(a)
-            m.error expected(f, a)
+            m.error expected(fOrig, aOrig)
           # only the type of the field is important:
           var ffld = asLocal(f).typ
           var afld = asLocal(a).typ
@@ -406,7 +408,7 @@ proc singleArg(m: var Match; f: var Cursor; arg: Item) =
           skip a
         if a.kind != ParRi:
           # len(a) > len(f)
-          m.error expected(f, a)
+          m.error expected(fOrig, aOrig)
     else:
       m.error "BUG: unhandled type: " & pool.tags[f.tagId]
   else:
