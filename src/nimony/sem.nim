@@ -2619,6 +2619,39 @@ proc semTupleConstr(c: var SemContext, it: var Item) =
   c.dest.shrink typeStart
   commonType c, it, exprStart, origExpected
 
+proc semDefined(c: var SemContext; it: var Item) =
+  inc it.n
+  # does not consider dots for now
+  let name = pool.strings[getIdent(c, it.n)]
+  skipParRi it.n
+  let isDefined = name in c.g.config.defines
+  let beforeExpr = c.dest.len
+  c.dest.add toToken(ParLe, if isDefined: TrueX else: FalseX, it.n.info)
+  c.dest.addParRi()
+  let expected = it.typ
+  it.typ = c.types.boolType
+  commonType c, it, beforeExpr, expected
+
+proc isDeclared(c: var SemContext; name: StrId): bool =
+  var scope = c.currentScope
+  while scope != nil:
+    if name in scope.tab:
+      return true
+  result = name in c.importTab
+
+proc semDeclared(c: var SemContext; it: var Item) =
+  inc it.n
+  # does not consider module quoted symbols for now
+  let nameId = getIdent(c, it.n)
+  skipParRi it.n
+  let isDeclared = isDeclared(c, nameId)
+  let beforeExpr = c.dest.len
+  c.dest.add toToken(ParLe, if isDeclared: TrueX else: FalseX, it.n.info)
+  c.dest.addParRi()
+  let expected = it.typ
+  it.typ = c.types.boolType
+  commonType c, it, beforeExpr, expected
+
 proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
   case it.n.kind
   of IntLit:
@@ -2738,10 +2771,14 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
       semSuf c, it
     of TupleConstrX:
       semTupleConstr c, it
+    of DefinedX:
+      semDefined c, it
+    of DeclaredX:
+      semDeclared c, it
     of AtX, DerefX, PatX, AddrX, NilX, SizeofX, OconstrX, KvX,
        CastX, ConvX, RangeX, RangesX,
        HderefX, HaddrX, OconvX, HconvX, OchoiceX, CchoiceX,
-       CompilesX, DeclaredX, DefinedX, HighX, LowX, TypeofX, UnpackX:
+       CompilesX, HighX, LowX, TypeofX, UnpackX:
       # XXX To implement
       takeToken c, it.n
       wantParRi c, it.n
