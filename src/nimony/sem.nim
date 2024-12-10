@@ -1262,6 +1262,7 @@ proc fetchType(c: var SemContext; n: Cursor; s: Sym): TypeCursor =
 
 proc pickBestMatch(c: var SemContext; m: openArray[Match]): int =
   result = -1
+  var other = -1
   for i in 0..<m.len:
     if not m[i].err:
       if result < 0:
@@ -1269,19 +1270,13 @@ proc pickBestMatch(c: var SemContext; m: openArray[Match]): int =
       else:
         case cmpMatches(m[result], m[i])
         of NobodyWins:
-          result = -2 # ambiguous
-          break
+          other = i
         of FirstWins:
           discard "result remains the same"
         of SecondWins:
           result = i
-
-when false:
-  proc semExpr2(c: var SemContext; it: var Item): TokenBuf =
-    result = createTokenBuf(20)
-    swap c.dest, result
-    semExpr c, it
-    swap c.dest, result
+          other = -1
+  if other >= 0: result = -2 # ambiguous
 
 const
   ConceptProcY = CchoiceY
@@ -1359,7 +1354,7 @@ proc addUnique(c: var FnCandidates; x: FnCandidate) =
   if not containsOrIncl(c.s, x.sym):
     c.a.add x
 
-proc maybeAddConceptMethods(c: var SemContext; fn, typevar: SymId; cands: var FnCandidates) =
+proc maybeAddConceptMethods(c: var SemContext; fn: StrId; typevar: SymId; cands: var FnCandidates) =
   let res = tryLoadSym(typevar)
   assert res.status == LacksNothing
   let local = asLocal(res.decl)
@@ -1379,7 +1374,7 @@ proc maybeAddConceptMethods(c: var SemContext; fn, typevar: SymId; cands: var Fn
         if sk in RoutineKinds:
           var prc = ops
           inc prc # (proc
-          if prc.kind == SymbolDef and sameIdent(fn, prc.symId):
+          if prc.kind == SymbolDef and sameIdent(prc.symId, fn):
             var d = ops
             skipToParams d
             cands.addUnique FnCandidate(kind: ConceptProcY, sym: prc.symId, typ: d)
@@ -1435,6 +1430,11 @@ proc typeofCallIs(c: var SemContext; it: var Item; beforeCall: int; returnType: 
   it.typ = returnType
   commonType c, it, beforeCall, expected
 
+proc getFnIdent(c: var SemContext): StrId =
+  var n = beginRead(c.dest)
+  result = getIdent(c, n)
+  endRead(c.dest)
+
 proc semCall(c: var SemContext; it: var Item) =
   let beforeCall = c.dest.len
   let callNode = it.n.load()
@@ -1444,7 +1444,7 @@ proc semCall(c: var SemContext; it: var Item) =
   var fn = Item(n: it.n, typ: c.types.autoType)
   semExpr(c, fn, {KeepMagics})
   let fnKind = fn.kind
-  let fnId = if c.dest[0].kind == Symbol: c.dest[0].symId else: SymId(0)
+  let fnName = getFnIdent(c)
   it.n = fn.n
   var args: seq[Item] = @[]
   var argIndexes: seq[int] = @[]
@@ -1455,8 +1455,8 @@ proc semCall(c: var SemContext; it: var Item) =
     semExpr c, arg
     # scope extension: If the type is Typevar and it has attached
     # a concept, use the concepts symbols too:
-    if fnId != SymId(0) and arg.typ.kind == Symbol:
-      maybeAddConceptMethods c, fnId, arg.typ.symId, candidates
+    if fnName != StrId(0) and arg.typ.kind == Symbol:
+      maybeAddConceptMethods c, fnName, arg.typ.symId, candidates
     it.n = arg.n
     args.add arg
   assert args.len == argIndexes.len
