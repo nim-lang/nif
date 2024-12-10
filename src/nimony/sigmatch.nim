@@ -84,22 +84,11 @@ proc isObjectType(s: SymId): bool =
   let impl = objtypeImpl(s)
   result = impl.typeKind == ObjectT
 
-proc isTupleType(s: SymId): bool =
-  let impl = typeImpl(s)
-  result = impl.typeKind == TupleT
-
 proc isConcept(s: SymId): bool =
   #let impl = typeImpl(s)
   # XXX Model Concept in the grammar
   #result = impl.tag == ConceptT
   result = false
-
-proc asTypeAlias(s: SymId): Cursor =
-  let impl = typeImpl(s)
-  if impl.kind == Symbol or impl.typeKind == InvokeT:
-    result = impl
-  else:
-    result = errCursor()
 
 iterator inheritanceChain(s: SymId): SymId =
   var objbody = objtypeImpl(s)
@@ -284,12 +273,6 @@ proc matchSymbol(m: var Match; f: Cursor; arg: Item) =
         m.error expected(f, a)
       elif m.skippedMod == OutT:
         m.error "subtype relation not available for `out` parameters"
-  elif isTupleType(fs):
-    if a.kind == Symbol and a.symId == fs:
-      discard "perfect match"
-    else:
-      var impl = typeImpl(fs)
-      singleArg(m, impl, arg)
   elif isConcept(fs):
     m.error "'concept' is not implemented"
   else:
@@ -297,9 +280,8 @@ proc matchSymbol(m: var Match; f: Cursor; arg: Item) =
     if a.kind == Symbol and a.symId == fs:
       discard "perfect match"
     else:
-      var impl = asTypeAlias(fs)
+      var impl = typeImpl(fs)
       if impl.kind == ParLe and impl.tagId == ErrT:
-        # not a type alias!
         m.error expected(f, a)
       else:
         singleArg(m, impl, arg)
