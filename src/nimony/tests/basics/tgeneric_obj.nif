@@ -51,9 +51,9 @@
    (param :y.1 . . ~15,~20
     (string) .)) 2,~23
   (i -1) . . 2,1
-  (result :result.0 . . ,~24
-   (i -1) .) 2,1
   (stmts 4
+   (result :result.0 . . ~4,~24
+    (i -1) .) 4
    (var :x.2 . .
     (string) 4 "abc") 7,1
    (asgn ~7 result.0 2 +4) 2,2
