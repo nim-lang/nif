@@ -246,7 +246,7 @@ proc useArg(m: var Match; arg: Item) =
   if usedDeref:
     m.args.addParRi()
 
-proc singleArg(m: var Match; f: var Cursor; arg: Item)
+proc singleArgImpl(m: var Match; f: var Cursor; arg: Item)
 
 proc matchSymbol(m: var Match; f: Cursor; arg: Item) =
   let a = skipModifier(arg.typ)
@@ -289,7 +289,7 @@ proc matchSymbol(m: var Match; f: Cursor; arg: Item) =
       if impl.kind == ParLe and impl.tagId == ErrT:
         m.error expected(f, a)
       else:
-        singleArg(m, impl, arg)
+        singleArgImpl(m, impl, arg)
 
 proc cmpTypeBits(f, a: Cursor): int =
   if (f.kind == IntLit or f.kind == InlineInt) and
@@ -328,7 +328,7 @@ proc expectParRi(m: var Match; f: var Cursor) =
   else:
     m.error "BUG: formal type not at end!"
 
-proc singleArg(m: var Match; f: var Cursor; arg: Item) =
+proc singleArgImpl(m: var Match; f: var Cursor; arg: Item) =
   case f.kind
   of Symbol:
     matchSymbol m, f, arg
@@ -345,7 +345,7 @@ proc singleArg(m: var Match; f: var Cursor; arg: Item) =
         m.args.addParLe HaddrX, m.argInfo
         inc m.opened
       inc f
-      singleArg m, f, Item(n: arg.n, typ: a)
+      singleArgImpl m, f, Item(n: arg.n, typ: a)
       expectParRi m, f
     of IntT, UIntT, FloatT, CharT:
       matchIntegralType m, f, arg
@@ -411,6 +411,8 @@ proc singleArg(m: var Match; f: var Cursor; arg: Item) =
   else:
     m.error "BUG: " & expected(f, arg.typ)
 
+proc singleArg(m: var Match; f: var Cursor; arg: Item) =
+  singleArgImpl(m, f, arg)
   if not m.err:
     m.useArg arg # since it was a match, copy it
     while m.opened > 0:
