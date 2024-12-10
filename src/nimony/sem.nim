@@ -428,6 +428,11 @@ proc identToSym(c: var SemContext; lit: StrId; kind: SymKind): SymId =
     c.makeLocalSym(name)
   result = pool.syms.getOrIncl(name)
 
+proc symToIdent(s: SymId): StrId =
+  var name = pool.syms[s]
+  extractBasename name
+  result = pool.strings.getOrIncl name
+
 proc declareSym(c: var SemContext; it: var Item; kind: SymKind): SymStatus =
   let info = it.n.info
   if it.n.kind == Ident:
@@ -1278,6 +1283,9 @@ when false:
     semExpr c, it
     swap c.dest, result
 
+const
+  ConceptProcY = CchoiceY
+
 proc addFn(c: var SemContext; fn: FnCandidate; fnOrig: Cursor; args: openArray[Item]): bool =
   result = false
   if fn.kind in RoutineKinds:
@@ -1303,6 +1311,8 @@ proc addFn(c: var SemContext; fn: FnCandidate; fnOrig: Cursor; args: openArray[I
             error "broken `magic`: expected ')', but got: ", n
     if not result:
       c.dest.add toToken(Symbol, fn.sym, fnOrig.info)
+  elif fn.kind == ConceptProcY and fn.sym != SymId(0):
+    c.dest.add toToken(Ident, symToIdent(fn.sym), fnOrig.info)
   else:
     c.dest.addSubtree fnOrig
 
@@ -1369,11 +1379,10 @@ proc maybeAddConceptMethods(c: var SemContext; fn, typevar: SymId; cands: var Fn
         if sk in RoutineKinds:
           var prc = ops
           inc prc # (proc
-          let sym = prc.symId
-          if prc.kind == SymbolDef and sameIdent(fn, sym):
+          if prc.kind == SymbolDef and sameIdent(fn, prc.symId):
             var d = ops
             skipToParams d
-            cands.addUnique FnCandidate(kind: sk, sym: sym, typ: d)
+            cands.addUnique FnCandidate(kind: ConceptProcY, sym: prc.symId, typ: d)
         skip ops
 
 proc considerTypeboundOps(c: var SemContext; m: var seq[Match]; candidates: FnCandidates; args: openArray[Item]) =
@@ -1389,6 +1398,7 @@ proc requestRoutineInstance(c: var SemContext; origin: SymId; m: var Match;
     let targetSym = newSymId(c, origin)
     var signature = createTokenBuf(30)
     let decl = getProcDecl(origin)
+    assert decl.typevars == "typevars", pool.syms[origin]
     buildTree signature, decl.kind, info:
       signature.add toToken(SymbolDef, targetSym, info)
       signature.addDotToken() # a generic instance is not exported
