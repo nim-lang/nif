@@ -109,3 +109,8 @@ var t: tuple[x: int, y: string] = (1, "abc")
 t = (x: 2, y: "def")
 
 var mt: Data = (1, "abc")
+
+
+const Inf* = 0x7FF0000000000000'f64
+
+let s: float = Inf
