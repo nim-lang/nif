@@ -505,8 +505,19 @@ proc traverseExpr(e: var EContext; c: var Cursor) =
     case c.kind
     of EofToken: break
     of ParLe:
-      e.dest.add c
-      inc nested
+      case c.exprKind
+      of EqX, NeqX, LeX, LtX:
+        e.dest.add c
+        inc c
+        var skipped = createTokenBuf()
+        swap skipped, e.dest
+        traverseType(e, c)
+        swap skipped, e.dest
+        inc nested
+      else:
+        e.dest.add c
+        inc nested
+        inc c
     of ParRi: # TODO: refactoring: take the whole statement into consideration
       if nested == 0:
         break
@@ -515,15 +526,18 @@ proc traverseExpr(e: var EContext; c: var Cursor) =
       if nested == 0:
         inc c
         break
+      inc c
     of SymbolDef:
       e.dest.add c
       e.offer c.symId
+      inc c
     of Symbol:
       e.dest.add c
       e.demand c.symId
+      inc c
     of UnknownToken, DotToken, Ident, StringLit, CharLit, IntLit, UIntLit, FloatLit:
       e.dest.add c
-    inc c
+      inc c
 
 proc traverseLocal(e: var EContext; c: var Cursor; tag: string; mode: TraverseMode) =
   let toPatch = e.dest.len
