@@ -317,7 +317,7 @@ proc handleCmdLine =
     if args.len > 0:
       test args[0], true, args[0].contains("track")
     else:
-      quit "`overwrite` takes an argument"
+      tests(true)
   of "record":
     buildNimony()
     if args.len == 2:

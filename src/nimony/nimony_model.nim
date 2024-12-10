@@ -272,3 +272,6 @@ proc symKind*(c: Cursor): SymKind {.inline.} =
     result = NoSym
 
 template `==`*(n: Cursor; s: string): bool = n.kind == ParLe and pool.tags[n.tagId] == s
+
+const
+  RoutineKinds* = {ProcY, FuncY, IterY, TemplateY, MacroY, ConverterY, MethodY}
