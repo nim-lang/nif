@@ -107,3 +107,5 @@ var z = (1, "abc")
 z = (2, "def")
 var t: tuple[x: int, y: string] = (1, "abc")
 t = (x: 2, y: "def")
+
+var mt: Data = (1, "abc")
