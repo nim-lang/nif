@@ -31,6 +31,39 @@
  (var :s.0.tesg7afhq1 . . 3 Child.0.tesg7afhq1 .)
 
 
+(proc 5 :==.0.tesg7afhq1 
+  (eq -3) . . 10
+  (params 1
+   (param :x.0 . . ~9,~7
+    (i -1) .) 4
+   (param :y.0 . . ~12,~7
+    (i -1) .)) 26,~3
+  (bool) 28
+  (pragmas 2
+   (magic 7 "EqI")) . .) ,10
+ (proc 5 :<=.0.tesg7afhq1 
+  (le -3) . . 10
+  (params 1
+   (param :x.1 . . ~9,~9
+    (i -1) .) 4
+   (param :y.1 . . ~12,~9
+    (i -1) .)) 26,~5
+  (bool) 28
+  (pragmas 2
+   (magic 7 "LeI")) . .) ,12
+ (proc 5 :ifExpr.0.tesg7afhq1 . . . 11
+  (params) . . . 2,1
+  (stmts 4
+   (let :s.0 . . 20,~8
+    (bool) 6
+    (eq
+     (i -1) ~2 +1 3 +1)) 4,1
+   (let :s2.0 . . 20,~9
+    (bool) 7
+    (le
+     (i -1) ~2 +1 3 +2))))
+
+
   (var :x . . (i +32) +12)
   (var :y . . (i +32) +12)
 
