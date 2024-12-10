@@ -1,40 +1,48 @@
 ## expression evaluator for simple constant expressions, not meant to be complete
-## 
-## included in sem.nim
 
-type EvalContext = object
-  c: ptr SemContext # used the same way as `var SemContext`
+include nifprelude
+import nimony_model, decls, programs, sigmatch # sigmatch just for addStrLit
+
+type EvalContext* = object
   values: seq[TokenBuf]
   trueValue, falseValue: Cursor
 
-proc isConstBoolValue(n: Cursor): bool =
+proc isConstBoolValue*(n: Cursor): bool =
   n.exprKind in {TrueX, FalseX}
 
-proc isConstIntValue(n: Cursor): bool =
+proc isConstIntValue*(n: Cursor): bool =
   n.kind == IntLit
 
-proc isConstUIntValue(n: Cursor): bool =
+proc isConstUIntValue*(n: Cursor): bool =
   n.kind == UIntLit
 
-proc isConstStringValue(n: Cursor): bool =
+proc isConstStringValue*(n: Cursor): bool =
   n.kind == StringLit
 
-proc isConstCharValue(n: Cursor): bool =
+proc isConstCharValue*(n: Cursor): bool =
   n.kind == CharLit
 
-proc initEvalContext(c: var SemContext): EvalContext =
-  result = EvalContext(c: addr c, values: @[])
+proc initEvalContext*(): EvalContext =
+  result = EvalContext(values: @[])
+
+proc skipParRi(n: var Cursor) =
+  if n.kind == ParRi:
+    inc n
+  else:
+    error "expected ')', but got: ", n
 
 proc error(c: var EvalContext, msg: string, info: PackedLineInfo): Cursor =
+  let i = c.values.len
   c.values.add createTokenBuf(3)
-  c.values[^1].addParLe ErrT, info
-  c.values[^1].addStrLit msg
-  c.values[^1].addParRi()
-  result = cursorAt(c.values[^1], 0)
+  c.values[i].addParLe ErrT, info
+  c.values[i].addStrLit msg
+  c.values[i].addParRi()
+  result = cursorAt(c.values[i], 0)
 
 proc getTrueValue(c: var EvalContext): Cursor =
   if c.trueValue == default(Cursor):
     let i = c.values.len
+    c.values.add createTokenBuf(2)
     c.values[i].add toToken(ParLe, TrueX, NoLineInfo)
     c.values[i].addParRi()
     c.trueValue = cursorAt(c.values[i], 0)
@@ -43,12 +51,13 @@ proc getTrueValue(c: var EvalContext): Cursor =
 proc getFalseValue(c: var EvalContext): Cursor =
   if c.falseValue == default(Cursor):
     let i = c.values.len
+    c.values.add createTokenBuf(2)
     c.values[i].add toToken(ParLe, FalseX, NoLineInfo)
     c.values[i].addParRi()
     c.falseValue = cursorAt(c.values[i], 0)
   result = c.falseValue
 
-proc eval(c: var EvalContext, n: var Cursor): Cursor =
+proc eval*(c: var EvalContext, n: var Cursor): Cursor =
   template error(msg: string, info: PackedLineInfo) =
     result = c.error(msg, info)
   template propagateError(r: Cursor): Cursor =
@@ -138,8 +147,8 @@ proc eval(c: var EvalContext, n: var Cursor): Cursor =
   else:
     error "cannot evaluate expression at compile time: " & toString(n, false), n.info
 
-proc evalExpr(c: var SemContext, n: var Cursor): TokenBuf =
-  var ec = initEvalContext(c)
+proc evalExpr*(n: var Cursor): TokenBuf =
+  var ec = initEvalContext()
   let val = eval(ec, n)
   result = createTokenBuf(val.span)
   result.addSubtree val

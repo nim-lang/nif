@@ -11,7 +11,7 @@
 import std / [tables, sets, os, syncio, formatfloat, assertions]
 include nifprelude
 import nimony_model, symtabs, builtintypes, decls, symparser,
-  programs, sigmatch, magics, reporters, nifconfig, nifindexes
+  programs, sigmatch, magics, reporters, nifconfig, nifindexes, expreval
 
 import ".." / gear2 / modnames
 
@@ -703,8 +703,6 @@ proc parseFile(nimFile: string; paths: openArray[string]): TokenBuf =
   finally:
     nifstreams.close(stream)
 
-include expreval
-
 proc semStmt(c: var SemContext; n: var Cursor)
 
 proc typeMismatch(c: var SemContext; info: PackedLineInfo; got, expected: TypeCursor) =
@@ -1164,7 +1162,7 @@ proc semConstBoolExpr(c: var SemContext; n: var Cursor) =
   if classifyType(c, it.typ) != BoolT:
     buildErr c, it.n.info, "expected `bool` but got: " & typeToString(it.typ)
   var e = cursorAt(c.dest, start)
-  var valueBuf = evalExpr(c, e)
+  var valueBuf = evalExpr(e)
   endRead(c.dest)
   let value = cursorAt(valueBuf, 0)
   if not isConstBoolValue(value):
@@ -1184,7 +1182,7 @@ proc semConstStrExpr(c: var SemContext; n: var Cursor) =
   if classifyType(c, it.typ) != StringT:
     buildErr c, it.n.info, "expected `string` but got: " & typeToString(it.typ)
   var e = cursorAt(c.dest, start)
-  var valueBuf = evalExpr(c, e)
+  var valueBuf = evalExpr(e)
   endRead(c.dest)
   let value = cursorAt(valueBuf, 0)
   if not isConstStringValue(value):
@@ -1204,7 +1202,7 @@ proc semConstIntExpr(c: var SemContext; n: var Cursor) =
   if classifyType(c, it.typ) != IntT:
     buildErr c, it.n.info, "expected `int` but got: " & typeToString(it.typ)
   var e = cursorAt(c.dest, start)
-  var valueBuf = evalExpr(c, e)
+  var valueBuf = evalExpr(e)
   endRead(c.dest)
   let value = cursorAt(valueBuf, 0)
   if not isConstIntValue(value):
