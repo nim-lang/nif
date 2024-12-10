@@ -2073,7 +2073,7 @@ proc semLocal(c: var SemContext; n: var Cursor; kind: SymKind) =
   of TypevarY:
     discard semLocalType(c, n, InGenericConstraint)
     wantDot c, n
-  of ParamY, LetY, VarY, CursorY, ResultY, FldY, EfldY:
+  of ParamY, LetY, VarY, ConstY, CursorY, ResultY, FldY, EfldY:
     let beforeType = c.dest.len
     if n.kind == DotToken:
       # no explicit type given:
