@@ -1637,10 +1637,12 @@ proc semTupleType(c: var SemContext; n: var Cursor) =
       semLocal(c, n, FldY)
   wantParRi c, n
 
-proc semEnumType(c: var SemContext; n: var Cursor) =
+proc semEnumField(c: var SemContext; n: var Cursor; enumType: SymId)
+
+proc semEnumType(c: var SemContext; n: var Cursor; enumType: SymId) =
   takeToken c, n
   while n.substructureKind == EfldS:
-    semLocal(c, n, EfldY)
+    semEnumField(c, n, enumType)
   wantParRi c, n
 
 proc declareConceptSelf(c: var SemContext; info: PackedLineInfo) =
@@ -1822,11 +1824,8 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
       else:
         semObjectType c, n
     of EnumT:
-      if context != InTypeSection:
-        c.buildErr info, "`enum` type must be defined in a `type` section"
-        skip n
-      else:
-        semEnumType c, n
+      c.buildErr info, "`enum` type must be defined in a `type` section"
+      skip n
     of ConceptT:
       if context != InTypeSection:
         c.buildErr info, "`concept` type must be defined in a `type` section"
@@ -1893,7 +1892,7 @@ proc semLocal(c: var SemContext; n: var Cursor; kind: SymKind) =
   of TypevarY:
     discard semLocalType(c, n, InGenericConstraint)
     wantDot c, n
-  of ParamY, LetY, VarY, ConstY, CursorY, ResultY, FldY, EfldY:
+  of ParamY, LetY, VarY, ConstY, CursorY, ResultY, FldY:
     let beforeType = c.dest.len
     if n.kind == DotToken:
       # no explicit type given:
@@ -1922,6 +1921,43 @@ proc semLocal(c: var SemContext; it: var Item; kind: SymKind) =
   let info = it.n.info
   semLocal c, it.n, kind
   producesVoid c, info, it.typ
+
+proc semEnumField(c: var SemContext; n: var Cursor; enumType: SymId) =
+  let declStart = c.dest.len
+  takeToken c, n
+  let delayed = handleSymDef(c, n, EfldY) # 0
+  let beforeExportMarker = c.dest.len
+  wantExportMarker c, n # 1
+  var crucial = default CrucialPragma
+  semPragmas c, n, crucial, EfldY # 2
+  if crucial.magic.len > 0:
+    exportMarkerBecomesNifTag c, beforeExportMarker, crucial
+  let beforeType = c.dest.len
+  if n.kind == DotToken:
+    c.dest.add toToken(Symbol, enumType, n.info)
+    # no explicit type given:
+    inc n # 3
+    if n.kind == DotToken:
+      # empty value
+      takeToken c, n
+    else:
+      var it = Item(n: n, typ: c.types.autoType)
+      semExpr c, it # 4
+      n = it.n
+      # XXX check that it.typ is an ordinal!
+  else:
+    let typ = semLocalType(c, n) # 3
+    if n.kind == DotToken:
+      # empty value
+      takeToken c, n
+    else:
+      var it = Item(n: n, typ: typ)
+      semExpr c, it # 4
+      n = it.n
+      patchType c, it.typ, beforeType
+  c.addSym delayed
+  wantParRi c, n
+  publish c, delayed.s.name, declStart
 
 proc semGenericParam(c: var SemContext; n: var Cursor) =
   if n == "typevar":
@@ -2066,7 +2102,7 @@ proc semExprSym(c: var SemContext; it: var Item; s: Sym; start: int; flags: set[
       maybeInlineMagic c, res
     if res.status == LacksNothing:
       var n = res.decl
-      if s.kind.isLocal:
+      if s.kind.isLocal or s.kind == EfldY:
         skipToLocalType n
       elif s.kind.isRoutine:
         skipToParams n
@@ -2224,7 +2260,10 @@ proc semTypeSection(c: var SemContext; n: var Cursor) =
     takeToken c, n
   else:
     # body
-    semLocalTypeImpl c, n, InTypeSection
+    if n.typeKind == EnumT:
+      semEnumType c, n, delayed.s.name
+    else:
+      semLocalTypeImpl c, n, InTypeSection
   if isGeneric:
     closeScope c
   c.addSym delayed
