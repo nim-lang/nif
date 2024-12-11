@@ -233,8 +233,8 @@ proc traverseType(e: var EContext; c: var Cursor; flags: set[TypeFlag] = {}) =
     of ArrayT:
       e.dest.add c
       inc c
-      traverseType e, c
       traverseExpr e, c
+      traverseType e, c
       wantParRi e, c
     of UncheckedArrayT:
       if IsPointerOf in flags:
@@ -518,9 +518,7 @@ proc traverseExpr(e: var EContext; c: var Cursor) =
         e.dest.add c
         inc nested
         inc c
-    of ParRi: # TODO: refactoring: take the whole statement into consideration
-      if nested == 0:
-        break
+    of ParRi:
       e.dest.add c
       dec nested
       if nested == 0:
@@ -538,6 +536,9 @@ proc traverseExpr(e: var EContext; c: var Cursor) =
     of UnknownToken, DotToken, Ident, StringLit, CharLit, IntLit, UIntLit, FloatLit:
       e.dest.add c
       inc c
+
+    if nested == 0:
+      break
 
 proc traverseLocal(e: var EContext; c: var Cursor; tag: string; mode: TraverseMode) =
   let toPatch = e.dest.len
