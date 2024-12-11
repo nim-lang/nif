@@ -8,73 +8,13 @@
 ## Most important task is to turn identifiers into symbols and to perform
 ## type checking.
 
-import std / [tables, sets, os, syncio, formatfloat, assertions]
+import std / [tables, sets, syncio, formatfloat, assertions]
 include nifprelude
 import nimony_model, symtabs, builtintypes, decls, symparser,
-  programs, sigmatch, magics, reporters, nifconfig, nifindexes
+  programs, sigmatch, magics, reporters, nifconfig, nifindexes,
+  semdata, semos
 
 import ".." / gear2 / modnames
-
-type
-  TypeCursor = Cursor
-  SemRoutine {.acyclic.} = ref object
-    kind: SymKind
-    inGeneric, inLoop, inBlock: int
-    returnType: TypeCursor
-    resId: SymId
-    parent: SemRoutine
-
-proc createSemRoutine(kind: SymKind; parent: SemRoutine): SemRoutine =
-  result = SemRoutine(kind: kind, parent: parent, resId: SymId(0))
-
-const
-  MaxNestedTemplates = 100
-
-type
-  ImportedModule = object
-    iface: Iface
-
-  InstRequest* = object
-    origin*: SymId
-    targetSym*: SymId
-    #targetType*: TypeCursor
-    #typeParams*: seq[TypeCursor]
-    inferred*: Table[SymId, Cursor]
-    requestFrom*: seq[PackedLineInfo]
-
-  ProcInstance = object
-    targetSym: SymId
-    procType: TypeCursor
-    returnType: TypeCursor
-
-  ProgramContext = ref object # shared for every `SemContext`
-    config: NifConfig
-
-  ObjField = object
-    sym: SymId
-    level: int # inheritance level
-    typ: TypeCursor
-
-  SemContext = object
-    dest: TokenBuf
-    routine: SemRoutine
-    currentScope: Scope
-    g: ProgramContext
-    typeRequests, procRequests: seq[InstRequest]
-    includeStack: seq[string]
-    #importedModules: seq[ImportedModule]
-    instantiatedFrom: seq[PackedLineInfo]
-    importTab: Iface
-    globals, locals: Table[string, int]
-    types: BuiltinTypes
-    typeMem: Table[string, TokenBuf]
-    instantiatedTypes: OrderedTable[string, SymId]
-    instantiatedProcs: OrderedTable[string, ProcInstance]
-    thisModuleSuffix: string
-    processedModules: HashSet[string]
-    usedTypevars: int
-    templateInstCounter: int
-    #fieldsCache: Table[SymId, Table[StrId, ObjField]]
 
 # -------------- symbol lookups -------------------------------------
 
@@ -585,123 +525,7 @@ proc wantDot(c: var SemContext; n: var Cursor) =
   else:
     buildErr c, n.info, "expected '.'"
 
-# -------------------- path handling ----------------------------
-
-proc stdFile(f: string): string =
-  getAppDir() / "lib" / f
-
-proc resolveFile*(c: SemContext; origin: string; toResolve: string): string =
-  let nimFile = toResolve.addFileExt(".nim")
-  #if toResolve.startsWith("std/") or toResolve.startsWith("ext/"):
-  #  result = stdFile nimFile
-  if toResolve.isAbsolute:
-    result = nimFile
-  else:
-    result = splitFile(origin).dir / nimFile
-    var i = 0
-    while not fileExists(result) and i < c.g.config.paths.len:
-      result = c.g.config.paths[i] / nimFile
-      inc i
-
-proc filenameVal(n: var Cursor; res: var seq[string]; hasError: var bool) =
-  case n.kind
-  of StringLit, Ident:
-    res.add pool.strings[n.litId]
-    inc n
-  of Symbol:
-    var s = pool.syms[n.symId]
-    extractBasename s
-    res.add s
-    inc n
-  of ParLe:
-    case exprKind(n)
-    of OchoiceX, CchoiceX:
-      inc n
-      if n.kind != ParRi:
-        filenameVal(n, res, hasError)
-        while n.kind != ParRi: skip n
-        inc n
-      else:
-        hasError = true
-        inc n
-    of CallX, InfixX:
-      var x = n
-      skip n # ensure we skipped it completely
-      inc x
-      var isSlash = false
-      case x.kind
-      of StringLit, Ident:
-        isSlash = pool.strings[x.litId] == "/"
-      of Symbol:
-        var s = pool.syms[x.symId]
-        extractBasename s
-        isSlash = s == "/"
-      else: hasError = true
-      if not hasError:
-        inc x # skip slash
-        var prefix: seq[string] = @[]
-        filenameVal(x, prefix, hasError)
-        var suffix: seq[string] = @[]
-        filenameVal(x, suffix, hasError)
-        if x.kind != ParRi: hasError = true
-        for pre in mitems(prefix):
-          for suf in mitems(suffix):
-            if pre != "" and suf != "":
-              res.add pre & "/" & suf
-            else:
-              hasError = true
-        if prefix.len == 0 or suffix.len == 0:
-          hasError = true
-      else:
-        hasError = true
-    of ParX, AconstrX:
-      inc n
-      if n.kind != ParRi:
-        while n.kind != ParRi:
-          filenameVal(n, res, hasError)
-        inc n
-      else:
-        hasError = true
-        inc n
-    of TupleConstrX:
-      inc n
-      skip n # skip type
-      if n.kind != ParRi:
-        while n.kind != ParRi:
-          filenameVal(n, res, hasError)
-        inc n
-      else:
-        hasError = true
-        inc n
-    else:
-      skip n
-      hasError = true
-  else:
-    skip n
-    hasError = true
-
 # ------------------ include/import handling ------------------------
-
-proc findTool*(name: string): string =
-  let exe = name.addFileExt(ExeExt)
-  result = getAppDir() / exe
-
-proc exec*(cmd: string) =
-  if execShellCmd(cmd) != 0: quit("FAILURE: " & cmd)
-
-proc parseFile(nimFile: string; paths: openArray[string]): TokenBuf =
-  let nifler = findTool("nifler")
-  let name = moduleSuffix(nimFile, paths)
-  let src = "nifcache" / name & ".1.nif"
-  exec quoteShell(nifler) & " --portablePaths p " & quoteShell(nimFile) & " " &
-    quoteShell(src)
-
-  var stream = nifstreams.open(src)
-  try:
-    discard processDirectives(stream.r)
-    result = fromStream(stream)
-  finally:
-    nifstreams.close(stream)
 
 proc semStmt(c: var SemContext; n: var Cursor)
 
@@ -838,7 +662,7 @@ proc commonType(c: var SemContext; it: var Item; argBegin: int; expected: TypeCu
     return
 
   let info = it.n.info
-  var m = createMatch()
+  var m = createMatch(addr c)
   var arg = Item(n: cursorAt(c.dest, argBegin), typ: it.typ)
   if typeKind(arg.typ) == VoidT and isNoReturn(arg.n):
     # noreturn allowed in expression context
@@ -871,10 +695,6 @@ proc producesNoReturn(c: var SemContext; info: PackedLineInfo; dest: var Cursor)
   else:
     # allowed in expression context
     discard
-
-proc getFile(c: var SemContext; info: PackedLineInfo): string =
-  let (fid, _, _) = unpack(pool.man, info)
-  result = pool.files[fid]
 
 proc semInclude(c: var SemContext; it: var Item) =
   var files: seq[string] = @[]
@@ -919,7 +739,7 @@ proc importSingleFile(c: var SemContext; f1, origin: string; info: PackedLineInf
   let suffix = moduleSuffix(f2, c.g.config.paths)
   if not c.processedModules.containsOrIncl(suffix):
     if needsRecompile(f2, suffix):
-      exec os.getAppFilename() & " m " & quoteShell(f2)
+      selfExec c, f2
 
     loadInterface suffix, c.importTab
 
@@ -1382,7 +1202,7 @@ proc maybeAddConceptMethods(c: var SemContext; fn: StrId; typevar: SymId; cands:
 
 proc considerTypeboundOps(c: var SemContext; m: var seq[Match]; candidates: FnCandidates; args: openArray[Item]) =
   for candidate in candidates.a:
-    m.add createMatch()
+    m.add createMatch(addr c)
     sigmatch(m[^1], candidate, args, emptyNode())
 
 proc requestRoutineInstance(c: var SemContext; origin: SymId; m: var Match;
@@ -1474,7 +1294,7 @@ proc semCall(c: var SemContext; it: var Item) =
         let sym = f.symId
         let s = fetchSym(c, sym)
         let candidate = FnCandidate(kind: s.kind, sym: sym, typ: fetchType(c, f, s))
-        m.add createMatch()
+        m.add createMatch(addr c)
         sigmatch(m[^1], candidate, args, emptyNode())
       else:
         buildErr c, fn.n.info, "`choice` node does not contain `symbol`"
@@ -1488,7 +1308,7 @@ proc semCall(c: var SemContext; it: var Item) =
     # Keep in mind that proc vars are a thing:
     let sym = if fn.n.kind == Symbol: fn.n.symId else: SymId(0)
     let candidate = FnCandidate(kind: fnKind, sym: sym, typ: fn.typ)
-    m.add createMatch()
+    m.add createMatch(addr c)
     sigmatch(m[^1], candidate, args, emptyNode())
     considerTypeboundOps(c, m, candidates, args)
   let idx = pickBestMatch(c, m)
@@ -2817,14 +2637,16 @@ type
   ModuleFlag* = enum
     IsSystem, IsMain, SkipSystem
 
-proc semcheck*(infile, outfile: string; config: sink NifConfig; moduleFlags: set[ModuleFlag]) =
+proc semcheck*(infile, outfile: string; config: sink NifConfig; moduleFlags: set[ModuleFlag];
+               commandLineArgs: sink string) =
   var n = setupProgram(infile, outfile)
   var c = SemContext(
     dest: createTokenBuf(),
     types: createBuiltinTypes(),
     thisModuleSuffix: prog.main,
     g: ProgramContext(config: config),
-    routine: SemRoutine(kind: NoSym))
+    routine: SemRoutine(kind: NoSym),
+    commandLineArgs: commandLineArgs)
   c.currentScope = Scope(tab: initTable[StrId, seq[Sym]](), up: nil, kind: ToplevelScope)
 
   assert n == "stmts"
