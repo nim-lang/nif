@@ -8,7 +8,7 @@ import std / [sets, tables, assertions]
 
 import bitabs, nifreader, nifstreams, nifcursors, lineinfos
 
-import nimony_model, decls, programs
+import nimony_model, decls, programs, semdata
 
 proc addStrLit*(dest: var TokenBuf; s: string; info = NoLineInfo) =
   dest.add toToken(StringLit, pool.strings.getOrIncl(s), info)
@@ -40,8 +40,9 @@ type
     pos, opened: int
     inheritanceCosts, intCosts: int
     returnType*: Cursor
+    context: ptr SemContext
 
-proc createMatch*(): Match = Match()
+proc createMatch*(context: ptr SemContext): Match = Match(context: context)
 
 proc error(m: var Match; msg: string) =
   if m.err: return # first error is the important one
@@ -429,19 +430,6 @@ type
     ConvertibleMatch
     GenericMatch
     EqualMatch
-
-proc typecheck*(formal: Cursor; arg: Item): TypeRelation =
-  var f = formal
-  var m = createMatch()
-  singleArg m, f, arg
-  if m.err:
-    result = NoMatch
-  elif m.inheritanceCosts + m.intCosts > 0:
-    result = ConvertibleMatch
-  elif m.inferred.len > 0:
-    result = GenericMatch
-  else:
-    result = EqualMatch
 
 proc usesConversion*(m: Match): bool {.inline.} =
   result = m.inheritanceCosts + m.intCosts > 0

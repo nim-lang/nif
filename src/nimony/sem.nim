@@ -778,7 +778,7 @@ proc commonType(c: var SemContext; it: var Item; argBegin: int; expected: TypeCu
     return
 
   let info = it.n.info
-  var m = createMatch()
+  var m = createMatch(addr c)
   var arg = Item(n: cursorAt(c.dest, argBegin), typ: it.typ)
   if typeKind(arg.typ) == VoidT and isNoReturn(arg.n):
     # noreturn allowed in expression context
@@ -1322,7 +1322,7 @@ proc maybeAddConceptMethods(c: var SemContext; fn: StrId; typevar: SymId; cands:
 
 proc considerTypeboundOps(c: var SemContext; m: var seq[Match]; candidates: FnCandidates; args: openArray[Item]) =
   for candidate in candidates.a:
-    m.add createMatch()
+    m.add createMatch(addr c)
     sigmatch(m[^1], candidate, args, emptyNode())
 
 proc requestRoutineInstance(c: var SemContext; origin: SymId; m: var Match;
@@ -1414,7 +1414,7 @@ proc semCall(c: var SemContext; it: var Item) =
         let sym = f.symId
         let s = fetchSym(c, sym)
         let candidate = FnCandidate(kind: s.kind, sym: sym, typ: fetchType(c, f, s))
-        m.add createMatch()
+        m.add createMatch(addr c)
         sigmatch(m[^1], candidate, args, emptyNode())
       else:
         buildErr c, fn.n.info, "`choice` node does not contain `symbol`"
@@ -1428,7 +1428,7 @@ proc semCall(c: var SemContext; it: var Item) =
     # Keep in mind that proc vars are a thing:
     let sym = if fn.n.kind == Symbol: fn.n.symId else: SymId(0)
     let candidate = FnCandidate(kind: fnKind, sym: sym, typ: fn.typ)
-    m.add createMatch()
+    m.add createMatch(addr c)
     sigmatch(m[^1], candidate, args, emptyNode())
     considerTypeboundOps(c, m, candidates, args)
   let idx = pickBestMatch(c, m)
