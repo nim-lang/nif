@@ -97,7 +97,7 @@ proc readSection(s: var Stream; tab: var Table[string, NifIndexEntry]) =
         elif t.kind == Ident:
           key = pool.strings[t.litId]
         else:
-          assert false, "invalid (kv) construct: symbol expected"
+          raiseAssert "invalid (kv) construct: symbol expected"
         t = next(s) # skip Symbol
         if t.kind == IntLit:
           let offset = pool.integers[t.intId] + previousOffset
