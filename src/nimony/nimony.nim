@@ -10,7 +10,7 @@ import std / [parseopt, sets, strutils, os, assertions, syncio]
 
 import ".." / gear3 / gear3 # only imported to ensure it keeps compiling
 import ".." / gear2 / modnames
-import sem, nifconfig
+import sem, nifconfig, semos
 
 const
   Version = "0.2"
@@ -51,7 +51,8 @@ proc requiresTool(tool, src: string; forceRebuild: bool) =
     nimexec("c -d:release " & src)
     moveFile src.changeFileExt(ExeExt), t
 
-proc processSingleModule(nimFile: string; config: sink NifConfig; moduleFlags: set[ModuleFlag]; forceRebuild: bool) =
+proc processSingleModule(nimFile: string; config: sink NifConfig; moduleFlags: set[ModuleFlag];
+                         commandLineArgs: string; forceRebuild: bool) =
   let nifler = findTool("nifler")
   let name = moduleSuffix(nimFile, config.paths)
   let src = "nifcache" / name & ".1.nif"
@@ -60,7 +61,7 @@ proc processSingleModule(nimFile: string; config: sink NifConfig; moduleFlags: s
   exec quoteShell(nifler) & " --portablePaths p " & toforceRebuild & quoteShell(nimFile) & " " &
     quoteShell(src)
   if fileExists(src):
-    semcheck(src, dest, ensureMove config, moduleFlags)
+    semcheck(src, dest, ensureMove config, moduleFlags, commandLineArgs)
 
 type
   Command = enum
@@ -74,6 +75,7 @@ proc handleCmdLine() =
   var moduleFlags: set[ModuleFlag] = {}
   var config = NifConfig()
   config.defines.incl "nimony"
+  var commandLineArgs = ""
 
   for kind, key, val in getopt():
     case kind
@@ -88,6 +90,7 @@ proc handleCmdLine() =
         args.add key
 
     of cmdLongOption, cmdShortOption:
+      var forwardArg = true
       case normalize(key)
       of "help", "h": writeHelp()
       of "version", "v": writeVersion()
@@ -96,9 +99,18 @@ proc handleCmdLine() =
       of "define", "d": config.defines.incl val
       of "noenv": useEnv = false
       of "nosystem": moduleFlags.incl SkipSystem
-      of "issystem": moduleFlags.incl IsSystem
-      of "ismain": moduleFlags.incl IsMain
+      of "issystem":
+        moduleFlags.incl IsSystem
+        forwardArg = false
+      of "ismain":
+        moduleFlags.incl IsMain
+        forwardArg = false
       else: writeHelp()
+      if forwardArg:
+        commandLineArgs.add " --" & key
+        if val.len > 0:
+          commandLineArgs.add ":" & quoteShell(val)
+
     of cmdEnd: assert false, "cannot happen"
   if args.len == 0:
     quit "too few command line arguments"
@@ -116,7 +128,8 @@ proc handleCmdLine() =
     createDir("nifcache")
     requiresTool "nifler", "src/nifler/nifler.nim", forceRebuild
     requiresTool "nifc", "src/nifc/nifc.nim", forceRebuild
-    processSingleModule(args[0].addFileExt(".nim"), config, moduleFlags, forceRebuild)
+    processSingleModule(args[0].addFileExt(".nim"), config, moduleFlags,
+                        commandLineArgs, forceRebuild)
 
 when isMainModule:
   handleCmdLine()

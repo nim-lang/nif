@@ -8,11 +8,11 @@
 ## Most important task is to turn identifiers into symbols and to perform
 ## type checking.
 
-import std / [tables, sets, os, syncio, formatfloat, assertions]
+import std / [tables, sets, syncio, formatfloat, assertions]
 include nifprelude
 import nimony_model, symtabs, builtintypes, decls, symparser,
   programs, sigmatch, magics, reporters, nifconfig, nifindexes,
-  semdata
+  semdata, semos
 
 import ".." / gear2 / modnames
 
@@ -525,123 +525,7 @@ proc wantDot(c: var SemContext; n: var Cursor) =
   else:
     buildErr c, n.info, "expected '.'"
 
-# -------------------- path handling ----------------------------
-
-proc stdFile(f: string): string =
-  getAppDir() / "lib" / f
-
-proc resolveFile*(c: SemContext; origin: string; toResolve: string): string =
-  let nimFile = toResolve.addFileExt(".nim")
-  #if toResolve.startsWith("std/") or toResolve.startsWith("ext/"):
-  #  result = stdFile nimFile
-  if toResolve.isAbsolute:
-    result = nimFile
-  else:
-    result = splitFile(origin).dir / nimFile
-    var i = 0
-    while not fileExists(result) and i < c.g.config.paths.len:
-      result = c.g.config.paths[i] / nimFile
-      inc i
-
-proc filenameVal(n: var Cursor; res: var seq[string]; hasError: var bool) =
-  case n.kind
-  of StringLit, Ident:
-    res.add pool.strings[n.litId]
-    inc n
-  of Symbol:
-    var s = pool.syms[n.symId]
-    extractBasename s
-    res.add s
-    inc n
-  of ParLe:
-    case exprKind(n)
-    of OchoiceX, CchoiceX:
-      inc n
-      if n.kind != ParRi:
-        filenameVal(n, res, hasError)
-        while n.kind != ParRi: skip n
-        inc n
-      else:
-        hasError = true
-        inc n
-    of CallX, InfixX:
-      var x = n
-      skip n # ensure we skipped it completely
-      inc x
-      var isSlash = false
-      case x.kind
-      of StringLit, Ident:
-        isSlash = pool.strings[x.litId] == "/"
-      of Symbol:
-        var s = pool.syms[x.symId]
-        extractBasename s
-        isSlash = s == "/"
-      else: hasError = true
-      if not hasError:
-        inc x # skip slash
-        var prefix: seq[string] = @[]
-        filenameVal(x, prefix, hasError)
-        var suffix: seq[string] = @[]
-        filenameVal(x, suffix, hasError)
-        if x.kind != ParRi: hasError = true
-        for pre in mitems(prefix):
-          for suf in mitems(suffix):
-            if pre != "" and suf != "":
-              res.add pre & "/" & suf
-            else:
-              hasError = true
-        if prefix.len == 0 or suffix.len == 0:
-          hasError = true
-      else:
-        hasError = true
-    of ParX, AconstrX:
-      inc n
-      if n.kind != ParRi:
-        while n.kind != ParRi:
-          filenameVal(n, res, hasError)
-        inc n
-      else:
-        hasError = true
-        inc n
-    of TupleConstrX:
-      inc n
-      skip n # skip type
-      if n.kind != ParRi:
-        while n.kind != ParRi:
-          filenameVal(n, res, hasError)
-        inc n
-      else:
-        hasError = true
-        inc n
-    else:
-      skip n
-      hasError = true
-  else:
-    skip n
-    hasError = true
-
 # ------------------ include/import handling ------------------------
-
-proc findTool*(name: string): string =
-  let exe = name.addFileExt(ExeExt)
-  result = getAppDir() / exe
-
-proc exec*(cmd: string) =
-  if execShellCmd(cmd) != 0: quit("FAILURE: " & cmd)
-
-proc parseFile(nimFile: string; paths: openArray[string]): TokenBuf =
-  let nifler = findTool("nifler")
-  let name = moduleSuffix(nimFile, paths)
-  let src = "nifcache" / name & ".1.nif"
-  exec quoteShell(nifler) & " --portablePaths p " & quoteShell(nimFile) & " " &
-    quoteShell(src)
-
-  var stream = nifstreams.open(src)
-  try:
-    discard processDirectives(stream.r)
-    result = fromStream(stream)
-  finally:
-    nifstreams.close(stream)
 
 proc semStmt(c: var SemContext; n: var Cursor)
 
@@ -812,10 +696,6 @@ proc producesNoReturn(c: var SemContext; info: PackedLineInfo; dest: var Cursor)
     # allowed in expression context
     discard
 
-proc getFile(c: var SemContext; info: PackedLineInfo): string =
-  let (fid, _, _) = unpack(pool.man, info)
-  result = pool.files[fid]
-
 proc semInclude(c: var SemContext; it: var Item) =
   var files: seq[string] = @[]
   var hasError = false
@@ -859,7 +739,7 @@ proc importSingleFile(c: var SemContext; f1, origin: string; info: PackedLineInf
   let suffix = moduleSuffix(f2, c.g.config.paths)
   if not c.processedModules.containsOrIncl(suffix):
     if needsRecompile(f2, suffix):
-      exec os.getAppFilename() & " m " & quoteShell(f2)
+      selfExec c, f2
 
     loadInterface suffix, c.importTab
 
@@ -2757,14 +2637,16 @@ type
   ModuleFlag* = enum
     IsSystem, IsMain, SkipSystem
 
-proc semcheck*(infile, outfile: string; config: sink NifConfig; moduleFlags: set[ModuleFlag]) =
+proc semcheck*(infile, outfile: string; config: sink NifConfig; moduleFlags: set[ModuleFlag];
+               commandLineArgs: sink string) =
   var n = setupProgram(infile, outfile)
   var c = SemContext(
     dest: createTokenBuf(),
     types: createBuiltinTypes(),
     thisModuleSuffix: prog.main,
     g: ProgramContext(config: config),
-    routine: SemRoutine(kind: NoSym))
+    routine: SemRoutine(kind: NoSym),
+    commandLineArgs: commandLineArgs)
   c.currentScope = Scope(tab: initTable[StrId, seq[Sym]](), up: nil, kind: ToplevelScope)
 
   assert n == "stmts"
