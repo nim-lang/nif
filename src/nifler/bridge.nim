@@ -215,8 +215,8 @@ proc toNif*(n, parent: PNode; c: var TranslationContext) =
     relLineInfo(n, parent, c)
     c.b.addTree("type")
     var name: PNode
-    var visibility: PNode
-    var pragma: PNode
+    var visibility: PNode = nil
+    var pragma: PNode = nil
     if n[0].kind == nkPragmaExpr:
       pragma = n[0][1]
       if n[0][0].kind == nkPostfix:
@@ -291,8 +291,8 @@ proc toNif*(n, parent: PNode; c: var TranslationContext) =
       c.b.addTree(c.section)
       # flatten it further:
       var name: PNode
-      var visibility: PNode
-      var pragma: PNode
+      var visibility: PNode = nil
+      var pragma: PNode = nil
       if n[i].kind == nkPragmaExpr:
         pragma = n[i][1]
         if n[i][0].kind == nkPostfix:
@@ -577,7 +577,7 @@ proc parseFile*(thisfile, outfile: string; portablePaths: bool) =
     quit "cannot open file: " & thisfile
   else:
     var conf = createConf()
-    var parser: Parser
+    var parser: Parser = default(Parser)
     openParser(parser, AbsoluteFile(thisfile), stream, newIdentCache(), conf)
     var tc = initTranslationContext(conf, outfile, portablePaths)
 
