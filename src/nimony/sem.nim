@@ -488,7 +488,6 @@ proc takeTree(dest: var TokenBuf; n: var Cursor) =
           break
       of EofToken:
         error "expected ')', but EOF reached"
-        break
       else: discard
       inc n
 
@@ -1725,7 +1724,7 @@ proc semInvoke(c: var SemContext; n: var Cursor) =
   takeToken c, n # copy `at`
   semLocalTypeImpl c, n, InLocalDecl
 
-  var headId: SymId
+  var headId: SymId = SymId(0)
   var decl = default TypeDecl
   var ok = false
   if c.dest[typeStart+1].kind == Symbol:
