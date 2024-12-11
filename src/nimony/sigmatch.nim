@@ -17,7 +17,7 @@ proc addIntLit*(dest: var TokenBuf; i: BiggestInt; info = NoLineInfo) =
   dest.add toToken(IntLit, pool.integers.getOrIncl(i), info)
 
 proc addParLe*(dest: var TokenBuf; kind: TypeKind|SymKind|ExprKind|StmtKind; info = NoLineInfo) =
-  dest.add toToken(IntLit, pool.tags.getOrIncl($kind), info)
+  dest.add toToken(ParLe, pool.tags.getOrIncl($kind), info)
 
 type
   Item* = object
