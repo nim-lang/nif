@@ -12,6 +12,7 @@ import std / [tables, sets, syncio, formatfloat, assertions]
 include nifprelude
 import nimony_model, symtabs, builtintypes, decls, symparser,
   programs, sigmatch, magics, reporters, nifconfig, nifindexes,
+  intervals, xints,
   semdata, semos
 
 import ".." / gear2 / modnames
@@ -1538,7 +1539,7 @@ proc semPragma(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; kin
   of Align, Bits:
     c.dest.add toToken(ParLe, pool.tags.getOrIncl($pk), n.info)
     inc n
-    semConstIntExpr c, n
+    semConstIntExpr(c, n)
     c.dest.addParRi()
   of Nodecl, Selectany, Threadvar, Globalvar, Discardable, Noreturn:
     c.dest.add toToken(ParLe, pool.tags.getOrIncl($pk), n.info)
@@ -2202,6 +2203,76 @@ proc semIf(c: var SemContext; it: var Item) =
   if typeKind(it.typ) == AutoT:
     producesVoid c, info, it.typ
 
+proc isRangeNode(c: var SemContext; n: Cursor): bool =
+  var n = n
+  if n.exprKind notin {CallX, InfixX}:
+    return false
+  inc n
+  let name = getIdent(c, n)
+  result = name != StrId(0) and pool.strings[name] == ".."
+
+proc evalConstIntExpr(c: var SemContext; n: var Cursor; expected: TypeCursor): xint =
+  var x = Item(n: n, typ: expected)
+  semExpr c, x
+  n = x.n
+  result = xints.zero()
+
+proc semCaseOfValue(c: var SemContext; it: var Item; selectorType: TypeCursor;
+                    seen: var seq[(xint, xint)]) =
+  if it.n == "set":
+    takeToken c, it.n
+    while it.n.kind != ParRi:
+      let info = it.n.info
+      if isRangeNode(c, it.n):
+        inc it.n # call tag
+        skip it.n # `..`
+        c.dest.buildTree RangeX, it.n.info:
+          let a = evalConstIntExpr(c, it.n, selectorType)
+          let b = evalConstIntExpr(c, it.n, selectorType)
+          if seen.doesOverlapOrIncl(a, b):
+            buildErr c, info, "overlapping values"
+        inc it.n # right paren of call
+      elif it.n.exprKind == RangeX:
+        takeToken c, it.n
+        let a = evalConstIntExpr(c, it.n, selectorType)
+        let b = evalConstIntExpr(c, it.n, selectorType)
+        if seen.doesOverlapOrIncl(a, b):
+          buildErr c, info, "overlapping values"
+        wantParRi c, it.n
+      else:
+        let a = evalConstIntExpr(c, it.n, selectorType)
+        if seen.containsOrIncl(a):
+          buildErr c, info, "value already handled"
+    wantParRi c, it.n
+  else:
+    buildErr c, it.n.info, "`set` within `of` expected"
+    skip it.n
+
+proc semCase(c: var SemContext; it: var Item) =
+  let info = it.n.info
+  takeToken c, it.n
+  var selector = Item(n: it.n, typ: c.types.autoType)
+  semExpr c, selector
+  it.n = selector.n
+  var seen: seq[(xint, xint)] = @[]
+  if it.n.substructureKind == OfS:
+    while it.n.substructureKind == OfS:
+      takeToken c, it.n
+      semCaseOfValue c, it, selector.typ, seen
+      withNewScope c:
+        semStmtBranch c, it
+      wantParRi c, it.n
+  else:
+    buildErr c, it.n.info, "illformed AST: `of` inside `case` expected"
+  if it.n.substructureKind == ElseS:
+    takeToken c, it.n
+    withNewScope c:
+      semStmtBranch c, it
+    wantParRi c, it.n
+  wantParRi c, it.n
+  if typeKind(it.typ) == AutoT:
+    producesVoid c, info, it.typ
+
 proc semReturn(c: var SemContext; it: var Item) =
   let info = it.n.info
   takeToken c, it.n
@@ -2341,14 +2412,6 @@ proc semArrayConstr(c: var SemContext, it: var Item) =
   it.typ = typeToCursor(c, typeStart)
   c.dest.shrink typeStart
   commonType c, it, exprStart, expected
-
-proc isRangeNode(c: var SemContext; n: Cursor): bool =
-  var n = n
-  if n.exprKind notin {CallX, InfixX}:
-    return false
-  inc n
-  let name = getIdent(c, n)
-  result = name != StrId(0) and pool.strings[name] == ".."
 
 proc semSetConstr(c: var SemContext, it: var Item) =
   let exprStart = c.dest.len
@@ -2592,8 +2655,12 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
         producesVoid c, info, it.typ
       of BlockS:
         semBlock c, it
-      of ForS, CaseS:
-        discard "XXX to implement"
+      of CaseS:
+        semCase c, it
+      of ForS:
+        # XXX
+        buildErr c, it.n.info, "statement not implemented"
+        skip it.n
     of FalseX, TrueX:
       literalB c, it, c.types.boolType
     of InfX, NegInfX, NanX:
