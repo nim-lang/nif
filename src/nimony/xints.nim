@@ -5,7 +5,8 @@
 # distribution, for details about the copyright.
 
 ## Integer based arithmetic for compilers. Was `int128` in the old
-## compiler but this one here is simpler.
+## compiler but this one here is simpler and supports `NaN` for easy
+## error handling.
 
 type
   xint* = object
@@ -15,8 +16,9 @@ type
 
 proc zero*(): xint = xint(val: 0)
 
+proc isNaN*(x: xint): bool {.inline.} = x.nan
+
 proc `-`*(a: xint): xint =
-  # Unary negation
   xint(nan: a.nan, neg: not a.neg, val: a.val)
 
 proc `+`*(a, b: xint): xint =
@@ -84,7 +86,6 @@ proc `$`*(a: xint): string =
   elif a.neg: "-" & $a.val
   else: $a.val
 
-# Additional helper procs
 proc fromInt*(x: int64): xint =
   if x < 0:
     xint(neg: true, val: uint64(-x))
@@ -92,7 +93,6 @@ proc fromInt*(x: int64): xint =
     xint(neg: false, val: uint64(x))
 
 proc `shl`*(a: xint, b: int): xint =
-  # Left shift
   if a.nan or b < 0:
     return xint(nan: true)
 
@@ -107,7 +107,6 @@ proc `shl`*(a: xint, b: int): xint =
     result.nan = true
 
 proc `shr`*(a: xint, b: int): xint =
-  # Right shift
   if a.nan or b < 0:
     return xint(nan: true)
 
@@ -118,45 +117,29 @@ proc `shr`*(a: xint, b: int): xint =
   )
 
 proc `and`*(a, b: xint): xint =
-  # Bitwise AND
-  if a.nan or b.nan:
-    return xint(nan: true)
-
   xint(
-    nan: false,
+    nan: a.nan or b.nan,
     neg: a.neg and b.neg,
     val: a.val and b.val
   )
 
 proc `or`*(a, b: xint): xint =
-  # Bitwise OR
-  if a.nan or b.nan:
-    return xint(nan: true)
-
   xint(
-    nan: false,
+    nan: a.nan or b.nan,
     neg: a.neg or b.neg,
     val: a.val or b.val
   )
 
 proc `xor`*(a, b: xint): xint =
-  # Bitwise XOR
-  if a.nan or b.nan:
-    return xint(nan: true)
-
   xint(
-    nan: false,
+    nan: a.nan or b.nan,
     neg: a.neg xor b.neg,
     val: a.val xor b.val
   )
 
 proc `not`*(a: xint): xint =
-  # Bitwise NOT
-  if a.nan:
-    return xint(nan: true)
-
   xint(
-    nan: false,
+    nan: a.nan,
     neg: not a.neg,
     val: not a.val
   )
@@ -221,7 +204,9 @@ proc clearBit*(a: xint, pos: int): xint =
 
 
 proc `==`*(a, b: xint): bool =
-  if a.nan or b.nan:
+  if a.nan:
+    return b.nan
+  elif b.nan:
     return false
 
   # Compare sign and value
@@ -246,11 +231,9 @@ proc `<`*(a, b: xint): bool =
     a.val < b.val
 
 proc `<=`*(a, b: xint): bool =
-  # Less than or equal
   a < b or a == b
 
 proc abs*(a: xint): xint =
-  # Absolute value
   xint(
     nan: a.nan,
     neg: false,
@@ -258,14 +241,12 @@ proc abs*(a: xint): xint =
   )
 
 proc min*(a, b: xint): xint =
-  # Return the minimum of two xints
   if a.nan or b.nan:
     return xint(nan: true)
 
   if a < b: a else: b
 
 proc max*(a, b: xint): xint =
-  # Return the maximum of two xints
   if a.nan or b.nan:
     return xint(nan: true)
 
