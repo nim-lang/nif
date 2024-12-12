@@ -327,10 +327,17 @@ proc genObjectOrUnionBody(c: var GeneratedCode; types: TypeGraph; n: NodePos) =
       c.add Semicolon
     else: discard
 
-proc genEnumDecl(c: var GeneratedCode; t: TypeGraph; n: NodePos) =
+proc genEnumDecl(c: var GeneratedCode; t: TypeGraph; n: NodePos; name: string) =
   # (efld SymbolDef Expr)
   # EnumDecl ::= (enum Type EnumFieldDecl+)
   let baseType = n.firstSon
+  c.add TypedefKeyword
+  c.genType t, baseType
+  c.add Space
+  c.add name
+  c.add Semicolon
+  c.add NewLine
+
   for ch in sonsFromX(t, n):
     if t[ch].kind == EfldC:
       let (a, b) = sons2(t, ch)
@@ -384,7 +391,7 @@ proc generateTypes(c: var GeneratedCode; types: TypeGraph; o: TypeOrder) =
         c.add s
         c.add Semicolon
       of EnumC:
-        genEnumDecl c, types, decl.body
+        genEnumDecl c, types, decl.body, s
       of ProctypeC:
         c.add TypedefKeyword
         genType c, types, decl.body, s
