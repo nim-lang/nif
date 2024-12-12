@@ -1988,6 +1988,7 @@ proc semEnumField(c: var SemContext; n: var Cursor; enumType: SymId) =
       var it = Item(n: n, typ: c.types.autoType)
       semExpr c, it # 4
       n = it.n
+      patchType c, it.typ, beforeType
       # XXX check that it.typ is an ordinal!
   else:
     let typ = semLocalType(c, n) # 3

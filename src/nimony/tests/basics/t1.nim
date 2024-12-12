@@ -114,3 +114,5 @@ var mt: Data = (1, "abc")
 const Inf* = 0x7FF0000000000000'f64
 
 let s: float = Inf
+
+var enum_s = red
