@@ -1,7 +1,7 @@
 ## expression evaluator for simple constant expressions, not meant to be complete
 
 include nifprelude
-import nimony_model, decls, programs, sigmatch # sigmatch just for addStrLit
+import nimony_model, decls, programs, sigmatch # sigmatch just for addStrLit and addParLe
 
 type EvalContext* = object
   values: seq[TokenBuf]
@@ -43,7 +43,7 @@ proc getTrueValue(c: var EvalContext): Cursor =
   if c.trueValue == default(Cursor):
     let i = c.values.len
     c.values.add createTokenBuf(2)
-    c.values[i].add toToken(ParLe, TrueX, NoLineInfo)
+    c.values[i].addParLe(TrueX, NoLineInfo)
     c.values[i].addParRi()
     c.trueValue = cursorAt(c.values[i], 0)
   result = c.trueValue
@@ -52,7 +52,7 @@ proc getFalseValue(c: var EvalContext): Cursor =
   if c.falseValue == default(Cursor):
     let i = c.values.len
     c.values.add createTokenBuf(2)
-    c.values[i].add toToken(ParLe, FalseX, NoLineInfo)
+    c.values[i].addParLe(FalseX, NoLineInfo)
     c.values[i].addParRi()
     c.falseValue = cursorAt(c.values[i], 0)
   result = c.falseValue
