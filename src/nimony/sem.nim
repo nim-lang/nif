@@ -2339,7 +2339,7 @@ proc semArrayConstr(c: var SemContext, it: var Item) =
   wantParRi c, it.n
   let typeStart = c.dest.len
   c.dest.buildTree ArrayT, it.n.info:
-    c.dest.add toToken(IntLit, count, it.n.info)
+    c.dest.add toToken(IntLit, pool.integers.getOrIncl(count), it.n.info)
     c.dest.addSubtree elem.typ
   let expected = it.typ
   it.typ = typeToCursor(c, typeStart)
@@ -2489,7 +2489,7 @@ proc semDefined(c: var SemContext; it: var Item) =
   skipParRi it.n
   let isDefined = name in c.g.config.defines
   let beforeExpr = c.dest.len
-  c.dest.add toToken(ParLe, if isDefined: TrueX else: FalseX, it.n.info)
+  c.dest.addParLe(if isDefined: TrueX else: FalseX, it.n.info)
   c.dest.addParRi()
   let expected = it.typ
   it.typ = c.types.boolType
@@ -2509,7 +2509,7 @@ proc semDeclared(c: var SemContext; it: var Item) =
   skipParRi it.n
   let isDeclared = isDeclared(c, nameId)
   let beforeExpr = c.dest.len
-  c.dest.add toToken(ParLe, if isDeclared: TrueX else: FalseX, it.n.info)
+  c.dest.addParLe(if isDeclared: TrueX else: FalseX, it.n.info)
   c.dest.addParRi()
   let expected = it.typ
   it.typ = c.types.boolType
