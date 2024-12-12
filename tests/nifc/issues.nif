@@ -12,6 +12,11 @@
   )
   )
 
+  (type ~6 :bool.0.tesg7afhq1 . 2
+  (enum 12,1 (u +8) 2,1
+   (efld ~8 :false.0.tesg7afhq1 +0) 12,1
+   (efld ~7 :true.0.tesg7afhq1 +1))) ,13
+
   (type :MyObject3.m .
   (object . (fld :a1 . (i +32 (atomic)))
     (fld :a2 . (i +64 (atomic)))
@@ -298,6 +303,8 @@
     (call assert.c (eq s.cpp +3))
 
     (call foo.escaped)
+
+    (var :x.0 . 6,~3 bool.0.tesg7afhq1 4 false.0.tesg7afhq1)
 
     (ret +0)
   ))
