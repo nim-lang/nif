@@ -1844,8 +1844,8 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
       semTupleType c, n
     of ArrayT:
       takeToken c, n
-      semLocalTypeImpl c, n, AllowValues
       semLocalTypeImpl c, n, context
+      semLocalTypeImpl c, n, AllowValues
       wantParRi c, n
     of VarargsT:
       takeToken c, n
@@ -2324,7 +2324,6 @@ proc semArrayConstr(c: var SemContext, it: var Item) =
   of ArrayT: # , SeqT, OpenArrayT
     var arr = it.typ
     inc arr
-    skip arr # index
     elem.typ = arr
   of AutoT: discard
   else:
@@ -2339,8 +2338,8 @@ proc semArrayConstr(c: var SemContext, it: var Item) =
   wantParRi c, it.n
   let typeStart = c.dest.len
   c.dest.buildTree ArrayT, it.n.info:
-    c.dest.add toToken(IntLit, pool.integers.getOrIncl(count), it.n.info)
     c.dest.addSubtree elem.typ
+    c.dest.add toToken(IntLit, pool.integers.getOrIncl(count), it.n.info)
   let expected = it.typ
   it.typ = typeToCursor(c, typeStart)
   c.dest.shrink typeStart
