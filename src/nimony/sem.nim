@@ -13,7 +13,7 @@ include nifprelude
 import nimony_model, symtabs, builtintypes, decls, symparser,
   programs, sigmatch, magics, reporters, nifconfig, nifindexes,
   intervals, xints,
-  semdata, semos
+  semdata, semos, expreval
 
 import ".." / gear2 / modnames
 
@@ -489,7 +489,6 @@ proc takeTree(dest: var TokenBuf; n: var Cursor) =
           break
       of EofToken:
         error "expected ')', but EOF reached"
-        break
       else: discard
       inc n
 
@@ -975,21 +974,65 @@ proc semBoolExpr(c: var SemContext; n: var Cursor) =
   if classifyType(c, it.typ) != BoolT:
     buildErr c, it.n.info, "expected `bool` but got: " & typeToString(it.typ)
 
+proc semConstBoolExpr(c: var SemContext; n: var Cursor) =
+  let start = c.dest.len
+  var it = Item(n: n, typ: c.types.autoType)
+  semExpr c, it
+  n = it.n
+  if classifyType(c, it.typ) != BoolT:
+    buildErr c, it.n.info, "expected `bool` but got: " & typeToString(it.typ)
+  var e = cursorAt(c.dest, start)
+  var valueBuf = evalExpr(e)
+  endRead(c.dest)
+  let value = cursorAt(valueBuf, 0)
+  if not isConstBoolValue(value):
+    if value.kind == ParLe and value.tagId == ErrT:
+      c.dest.add valueBuf
+    else:
+      buildErr c, it.n.info, "expected constant bool value but got: " & toString(value, false)
+  else:
+    c.dest.shrink start
+    c.dest.add valueBuf
+
 proc semConstStrExpr(c: var SemContext; n: var Cursor) =
-  # XXX check for constant
+  let start = c.dest.len
   var it = Item(n: n, typ: c.types.autoType)
   semExpr c, it
   n = it.n
   if classifyType(c, it.typ) != StringT:
     buildErr c, it.n.info, "expected `string` but got: " & typeToString(it.typ)
+  var e = cursorAt(c.dest, start)
+  var valueBuf = evalExpr(e)
+  endRead(c.dest)
+  let value = cursorAt(valueBuf, 0)
+  if not isConstStringValue(value):
+    if value.kind == ParLe and value.tagId == ErrT:
+      c.dest.add valueBuf
+    else:
+      buildErr c, it.n.info, "expected constant string value but got: " & toString(value, false)
+  else:
+    c.dest.shrink start
+    c.dest.add valueBuf
 
 proc semConstIntExpr(c: var SemContext; n: var Cursor) =
-  # XXX check for constant
+  let start = c.dest.len
   var it = Item(n: n, typ: c.types.autoType)
   semExpr c, it
   n = it.n
   if classifyType(c, it.typ) != IntT:
     buildErr c, it.n.info, "expected `int` but got: " & typeToString(it.typ)
+  var e = cursorAt(c.dest, start)
+  var valueBuf = evalExpr(e)
+  endRead(c.dest)
+  let value = cursorAt(valueBuf, 0)
+  if not isConstIntValue(value):
+    if value.kind == ParLe and value.tagId == ErrT:
+      c.dest.add valueBuf
+    else:
+      buildErr c, it.n.info, "expected constant integer value but got: " & toString(value, false)
+  else:
+    c.dest.shrink start
+    c.dest.add valueBuf
 
 proc isLastSon(n: Cursor): bool =
   var n = n
@@ -1728,7 +1771,7 @@ proc semInvoke(c: var SemContext; n: var Cursor) =
   takeToken c, n # copy `at`
   semLocalTypeImpl c, n, InLocalDecl
 
-  var headId: SymId
+  var headId: SymId = SymId(0)
   var decl = default TypeDecl
   var ok = false
   if c.dest[typeStart+1].kind == Symbol:

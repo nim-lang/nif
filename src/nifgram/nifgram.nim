@@ -734,7 +734,7 @@ when isMainModule:
     var inp = ""
     var outp = ""
     var tagsFile = ""
-    var specTags: OrderedTable[string, int]
+    var specTags: OrderedTable[string, int] = initOrderedTable[string, int]()
     for kind, key, val in getopt():
       case kind
       of cmdArgument:
