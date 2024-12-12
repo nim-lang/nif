@@ -1654,10 +1654,32 @@ proc maybeInlineMagic(c: var SemContext; res: LoadResult) =
           if n.kind == ParRi: break
           inc n
 
+type
+  TypeDeclContext = enum
+    InLocalDecl, InTypeSection, InObjectDecl, InParamDecl, InInheritanceDecl, InReturnTypeDecl, AllowValues,
+    InGenericConstraint
+
+proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext)
+
 proc semTypeSym(c: var SemContext; s: Sym; info: PackedLineInfo) =
   if s.kind in {TypeY, TypevarY}:
     let res = tryLoadSym(s.name)
+    let beforeMagic = c.dest.len
     maybeInlineMagic c, res
+    let afterMagic = c.dest.len
+    if beforeMagic != afterMagic:
+      # was magic, nothing to do
+      discard
+    elif s.kind != TypevarY:
+      let typ = asTypeDecl(res.decl)
+      if typ.body.typeKind in {ObjectT, EnumT, DistinctT, ConceptT}:
+        # types that should stay as symbols, see sigmatch.matchSymbol
+        discard
+      else:
+        # remove symbol, inline type:
+        c.dest.shrink c.dest.len-1
+        var t = typ.body
+        semLocalTypeImpl c, t, InLocalDecl
     if s.kind == TypevarY: inc c.usedTypevars
   elif s.kind != NoSym:
     c.buildErr info, "type name expected, but got: " & pool.syms[s.name]
@@ -1666,13 +1688,6 @@ proc semTypeSym(c: var SemContext; s: Sym; info: PackedLineInfo) =
 
 proc semParams(c: var SemContext; n: var Cursor)
 proc semLocal(c: var SemContext; n: var Cursor; kind: SymKind)
-
-type
-  TypeDeclContext = enum
-    InLocalDecl, InTypeSection, InObjectDecl, InParamDecl, InInheritanceDecl, InReturnTypeDecl, AllowValues,
-    InGenericConstraint
-
-proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext)
 
 proc semObjectType(c: var SemContext; n: var Cursor) =
   takeToken c, n
