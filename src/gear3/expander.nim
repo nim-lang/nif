@@ -129,7 +129,7 @@ proc expectIntLit(e: var EContext; c: var Cursor) =
     error e, "expected int literal, but got: ", c
 
 proc tagToken(tag: string; info: PackedLineInfo): PackedToken {.inline.} =
-  toToken(ParLe, pool.tags.getOrIncl(tag), info)
+  parLeToken(pool.tags.getOrIncl(tag), info)
 
 proc add(e: var EContext; tag: string; info: PackedLineInfo) =
   e.dest.add tagToken(tag, info)
@@ -168,7 +168,7 @@ proc traverseField(e: var EContext; c: var Cursor; flags: set[TypeFlag] = {}) =
 
   expectSymdef(e, c)
   let (s, sinfo) = getSymDef(e, c)
-  e.dest.add toToken(SymbolDef, s, sinfo)
+  e.dest.add symdefToken(s, sinfo)
   e.offer s
 
   skipExportMarker e, c
@@ -187,7 +187,7 @@ proc traverseEnumField(e: var EContext; c: var Cursor; flags: set[TypeFlag] = {}
 
   expectSymdef(e, c)
   let (s, sinfo) = getSymDef(e, c)
-  e.dest.add toToken(SymbolDef, s, sinfo)
+  e.dest.add symdefToken(s, sinfo)
   e.offer s
 
   skipExportMarker e, c
@@ -268,7 +268,7 @@ proc traverseType(e: var EContext; c: var Cursor; flags: set[TypeFlag] = {}) =
       else:
         # inherited symbol
         let (s, sinfo) = getSym(e, c)
-        e.dest.add toToken(Symbol, s, sinfo)
+        e.dest.add symToken(s, sinfo)
         e.demand s
       while c.substructureKind == FldS:
         traverseField(e, c, flags)
@@ -423,7 +423,7 @@ proc traverseProc(e: var EContext; c: var Cursor; mode: TraverseMode) =
   let (s, sinfo) = getSymDef(e, c)
 
   # namePos
-  e.dest.add toToken(SymbolDef, s, sinfo)
+  e.dest.add symdefToken(s, sinfo)
   e.offer s
 
   skipExportMarker e, c
@@ -444,7 +444,7 @@ proc traverseProc(e: var EContext; c: var Cursor; mode: TraverseMode) =
   var genPragmas = openGenPragmas()
   if prag.externName.len > 0:
     e.toMangle[(s, oldOwner)] = prag.externName & ".c"
-    e.addKeyVal genPragmas, "was", toToken(Symbol, s, pinfo), pinfo
+    e.addKeyVal genPragmas, "was", symToken(s, pinfo), pinfo
   if Selectany in prag.flags:
     e.addKey genPragmas, "selectany", pinfo
   closeGenPragmas e, genPragmas
@@ -477,7 +477,7 @@ proc traverseTypeDecl(e: var EContext; c: var Cursor) =
   let (s, sinfo) = getSymDef(e, c)
   let oldOwner = setOwner(e, s)
 
-  e.dest.add toToken(SymbolDef, s, sinfo)
+  e.dest.add symdefToken(s, sinfo)
   e.offer s
 
   skipExportMarker e, c
@@ -549,14 +549,14 @@ proc traverseLocal(e: var EContext; c: var Cursor; tag: string; mode: TraverseMo
   let pinfo = c.info
   let prag = parsePragmas(e, c)
 
-  e.dest.add toToken(SymbolDef, s, sinfo)
+  e.dest.add symdefToken(s, sinfo)
   e.offer s
 
   var genPragmas = openGenPragmas()
 
   if prag.externName.len > 0:
     e.toMangle[(s, e.currentOwner)] = prag.externName & ".c"
-    e.addKeyVal genPragmas, "was", toToken(Symbol, s, pinfo), pinfo
+    e.addKeyVal genPragmas, "was", symToken(s, pinfo), pinfo
 
   if Threadvar in prag.flags:
     e.dest[toPatch] = tagToken("tvar", vinfo)
@@ -564,9 +564,9 @@ proc traverseLocal(e: var EContext; c: var Cursor; tag: string; mode: TraverseMo
     e.dest[toPatch] = tagToken("gvar", vinfo)
 
   if prag.align != IntId(0):
-    e.addKeyVal genPragmas, "align", toToken(IntLit, prag.align, pinfo), pinfo
+    e.addKeyVal genPragmas, "align", intToken(prag.align, pinfo), pinfo
   if prag.bits != IntId(0):
-    e.addKeyVal genPragmas, "bits", toToken(IntLit, prag.bits, pinfo), pinfo
+    e.addKeyVal genPragmas, "bits", intToken(prag.bits, pinfo), pinfo
   closeGenPragmas e, genPragmas
 
   traverseType e, c
@@ -592,7 +592,7 @@ proc traverseWhile(e: var EContext; c: var Cursor) =
   let lab = e.nestedIn[^1][1]
   if lab != SymId(0):
     e.dest.add tagToken("lab", info)
-    e.dest.add toToken(SymbolDef, lab, info)
+    e.dest.add symdefToken(lab, info)
     e.offer lab
     e.dest.addParRi()
   discard e.nestedIn.pop()
@@ -612,7 +612,7 @@ proc traverseBlock(e: var EContext; c: var Cursor) =
   let lab = e.nestedIn[^1][1]
   if lab != SymId(0):
     e.dest.add tagToken("lab", info)
-    e.dest.add toToken(SymbolDef, lab, info)
+    e.dest.add symdefToken(lab, info)
     e.offer lab
     e.dest.addParRi()
   discard e.nestedIn.pop()
@@ -628,7 +628,7 @@ proc traverseBreak(e: var EContext; c: var Cursor) =
     let lab = c.symId
     inc c
     e.dest.add tagToken("jmp", info)
-    e.dest.add toToken(Symbol, lab, info)
+    e.dest.add symToken(lab, info)
   wantParRi e, c
 
 proc traverseIf(e: var EContext; c: var Cursor) =

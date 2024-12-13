@@ -16,6 +16,8 @@ type
 
 proc zero*(): xint = xint(val: 0)
 
+proc createNaN*(): xint = xint(nan: true)
+
 proc isNaN*(x: xint): bool {.inline.} = x.nan
 
 proc `-`*(a: xint): xint =
@@ -86,11 +88,14 @@ proc `$`*(a: xint): string =
   elif a.neg: "-" & $a.val
   else: $a.val
 
-proc fromInt*(x: int64): xint =
+proc createXint*(x: int64): xint =
   if x < 0:
     xint(neg: true, val: uint64(-x))
   else:
     xint(neg: false, val: uint64(x))
+
+proc createXint*(x: uint64): xint =
+  xint(neg: false, val: uint64(x))
 
 proc `shl`*(a: xint, b: int): xint =
   if a.nan or b < 0:
@@ -252,13 +257,13 @@ proc max*(a, b: xint): xint =
 
   if a > b: a else: b
 
-proc succ*(a: xint): xint = a + fromInt 1
-proc pred*(a: xint): xint = a - fromInt 1
+proc succ*(a: xint): xint = a + createXint 1'u64
+proc pred*(a: xint): xint = a - createXint 1'u64
 
 
 when isMainModule:
-  var a = fromInt(10)
-  var b = fromInt(-5)
+  var a = createXint(10'i64)
+  var b = createXint(-5'i64)
   echo a + b   # Outputs: "5"
   echo a - b   # Outputs: "15"
   echo a * b   # Outputs: "-50"
