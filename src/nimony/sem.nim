@@ -2647,6 +2647,35 @@ proc semDeclared(c: var SemContext; it: var Item) =
   it.typ = c.types.boolType
   commonType c, it, beforeExpr, expected
 
+proc semSubscript(c: var SemContext; it: var Item) =
+  var n = it.n
+  inc n # tag
+  var lhsBuf = createTokenBuf(4)
+  swap c.dest, lhsBuf
+  var lhs = Item(n: n, typ: c.types.autoType)
+  semExpr c, lhs, {KeepMagics}
+  swap c.dest, lhsBuf
+  if lhs.n.kind == Symbol and lhs.kind == TypeY and
+      getTypeSection(lhs.n.symId).typevars == "typevars":
+    # lhs is a generic type symbol, this is a generic invocation
+    # treat it as a type expression to call semInvoke
+    semLocalTypeExpr c, it
+    return
+  # XXX also check for proc generic instantiation, including symchoice
+
+  # build call:
+  var callBuf = createTokenBuf(16)
+  callBuf.addParLe(CallX, it.n.info)
+  callBuf.add toToken(Ident, pool.strings.getOrIncl("[]"), it.n.info)
+  callBuf.add lhsBuf
+  it.n = lhs.n
+  while it.n.kind != ParRi:
+    callBuf.takeTree it.n
+  callBuf.addParRi()
+  skipParRi it.n
+  var call = Item(n: cursorAt(callBuf, 0), typ: it.typ)
+  semExpr c, call
+
 proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
   case it.n.kind
   of IntLit:
@@ -2774,7 +2803,9 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
       semDefined c, it
     of DeclaredX:
       semDeclared c, it
-    of AtX, DerefX, PatX, AddrX, NilX, SizeofX, OconstrX, KvX,
+    of AtX:
+      semSubscript c, it
+    of DerefX, PatX, AddrX, NilX, SizeofX, OconstrX, KvX,
        CastX, ConvX, RangeX, RangesX,
        HderefX, HaddrX, OconvX, HconvX, OchoiceX, CchoiceX,
        CompilesX, HighX, LowX, TypeofX, UnpackX:
