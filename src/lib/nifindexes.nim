@@ -55,8 +55,8 @@ proc createIndex*(infile: string) =
         let diff = if isPublic: target - previousPublicTarget
                   else: target - previousPrivateTarget
         dest[].buildTree KvT, info:
-          dest[].add toToken(Symbol, sym, NoLineInfo)
-          dest[].add toToken(IntLit, pool.integers.getOrIncl(diff), NoLineInfo)
+          dest[].add symToken(sym, NoLineInfo)
+          dest[].add intToken(pool.integers.getOrIncl(diff), NoLineInfo)
         if isPublic:
           previousPublicTarget = target
         else:

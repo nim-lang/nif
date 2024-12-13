@@ -1,11 +1,12 @@
 ## expression evaluator for simple constant expressions, not meant to be complete
 
 include nifprelude
-import nimony_model, decls, programs, sigmatch # sigmatch just for addStrLit and addParLe
+import nimony_model, decls, programs, xints
 
-type EvalContext* = object
-  values: seq[TokenBuf]
-  trueValue, falseValue: Cursor
+type
+  EvalContext* = object
+    values: seq[TokenBuf]
+    trueValue, falseValue: Cursor
 
 proc isConstBoolValue*(n: Cursor): bool =
   n.exprKind in {TrueX, FalseX}
@@ -152,3 +153,16 @@ proc evalExpr*(n: var Cursor): TokenBuf =
   let val = eval(ec, n)
   result = createTokenBuf(val.span)
   result.addSubtree val
+
+proc evalOrdinal*(n: var Cursor): xint =
+  var ec = initEvalContext()
+  let val = eval(ec, n)
+  case val.kind
+  of CharLit:
+    result = createXint val.uoperand
+  of IntLit:
+    result = createXint pool.integers[val.intId]
+  of UIntLit:
+    result = createXint pool.uintegers[val.uintId]
+  else:
+    result = createNaN()

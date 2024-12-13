@@ -275,3 +275,6 @@ template `==`*(n: Cursor; s: string): bool = n.kind == ParLe and pool.tags[n.tag
 
 const
   RoutineKinds* = {ProcY, FuncY, IterY, TemplateY, MacroY, ConverterY, MethodY}
+
+proc addParLe*(dest: var TokenBuf; kind: TypeKind|SymKind|ExprKind|StmtKind; info = NoLineInfo) =
+  dest.add parLeToken(pool.tags.getOrIncl($kind), info)
