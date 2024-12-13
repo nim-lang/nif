@@ -1298,6 +1298,14 @@ proc getFnIdent(c: var SemContext): StrId =
   result = getIdent(c, n)
   endRead(c.dest)
 
+type
+  DotExprMode = enum
+    OrdinaryDot, AlsoTryDotCall, CalleeDot
+  DotExprState = enum
+    DotMatch, DotFailedMatch, DotError
+
+proc semDot(c: var SemContext; it: var Item; mode: DotExprMode): DotExprState
+
 proc semCall(c: var SemContext; it: var Item) =
   let beforeCall = c.dest.len
   let callNode = it.n.load()
@@ -1305,13 +1313,45 @@ proc semCall(c: var SemContext; it: var Item) =
   var dest = createTokenBuf(16)
   swap c.dest, dest
   var fn = Item(n: it.n, typ: c.types.autoType)
-  semExpr(c, fn, {KeepMagics})
-  let fnKind = fn.kind
-  let fnName = getFnIdent(c)
-  it.n = fn.n
+  var fnName = StrId(0)
   var args: seq[Item] = @[]
   var argIndexes: seq[int] = @[]
   var candidates = default FnCandidates
+  if fn.n.exprKind == DotX:
+    let dotState = semDot(c, fn, CalleeDot)
+    it.n = fn.n
+    if dotState == DotFailedMatch:
+      # turn a.b(...) into b(a, ...)
+      # resem b and save its kind into fn.kind
+      # add a as an argument, semDot sets fn.typ to its type
+      let lhsTyp = fn.typ
+      fn.typ = c.types.autoType
+      var dotBuf = createTokenBuf(16)
+      swap c.dest, dotBuf
+      var dotRead = beginRead(dotBuf)
+      inc dotRead # skip dot tag
+      let lhsRead = dotRead
+      skip dotRead # skip lhs
+      # resem b:
+      fn = Item(n: dotRead, typ: c.types.autoType)
+      semExpr c, fn, {KeepMagics}
+      fnName = getFnIdent(c)
+      # add a as argument:
+      let lhsIndex = c.dest.len
+      c.dest.addSubtree lhsRead
+      # arg.n will be set by argIndexes:
+      let arg = Item(n: lhsRead, typ: lhsTyp)
+      argIndexes.add lhsIndex
+      # scope extension: If the type is Typevar and it has attached
+      # a concept, use the concepts symbols too:
+      if fnName != StrId(0) and arg.typ.kind == Symbol:
+        maybeAddConceptMethods c, fnName, arg.typ.symId, candidates
+      args.add arg
+  else:
+    semExpr(c, fn, {KeepMagics})
+    fnName = getFnIdent(c)
+    it.n = fn.n
+  let fnKind = fn.kind
   while it.n.kind != ParRi:
     var arg = Item(n: it.n, typ: c.types.autoType)
     argIndexes.add c.dest.len
@@ -1416,11 +1456,7 @@ proc findObjField(t: Cursor; name: StrId; level = 0): ObjField =
   else:
     result = ObjField(level: -1)
 
-type
-  DotExprMode = enum
-    OrdinaryDot, AlsoTryDotCall, DotDontReportError
-
-proc semDot(c: var SemContext; it: var Item; mode: DotExprMode) =
+proc semDot(c: var SemContext; it: var Item; mode: DotExprMode): DotExprState =
   let exprStart = c.dest.len
   let expected = it.typ
   takeToken c, it.n
@@ -1429,9 +1465,12 @@ proc semDot(c: var SemContext; it: var Item; mode: DotExprMode) =
   it.n = a.n
   let info = it.n.info
   let fieldName = getIdent(c, it.n)
-  var isMatch = false
+  result = DotFailedMatch
+  var failedMatchError = createTokenBuf(4)
   if fieldName == StrId(0):
+    # fatal error
     c.buildErr it.n.info, "identifier after `.` expected"
+    result = DotError
   else:
     let t = skipModifier(a.typ)
     if t.kind == Symbol:
@@ -1443,11 +1482,15 @@ proc semDot(c: var SemContext; it: var Item; mode: DotExprMode) =
           c.dest.add toToken(IntLit, pool.integers.getOrIncl(field.level), info)
           it.typ = field.typ # will be fit later with commonType
           it.kind = FldY
-          isMatch = true
+          result = DotMatch
         else:
+          swap c.dest, failedMatchError
           c.buildErr it.n.info, "undeclared field: " & pool.strings[fieldName]
+          swap c.dest, failedMatchError
       else:
+        swap c.dest, failedMatchError
         c.buildErr it.n.info, "object type exptected"
+        swap c.dest, failedMatchError
     elif t.typeKind == TupleT:
       var tup = t
       inc tup
@@ -1457,19 +1500,47 @@ proc semDot(c: var SemContext; it: var Item; mode: DotExprMode) =
           c.dest.add toToken(Symbol, field.name.symId, info)
           it.typ = field.typ # will be fit later with commonType
           it.kind = FldY
-          isMatch = true
+          result = DotMatch
           break
         skip tup
-      if not isMatch:
+      if result != DotMatch:
+        swap c.dest, failedMatchError
         c.buildErr it.n.info, "undeclared field: " & pool.strings[fieldName]
+        swap c.dest, failedMatchError
     else:
+      swap c.dest, failedMatchError
       c.buildErr it.n.info, "object type exptected"
+      swap c.dest, failedMatchError
   # skip optional inheritance depth:
   if it.n.kind == IntLit:
     inc it.n
-  wantParRi c, it.n
-  if isMatch:
+  case result
+  of DotError:
+    wantParRi c, it.n
+  of DotMatch:
+    wantParRi c, it.n
     commonType c, it, exprStart, expected
+  of DotFailedMatch:
+    case mode
+    of OrdinaryDot:
+      c.dest.add failedMatchError
+      wantParRi c, it.n
+    of CalleeDot:
+      wantParRi c, it.n
+      it.typ = a.typ # store info of lhs type
+    of AlsoTryDotCall:
+      skipParRi it.n
+      var callBuf = createTokenBuf(16)
+      callBuf.addParLe(CallX, info)
+      callBuf.add toToken(Ident, fieldName, info)
+      callBuf.addSubtree cursorAt(c.dest, exprStart + 1) # add lhs as first argument
+      endRead(c.dest)
+      callBuf.addParRi()
+      c.dest.shrink exprStart
+      var call = Item(n: cursorAt(callBuf, 0), typ: it.typ)
+      # error messages aren't specialized for now
+      semCall c, call
+      it.typ = call.typ
 
 proc semWhile(c: var SemContext; it: var Item) =
   let info = it.n.info
@@ -2674,7 +2745,9 @@ proc semSubscript(c: var SemContext; it: var Item) =
   callBuf.addParRi()
   skipParRi it.n
   var call = Item(n: cursorAt(callBuf, 0), typ: it.typ)
-  semExpr c, call
+  # error messages aren't specialized for now
+  semCall c, call
+  it.typ = call.typ
 
 proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
   case it.n.kind
@@ -2784,7 +2857,7 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
     of CallX, CmdX, CallStrLitX, InfixX, PrefixX:
       semCall c, it
     of DotX:
-      semDot c, it, AlsoTryDotCall
+      discard semDot(c, it, AlsoTryDotCall)
     of EqX, NeqX, LeX, LtX:
       semCmp c, it
     of AshrX, AddX, SubX, MulX, DivX, ModX, ShrX, ShlX, BitandX, BitorX, BitxorX:
