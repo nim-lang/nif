@@ -81,6 +81,11 @@ proc createData(): tuple[a: int, b: string] =
 
 proc `==`*(x, y: int): bool {.magic: "EqI".}
 
+proc whileStmt =
+  while 1 == 2:
+    var s = 12
+    break
+
 proc ifExpr(): int =
   let x =
     if 1 == 1:
