@@ -107,6 +107,15 @@ proc parLeToken*(t: TagId; info: PackedLineInfo): PackedToken {.inline.} =
 proc intToken*(id: IntId; info: PackedLineInfo): PackedToken {.inline.} =
   toToken(IntLit, id, info)
 
+proc uintToken*(id: UIntId; info: PackedLineInfo): PackedToken {.inline.} =
+  toToken(UIntLit, id, info)
+
+proc floatToken*(id: FloatId; info: PackedLineInfo): PackedToken {.inline.} =
+  toToken(FloatLit, id, info)
+
+proc charToken*(ch: char; info: PackedLineInfo): PackedToken {.inline.} =
+  toToken(CharLit, uint32(ch), info)
+
 proc strToken*(id: StrId; info: PackedLineInfo): PackedToken {.inline.} =
   toToken(StringLit, id, info)
 
