@@ -36,6 +36,7 @@ proc recordDependencyImpl(m: Module; o: var TypeOrder; parent, child: TypeId;
       viaPointer = true
       ch = elementType(m.code, ch)
     of FlexarrayC:
+      viaPointer = false
       ch = elementType(m.code, ch)
     else:
       break
@@ -402,6 +403,7 @@ proc generateTypes(c: var GeneratedCode; types: TypeGraph; o: TypeOrder) =
         c.add Semicolon
       else:
         c.add declKeyword
+        c.add s
         c.add CurlyLe
         # XXX generate attributes and pragmas here
         c.genObjectOrUnionBody types, decl.body
