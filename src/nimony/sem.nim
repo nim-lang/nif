@@ -1714,12 +1714,21 @@ proc semTupleType(c: var SemContext; n: var Cursor) =
       semLocal(c, n, FldY)
   wantParRi c, n
 
-proc semEnumField(c: var SemContext; n: var Cursor; enumType: SymId)
+type
+  EnumTypeState = object
+    enumType: SymId
+    thisValue: xint
+    hasHole: bool
+
+proc semEnumField(c: var SemContext; n: var Cursor; state: var EnumTypeState)
 
 proc semEnumType(c: var SemContext; n: var Cursor; enumType: SymId) =
+  # XXX Propagate hasHole somehow
   takeToken c, n
+  var state = EnumTypeState(enumType: enumType, thisValue: createXint(0'i64), hasHole: false)
   while n.substructureKind == EfldS:
-    semEnumField(c, n, enumType)
+    semEnumField(c, n, state)
+    inc state.thisValue
   wantParRi c, n
 
 proc declareConceptSelf(c: var SemContext; info: PackedLineInfo) =
@@ -1999,7 +2008,27 @@ proc semLocal(c: var SemContext; it: var Item; kind: SymKind) =
   semLocal c, it.n, kind
   producesVoid c, info, it.typ
 
-proc semEnumField(c: var SemContext; n: var Cursor; enumType: SymId) =
+proc addXint(c: var SemContext; x: xint; info: PackedLineInfo) =
+  var err = false
+  let val = asSigned(x, err)
+  if not err:
+    c.dest.add intToken(pool.integers.getOrIncl(val), info)
+  else:
+    let val = asUnsigned(x, err)
+    if not err:
+      c.dest.add uintToken(pool.uintegers.getOrIncl(val), info)
+    else:
+      c.buildErr info, "enum value not a constant expression"
+
+proc evalConstIntExpr(c: var SemContext; n: var Cursor; expected: TypeCursor): xint =
+  let beforeExpr = c.dest.len
+  var x = Item(n: n, typ: expected)
+  semExpr c, x
+  n = x.n
+  result = evalOrdinal(cursorAt(c.dest, beforeExpr))
+  endRead c.dest
+
+proc semEnumField(c: var SemContext; n: var Cursor; state: var EnumTypeState) =
   let declStart = c.dest.len
   takeToken c, n
   let delayed = handleSymDef(c, n, EfldY) # 0
@@ -2009,29 +2038,21 @@ proc semEnumField(c: var SemContext; n: var Cursor; enumType: SymId) =
   semPragmas c, n, crucial, EfldY # 2
   if crucial.magic.len > 0:
     exportMarkerBecomesNifTag c, beforeExportMarker, crucial
-  let beforeType = c.dest.len
-  if n.kind == DotToken:
-    c.dest.add symToken(enumType, n.info)
-    # no explicit type given:
+  if n.kind == DotToken or n.kind == Symbol:
+    c.dest.add symToken(state.enumType, n.info)
     inc n # 3
-    if n.kind == DotToken:
-      # empty value
-      takeToken c, n
-    else:
-      var it = Item(n: n, typ: c.types.autoType)
-      semExpr c, it # 4
-      n = it.n
-      # XXX check that it.typ is an ordinal!
   else:
-    let typ = semLocalType(c, n) # 3
-    if n.kind == DotToken:
-      # empty value
-      takeToken c, n
-    else:
-      var it = Item(n: n, typ: typ)
-      semExpr c, it # 4
-      n = it.n
-      patchType c, it.typ, beforeType
+    c.buildErr n.info, "enum field's type must be empty"
+
+  if n.kind == DotToken:
+    # empty value
+    c.addXint state.thisValue, c.dest[declStart].info
+    inc n
+  else:
+    let explicitValue = evalConstIntExpr(c, n, c.types.autoType) # 4
+    if explicitValue != state.thisValue:
+      state.hasHole = true
+      state.thisValue = explicitValue
   c.addSym delayed
   wantParRi c, n
   publish c, delayed.s.name, declStart
@@ -2286,12 +2307,6 @@ proc isRangeNode(c: var SemContext; n: Cursor): bool =
   inc n
   let name = getIdent(c, n)
   result = name != StrId(0) and pool.strings[name] == ".."
-
-proc evalConstIntExpr(c: var SemContext; n: var Cursor; expected: TypeCursor): xint =
-  var x = Item(n: n, typ: expected)
-  semExpr c, x
-  n = x.n
-  result = xints.zero()
 
 proc semCaseOfValue(c: var SemContext; it: var Item; selectorType: TypeCursor;
                     seen: var seq[(xint, xint)]) =

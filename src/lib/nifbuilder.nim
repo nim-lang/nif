@@ -250,7 +250,8 @@ proc addTree*(b: var Builder; kind: string) =
 
 proc endTree*(b: var Builder) =
   assert b.nesting > 0, "generating ')' would produce a syntax error"
-  dec b.nesting
+  if b.nesting >= 0:
+    dec b.nesting
   undoWhitespace b
   b.put ')'
 

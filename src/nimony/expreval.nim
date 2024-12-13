@@ -72,16 +72,17 @@ proc eval*(c: var EvalContext, n: var Cursor): Cursor =
     error "cannot evaluate undeclared ident: " & pool.strings[n.litId], n.info
     inc n
   of Symbol:
-    case n.symKind
-    of ConstY:
-      let sym = tryLoadSym(n.symId)
-      if sym.status == LacksNothing:
-        result = asLocal(sym.decl).val
-        inc n
-        return
-    else: discard
-    error "cannot evaluate symbol at compile time: " & pool.syms[n.symId], n.info
+    let symId = n.symId
+    let info = n.info
     inc n
+    let sym = tryLoadSym(symId)
+    if sym.status == LacksNothing:
+      let local = asLocal(sym.decl)
+      case local.kind
+      of ConstY, EfldY:
+        return local.val
+      else: discard
+    error "cannot evaluate symbol at compile time: " & pool.syms[symId], info
   of StringLit, CharLit, IntLit, UIntLit, FloatLit:
     result = n
     inc n
@@ -154,9 +155,10 @@ proc evalExpr*(n: var Cursor): TokenBuf =
   result = createTokenBuf(val.span)
   result.addSubtree val
 
-proc evalOrdinal*(n: var Cursor): xint =
+proc evalOrdinal*(n: Cursor): xint =
   var ec = initEvalContext()
-  let val = eval(ec, n)
+  var n0 = n
+  let val = eval(ec, n0)
   case val.kind
   of CharLit:
     result = createXint val.uoperand

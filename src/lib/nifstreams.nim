@@ -287,7 +287,8 @@ proc toString*(tree: openArray[PackedToken]; produceLineInfo = true): string =
     of EofToken:
       b.addIntLit tree[n].soperand
     of ParRi:
-      discard stack.pop()
+      if stack.len > 0:
+        discard stack.pop()
       b.endTree()
     of ParLe:
       b.addTree(pool.tags[tree[n].tagId])
