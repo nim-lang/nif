@@ -27,9 +27,9 @@ type
 
 proc traverseObjectBody(m: Module; o: var TypeOrder; t: TypeId)
 
-proc recordDependency(m: Module; o: var TypeOrder; parent, child: TypeId) =
+proc recordDependencyImpl(m: Module; o: var TypeOrder; parent, child: TypeId;
+                      viaPointer: var bool) =
   var ch = child
-  var viaPointer = false
   while true:
     case m.code[ch].kind
     of APtrC, PtrC:
@@ -70,9 +70,13 @@ proc recordDependency(m: Module; o: var TypeOrder; parent, child: TypeId) =
     else:
       let decl = asTypeDecl(m.code, def.pos)
       if not containsOrIncl(o.lookedAtBodies, decl.body.int):
-        recordDependency m, o, parent, decl.body
+        recordDependencyImpl m, o, def.pos, decl.body, viaPointer
   else:
     discard "uninteresting type as we only focus on the required struct declarations"
+
+proc recordDependency(m: Module; o: var TypeOrder; parent, child: TypeId) =
+  var viaPointer = false
+  recordDependencyImpl m, o, parent, child, viaPointer
 
 proc traverseObjectBody(m: Module; o: var TypeOrder; t: TypeId) =
   for x in sons(m.code, t):
