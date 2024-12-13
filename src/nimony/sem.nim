@@ -476,6 +476,7 @@ proc publishSignature(c: var SemContext; s: SymId; start: int) =
 proc takeTree(dest: var TokenBuf; n: var Cursor) =
   if n.kind != ParLe:
     dest.add n
+    inc n
   else:
     var nested = 0
     while true:
