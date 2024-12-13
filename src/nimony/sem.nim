@@ -1302,7 +1302,7 @@ type
   DotExprMode = enum
     OrdinaryDot, AlsoTryDotCall, CalleeDot
   DotExprState = enum
-    DotMatch, DotFailedMatch, DotError
+    MatchedDot, FailedDot, InvalidDot
 
 proc semDot(c: var SemContext; it: var Item; mode: DotExprMode): DotExprState
 
@@ -1320,7 +1320,7 @@ proc semCall(c: var SemContext; it: var Item) =
   if fn.n.exprKind == DotX:
     let dotState = semDot(c, fn, CalleeDot)
     it.n = fn.n
-    if dotState == DotFailedMatch:
+    if dotState == FailedDot:
       # turn a.b(...) into b(a, ...)
       # resem b and save its kind into fn.kind
       # add a as an argument, semDot sets fn.typ to its type
@@ -1465,12 +1465,12 @@ proc semDot(c: var SemContext; it: var Item; mode: DotExprMode): DotExprState =
   it.n = a.n
   let info = it.n.info
   let fieldName = getIdent(c, it.n)
-  result = DotFailedMatch
+  result = FailedDot
   var failedMatchError = createTokenBuf(4)
   if fieldName == StrId(0):
     # fatal error
     c.buildErr it.n.info, "identifier after `.` expected"
-    result = DotError
+    result = InvalidDot
   else:
     let t = skipModifier(a.typ)
     if t.kind == Symbol:
@@ -1482,7 +1482,7 @@ proc semDot(c: var SemContext; it: var Item; mode: DotExprMode): DotExprState =
           c.dest.add toToken(IntLit, pool.integers.getOrIncl(field.level), info)
           it.typ = field.typ # will be fit later with commonType
           it.kind = FldY
-          result = DotMatch
+          result = MatchedDot
         else:
           swap c.dest, failedMatchError
           c.buildErr it.n.info, "undeclared field: " & pool.strings[fieldName]
@@ -1500,10 +1500,10 @@ proc semDot(c: var SemContext; it: var Item; mode: DotExprMode): DotExprState =
           c.dest.add toToken(Symbol, field.name.symId, info)
           it.typ = field.typ # will be fit later with commonType
           it.kind = FldY
-          result = DotMatch
+          result = MatchedDot
           break
         skip tup
-      if result != DotMatch:
+      if result != MatchedDot:
         swap c.dest, failedMatchError
         c.buildErr it.n.info, "undeclared field: " & pool.strings[fieldName]
         swap c.dest, failedMatchError
@@ -1515,12 +1515,12 @@ proc semDot(c: var SemContext; it: var Item; mode: DotExprMode): DotExprState =
   if it.n.kind == IntLit:
     inc it.n
   case result
-  of DotError:
+  of InvalidDot:
     wantParRi c, it.n
-  of DotMatch:
+  of MatchedDot:
     wantParRi c, it.n
     commonType c, it, exprStart, expected
-  of DotFailedMatch:
+  of FailedDot:
     case mode
     of OrdinaryDot:
       c.dest.add failedMatchError
