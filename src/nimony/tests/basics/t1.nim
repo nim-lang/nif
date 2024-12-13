@@ -39,12 +39,12 @@ var global: MyObject
 
 global.x = 45
 discard foo(global.x, "123")
-#discard global.x.foo("123")
+discard global.x.foo("123")
 
 overloaded()
 overloaded("abc")
 "abc".overloaded
-#"abc".overloaded()
+"abc".overloaded()
 
 proc discardable(x: int): int {.discardable.} =
   result = x + 7

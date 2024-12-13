@@ -1526,6 +1526,7 @@ proc semDot(c: var SemContext; it: var Item; mode: DotExprMode): DotExprState =
       c.dest.add failedMatchError
       wantParRi c, it.n
     of CalleeDot:
+      c.dest.add toToken(Ident, fieldName, info)
       wantParRi c, it.n
       it.typ = a.typ # store info of lhs type
     of AlsoTryDotCall:
