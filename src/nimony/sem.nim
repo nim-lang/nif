@@ -2633,6 +2633,159 @@ proc semDeclared(c: var SemContext; it: var Item) =
   it.typ = c.types.boolType
   commonType c, it, beforeExpr, expected
 
+proc trySemSubscript(c: var SemContext; it: var Item; isPat = false): bool =
+  ## returns true if subscript is a language level operation,
+  ## false if overloads of `[]` have to be considered
+  ##
+  ## `isPat` is true if the original expression was `PatX`, currently doesn't
+  ## enforce pointer access and just generates the given tag
+  # the way this is set up re-sems the operands if overloading has to be considered,
+  # maybe return a buffer with the semchecked expressions instead? or re-semming is fine
+  let baseTag = if isPat: PatX else: AtX
+  let startInfo = it.n.info
+  var n = it.n
+  inc n
+  var buf = createTokenBuf(4)
+  swap c.dest, buf
+  var arr = Item(n: n, typ: c.types.autoType)
+  semExpr c, arr, {KeepMagics}
+  var arrTyp = arr.typ
+  var derefs = 0
+  if arrTyp.typeKind == SinkT: arrTyp = arrTyp.skipModifier
+  if arrTyp.typeKind in {MutT, OutT, LentT}:
+    inc derefs
+    arrTyp = arrTyp.skipModifier
+  while arrTyp.typeKind in {PtrT, RefT}:
+    inc derefs
+    arrTyp = arrTyp.skipModifier
+  case arrTyp.typeKind
+  of ArrayT, VarargsT, StringT, UncheckedArrayT:
+    var index = Item(n: arr.n, typ: c.types.autoType)
+    semExpr c, index
+    swap c.dest, buf
+    if index.n.kind != ParRi:
+      # this is a [] call with multiple arguments
+      return false
+    var arrEx = buf.cursorAt(0)
+    var indexEx = arrEx
+    skip indexEx
+    if arrTyp.typeKind != ArrayT and index.typ.typeKind notin {IntT, UIntT}:
+      # invalid index type, array will attempt to fit below
+      return false
+    # now adding to c.dest:
+    let start = c.dest.len
+    # replace final deref with `Pat` if possible or expression was already Pat
+    let doPat = isPat or arrTyp.typeKind != StringT
+    if derefs > 0 and doPat:
+      c.dest.addParLe(PatX, startInfo)
+    else:
+      c.dest.addParLe(baseTag, startInfo)
+    for _ in ord(doPat) ..< derefs:
+      c.dest.addParLe(HderefX, startInfo)
+    c.dest.addSubtree arrEx
+    for _ in ord(doPat) ..< derefs:
+      c.dest.addParRi()
+    var elemTyp: Cursor
+    case arrTyp.typeKind
+    of ArrayT:
+      var indexTyp = arrTyp
+      inc indexTyp # get to range
+      if indexTyp.typeKind == NoType:
+        indexTyp = c.types.intType
+      elemTyp = indexTyp
+      skip elemTyp # get to element
+      let indexStart = c.dest.len
+      c.dest.addSubtree indexEx
+      let indexEnd = c.dest.len
+      commonType c, index, indexStart, indexTyp
+      if indexEnd < c.dest.len:
+        let firstOutToken = cursorAt(c.dest, indexEnd)
+        endRead(c.dest)
+        if firstOutToken.kind == ParLe and firstOutToken.tag == ErrT:
+          # index gave type mismatch
+          c.dest.shrink start
+          return false
+    of StringT:
+      elemTyp = c.types.charType
+      c.dest.addSubtree indexEx
+    else:
+      elemTyp = arrTyp
+      inc elemTyp
+      c.dest.addSubtree indexEx
+    it.n = index.n
+    wantParRi c, it.n
+    result = true
+    commonType c, it, start, elemTyp
+  of TupleT:
+    var index = Item(n: arr.n, typ: c.types.autoType)
+    semExpr c, index
+    if classifyType(c, index.typ) != IntT:
+      # index is not an integer
+      return false
+    swap c.dest, buf
+    if index.n.kind != ParRi:
+      # this is a [] call with multiple arguments
+      return false
+    var arrEx = buf.cursorAt(0)
+    var indexEx = arrEx
+    skip indexEx
+    var valueBuf = evalExpr(indexEx)
+    let value = cursorAt(valueBuf, 0)
+    if not isConstIntValue(value):
+      # index is not a constant integer, includes error case
+      return false
+    let indexValue = pool.integers[value.intId]
+    if indexValue < 0:
+      # negative index, maybe should error?
+      return false
+    var elemTyp = arrTyp
+    inc elemTyp
+    if elemTyp.kind == ParRi:
+      # tuple is empty but trying to index, maybe should error?
+      return false
+    for i in 0 ..< pool.integers[value.intId]:
+      # skip previous fields
+      skip elemTyp
+      if elemTyp.kind == ParRi:
+        # index is outside tuple, maybe should error?
+        return false
+    elemTyp = asLocal(elemTyp).typ
+    # now adding to c.dest:
+    let start = c.dest.len
+    c.dest.addParLe(baseTag, startInfo)
+    for _ in 0 ..< derefs:
+      c.dest.addParLe(HderefX, startInfo)
+    c.dest.addSubtree arrEx
+    for _ in 0 ..< derefs:
+      c.dest.addParRi()
+    c.dest.addSubtree value
+    it.n = index.n
+    wantParRi c, it.n
+    result = true
+    commonType c, it, start, elemTyp
+  of TypedescT:
+    # XXX type instantiation, but has to be a symbol node
+    result = false
+  else:
+    # XXX proc instantiations go here, but has to be a symbol node
+    result = false
+
+proc semArrayAccess(c: var SemContext, it: var Item; isPat = false) =
+  let wasLanguageSubscript = trySemSubscript(c, it, isPat)
+  if not wasLanguageSubscript:
+    # transform into call
+    var callBuf = createTokenBuf(16)
+    callBuf.addParLe(CallX, it.n.info)
+    callBuf.add toToken(Ident, pool.strings.getOrIncl("[]"), it.n.info)
+    inc it.n
+    while it.n.kind != ParRi:
+      callBuf.addSubtree it.n
+      skip it.n
+    callBuf.addParRi()
+    skipParRi it.n
+    var call = Item(n: cursorAt(callBuf, 0), typ: it.typ)
+    semExpr c, call
+
 proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
   case it.n.kind
   of IntLit:
@@ -2760,7 +2913,11 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
       semDefined c, it
     of DeclaredX:
       semDeclared c, it
-    of AtX, DerefX, PatX, AddrX, NilX, SizeofX, OconstrX, KvX,
+    of AtX:
+      semArrayAccess c, it, isPat = false
+    of PatX:
+      semArrayAccess c, it, isPat = true
+    of DerefX, AddrX, NilX, SizeofX, OconstrX, KvX,
        CastX, ConvX, RangeX, RangesX,
        HderefX, HaddrX, OconvX, HconvX, OchoiceX, CchoiceX,
        CompilesX, HighX, LowX, TypeofX, UnpackX:

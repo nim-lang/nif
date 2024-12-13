@@ -107,6 +107,10 @@ var z = (1, "abc")
 z = (2, "def")
 var t: tuple[x: int, y: string] = (1, "abc")
 t = (x: 2, y: "def")
+let arrIndex1#[: int]# = x[0] # expects uint for some reason?
+var arrIndex2#[: int]# = x[2]
+let tupIndex1: int = t[0]
+let tupIndex2: string = t[1]
 
 var mt: Data = (1, "abc")
 
