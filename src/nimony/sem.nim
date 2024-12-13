@@ -1460,6 +1460,7 @@ proc semDot(c: var SemContext; it: var Item; mode: DotExprMode) =
           isMatch = true
           break
         skip tup
+      c.dest.add toToken(IntLit, pool.integers.getOrIncl(0), info)
       if not isMatch:
         c.buildErr it.n.info, "undeclared field: " & pool.strings[fieldName]
     else:
