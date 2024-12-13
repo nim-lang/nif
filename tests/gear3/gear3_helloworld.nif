@@ -31,6 +31,23 @@
  (var :s.0.tesg7afhq1 . . 3 Child.0.tesg7afhq1 .)
 
 
+
+(type ~6 :Tuple.0.tesg7afhq12 . . . 2
+  (tuple 6
+   (fld :x.0.tesg7afhq12 . . ~14,~6
+    (i -1) .) 14
+   (fld :y.0.tesg7afhq12 . . ~22,~6
+    (i -1) .))) ,9
+ (proc 5 :foo.0.tesg7afhq12 . . . 9
+  (params) . . . 2,1
+  (stmts 4
+   (var :t.0 . . 4,~3
+    Tuple.0.tesg7afhq12 .) 4,2
+   (let :tx.0 . . ~4,~11
+    (i -1) 11
+    (dot ~1 t.0 1 x.0.tesg7afhq12)))
+ )
+
 (proc 5 :==.0.tesg7afhq1 
   (eq -3) . . 10
   (params 1

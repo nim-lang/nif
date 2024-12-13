@@ -514,13 +514,18 @@ proc traverseExpr(e: var EContext; c: var Cursor) =
         traverseType(e, c)
         swap skipped, e.dest
         inc nested
+      of DotX:
+        e.dest.add c
+        inc c
+        traverseExpr(e, c)
+        traverseExpr(e, c)
+        e.dest.add toToken(IntLit, pool.integers.getOrIncl(0), c.info)
+        inc nested
       else:
         e.dest.add c
         inc nested
         inc c
-    of ParRi: # TODO: refactoring: take the whole statement into consideration
-      if nested == 0:
-        break
+    of ParRi:
       e.dest.add c
       dec nested
       if nested == 0:
@@ -538,6 +543,9 @@ proc traverseExpr(e: var EContext; c: var Cursor) =
     of UnknownToken, DotToken, Ident, StringLit, CharLit, IntLit, UIntLit, FloatLit:
       e.dest.add c
       inc c
+
+    if nested == 0:
+      break
 
 proc traverseLocal(e: var EContext; c: var Cursor; tag: string; mode: TraverseMode) =
   let toPatch = e.dest.len
