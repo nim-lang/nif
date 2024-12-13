@@ -117,3 +117,9 @@ let mtb: string = mt.b
 const Inf* = 0x7FF0000000000000'f64
 
 let s: float = Inf
+
+proc `[]`*[I;T](a: T; i: I): T {.magic: "ArrGet".}
+
+proc foo2 =
+  var x = [1, 2, 3]
+  let m = x[1]

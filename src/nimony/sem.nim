@@ -2672,6 +2672,7 @@ proc semSubscript(c: var SemContext; it: var Item) =
   it.n = lhs.n
   while it.n.kind != ParRi:
     callBuf.takeTree it.n
+    inc it.n
   callBuf.addParRi()
   skipParRi it.n
   var call = Item(n: cursorAt(callBuf, 0), typ: it.typ)
