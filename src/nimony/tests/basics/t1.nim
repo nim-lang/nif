@@ -107,9 +107,12 @@ var z = (1, "abc")
 z = (2, "def")
 var t: tuple[x: int, y: string] = (1, "abc")
 t = (x: 2, y: "def")
+let tx: int = t.x
+let ty: string = t.y
 
 var mt: Data = (1, "abc")
-
+let mta: int = mt.a
+let mtb: string = mt.b
 
 const Inf* = 0x7FF0000000000000'f64
 

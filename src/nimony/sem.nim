@@ -1448,6 +1448,20 @@ proc semDot(c: var SemContext; it: var Item; mode: DotExprMode) =
           c.buildErr it.n.info, "undeclared field: " & pool.strings[fieldName]
       else:
         c.buildErr it.n.info, "object type exptected"
+    elif t.typeKind == TupleT:
+      var tup = t
+      inc tup
+      while tup.kind != ParRi:
+        let field = asLocal(tup)
+        if field.name.kind == SymbolDef and sameIdent(field.name.symId, fieldName):
+          c.dest.add toToken(Symbol, field.name.symId, info)
+          it.typ = field.typ # will be fit later with commonType
+          it.kind = FldY
+          isMatch = true
+          break
+        skip tup
+      if not isMatch:
+        c.buildErr it.n.info, "undeclared field: " & pool.strings[fieldName]
     else:
       c.buildErr it.n.info, "object type exptected"
   # skip optional inheritance depth:
