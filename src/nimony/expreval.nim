@@ -73,7 +73,7 @@ proc eval*(c: var EvalContext, n: var Cursor): Cursor =
     inc n
   of Symbol:
     case n.symKind
-    of ConstY:
+    of ConstY, EfldY:
       let sym = tryLoadSym(n.symId)
       if sym.status == LacksNothing:
         result = asLocal(sym.decl).val
@@ -154,9 +154,10 @@ proc evalExpr*(n: var Cursor): TokenBuf =
   result = createTokenBuf(val.span)
   result.addSubtree val
 
-proc evalOrdinal*(n: var Cursor): xint =
+proc evalOrdinal*(n: Cursor): xint =
   var ec = initEvalContext()
-  let val = eval(ec, n)
+  var n0 = n
+  let val = eval(ec, n0)
   case val.kind
   of CharLit:
     result = createXint val.uoperand

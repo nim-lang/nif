@@ -20,6 +20,32 @@ proc createNaN*(): xint = xint(nan: true)
 
 proc isNaN*(x: xint): bool {.inline.} = x.nan
 
+proc asSigned*(x: xint; err: var bool): int64 =
+  result = 0
+  if x.nan:
+    err = true
+  else:
+    if x.neg:
+      if x.val > uint64(high(int64))+1:
+        err = true
+      else:
+        result = -int64(x.val)
+    else:
+      if x.val > uint64(high(int64)):
+        err = true
+      else:
+        result = int64(x.val)
+
+proc asUnsigned*(x: xint; err: var bool): uint64 =
+  result = 0'u64
+  if x.nan:
+    err = true
+  else:
+    if x.neg and x.val != 0'u64:
+      err = true
+    else:
+      result = x.val
+
 proc `-`*(a: xint): xint =
   xint(nan: a.nan, neg: not a.neg, val: a.val)
 
@@ -260,6 +286,7 @@ proc max*(a, b: xint): xint =
 proc succ*(a: xint): xint = a + createXint 1'u64
 proc pred*(a: xint): xint = a - createXint 1'u64
 
+proc inc*(x: var xint) = x = x + createXint 1'u64
 
 when isMainModule:
   var a = createXint(10'i64)
