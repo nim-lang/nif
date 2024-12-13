@@ -680,8 +680,7 @@ proc commonType(c: var SemContext; it: var Item; argBegin: int; expected: TypeCu
   else:
     shrink c.dest, argBegin
     c.dest.add m.args
-    if true or m.usesConversion:
-      it.typ = expected
+    it.typ = expected
 
 proc producesVoid(c: var SemContext; info: PackedLineInfo; dest: var Cursor) =
   if typeKind(dest) in {AutoT, VoidT}:
@@ -1661,16 +1660,20 @@ type
 
 proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext)
 
-proc semTypeSym(c: var SemContext; s: Sym; info: PackedLineInfo) =
+proc semTypeSym(c: var SemContext; s: Sym; info: PackedLineInfo; context: TypeDeclContext) =
   if s.kind in {TypeY, TypevarY}:
     let res = tryLoadSym(s.name)
     let beforeMagic = c.dest.len
     maybeInlineMagic c, res
     let afterMagic = c.dest.len
-    if beforeMagic != afterMagic:
+    if s.kind == TypevarY:
+      # likely was not magic
+      # maybe substitution performed here?
+      inc c.usedTypevars
+    elif beforeMagic != afterMagic:
       # was magic, nothing to do
       discard
-    elif s.kind != TypevarY:
+    else:
       let typ = asTypeDecl(res.decl)
       if typ.body.typeKind in {ObjectT, EnumT, DistinctT, ConceptT}:
         # types that should stay as symbols, see sigmatch.matchSymbol
@@ -1679,8 +1682,7 @@ proc semTypeSym(c: var SemContext; s: Sym; info: PackedLineInfo) =
         # remove symbol, inline type:
         c.dest.shrink c.dest.len-1
         var t = typ.body
-        semLocalTypeImpl c, t, InLocalDecl
-    if s.kind == TypevarY: inc c.usedTypevars
+        semLocalTypeImpl c, t, context
   elif s.kind != NoSym:
     c.buildErr info, "type name expected, but got: " & pool.syms[s.name]
   else:
@@ -1844,17 +1846,17 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
   case n.kind
   of Ident:
     let s = semIdent(c, n)
-    semTypeSym c, s, info
+    semTypeSym c, s, info, context
   of Symbol:
     let s = fetchSym(c, n.symId)
     inc n
-    semTypeSym c, s, info
+    semTypeSym c, s, info, context
   of ParLe:
     case typeKind(n)
     of NoType:
       if exprKind(n) == QuotedX:
         let s = semQuoted(c, n)
-        semTypeSym c, s, info
+        semTypeSym c, s, info, context
       elif context == AllowValues:
         var it = Item(n: n, typ: c.types.autoType)
         semExpr c, it
@@ -2165,7 +2167,7 @@ proc semExprSym(c: var SemContext; it: var Item; s: Sym; start: int; flags: set[
     let typeStart = c.dest.len
     c.dest.buildTree TypedescT, it.n.info:
       c.dest.add toToken(Symbol, s.name, it.n.info)
-      semTypeSym c, s, it.n.info
+      semTypeSym c, s, it.n.info, InLocalDecl
     it.typ = typeToCursor(c, typeStart)
     c.dest.shrink typeStart
     commonType c, it, start, expected
