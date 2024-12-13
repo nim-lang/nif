@@ -1895,30 +1895,36 @@ proc semTypeSection(c: var SemContext; n: var Cursor) =
   let beforeExportMarker = c.dest.len
   wantExportMarker c, n # 1
 
-  var isGeneric: bool
-  if n.kind == DotToken:
-    takeToken c, n
-    isGeneric = false
-  else:
-    openScope c
-    semGenericParams c, n
-    isGeneric = true
-
-  var crucial = default CrucialPragma
-  semPragmas c, n, crucial, TypeY # 2
-  if crucial.magic.len > 0:
-    exportMarkerBecomesNifTag c, beforeExportMarker, crucial
-
-  if n.kind == DotToken:
-    takeToken c, n
-  else:
-    # body
-    if n.typeKind == EnumT:
-      semEnumType c, n, delayed.s.name
+  if c.phase == SemcheckSignatures or (delayed.status == OkNew and c.phase != SemcheckTopLevelSyms):
+    var isGeneric: bool
+    if n.kind == DotToken:
+      takeToken c, n
+      isGeneric = false
     else:
-      semLocalTypeImpl c, n, InTypeSection
-  if isGeneric:
-    closeScope c
+      openScope c
+      semGenericParams c, n
+      isGeneric = true
+
+    var crucial = default CrucialPragma
+    semPragmas c, n, crucial, TypeY # 2
+    if crucial.magic.len > 0:
+      exportMarkerBecomesNifTag c, beforeExportMarker, crucial
+
+    if n.kind == DotToken:
+      takeToken c, n
+    else:
+      # body
+      if n.typeKind == EnumT:
+        semEnumType c, n, delayed.s.name
+      else:
+        semLocalTypeImpl c, n, InTypeSection
+    if isGeneric:
+      closeScope c
+  else:
+    c.takeTree n # generics
+    c.takeTree n # pragmas
+    c.takeTree n # body
+
   c.addSym delayed
   wantParRi c, n
   publish c, delayed.s.name, declStart
@@ -2184,6 +2190,15 @@ proc semSubscript(c: var SemContext; it: var Item) =
   var call = Item(n: cursorAt(callBuf, 0), typ: it.typ)
   semExpr c, call
 
+proc whichPass(c: SemContext): PassKind =
+  result = if c.phase == SemcheckSignatures: checkSignatures else: checkBody
+
+template toplevelGuard(c: var SemContext; body: untyped) =
+  if c.phase == SemcheckBodies:
+    body
+  else:
+    c.takeTree it.n
+
 proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
   case it.n.kind
   of IntLit:
@@ -2228,49 +2243,82 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
           # should be handled in respective expression kinds
           discard
       of ProcS:
-        semProc c, it, ProcY, checkBody
+        semProc c, it, ProcY, whichPass(c)
       of FuncS:
-        semProc c, it, FuncY, checkBody
+        semProc c, it, FuncY, whichPass(c)
       of IterS:
-        semProc c, it, IterY, checkBody
+        semProc c, it, IterY, whichPass(c)
       of ConverterS:
-        semProc c, it, ConverterY, checkBody
+        semProc c, it, ConverterY, whichPass(c)
       of MethodS:
-        semProc c, it, MethodY, checkBody
+        semProc c, it, MethodY, whichPass(c)
       of TemplateS:
-        semProc c, it, TemplateY, checkBody
+        semProc c, it, TemplateY, whichPass(c)
       of MacroS:
-        semProc c, it, MacroY, checkBody
-      of WhileS: semWhile c, it
-      of VarS: semLocal c, it, VarY
-      of LetS: semLocal c, it, LetY
-      of CursorS: semLocal c, it, CursorY
-      of ResultS: semLocal c, it, ResultY
-      of ConstS: semLocal c, it, ConstY
+        semProc c, it, MacroY, whichPass(c)
+      of WhileS:
+        toplevelGuard c:
+          semWhile c, it
+      of VarS:
+        toplevelGuard c:
+          semLocal c, it, VarY
+      of LetS:
+        toplevelGuard c:
+          semLocal c, it, LetY
+      of CursorS:
+        toplevelGuard c:
+          semLocal c, it, CursorY
+      of ResultS:
+        toplevelGuard c:
+          semLocal c, it, ResultY
+      of ConstS:
+        toplevelGuard c:
+          semLocal c, it, ConstY
       of StmtsS: semStmtsExpr c, it
-      of BreakS: semBreak c, it
-      of ContinueS: semContinue c, it
-      of CallS, CmdS: semCall c, it
+      of BreakS:
+        toplevelGuard c:
+          semBreak c, it
+      of ContinueS:
+        toplevelGuard c:
+          semContinue c, it
+      of CallS, CmdS:
+        toplevelGuard c:
+          semCall c, it
       of IncludeS: semInclude c, it
       of ImportS: semImport c, it
-      of AsgnS: semAsgn c, it
-      of EmitS: semEmit c, it
-      of DiscardS: semDiscard c, it
-      of IfS: semIf c, it
-      of RetS: semReturn c, it
-      of YieldS: semYield c, it
+      of AsgnS:
+        toplevelGuard c:
+          semAsgn c, it
+      of EmitS:
+        toplevelGuard c:
+          semEmit c, it
+      of DiscardS:
+        toplevelGuard c:
+          semDiscard c, it
+      of IfS:
+        toplevelGuard c:
+          semIf c, it
+      of RetS:
+        toplevelGuard c:
+          semReturn c, it
+      of YieldS:
+        toplevelGuard c:
+          semYield c, it
       of TypeS:
         let info = it.n.info
         semTypeSection c, it.n
         producesVoid c, info, it.typ
       of BlockS:
-        semBlock c, it
+        toplevelGuard c:
+          semBlock c, it
       of CaseS:
-        semCase c, it
+        toplevelGuard c:
+          semCase c, it
       of ForS:
         # XXX
-        buildErr c, it.n.info, "statement not implemented"
-        skip it.n
+        toplevelGuard c:
+          buildErr c, it.n.info, "statement not implemented"
+          skip it.n
     of FalseX, TrueX:
       literalB c, it, c.types.boolType
     of InfX, NegInfX, NanX:
@@ -2290,7 +2338,8 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
       semExpr c, it
       wantParRi c, it.n
     of CallX, CmdX, CallStrLitX, InfixX, PrefixX:
-      semCall c, it
+      toplevelGuard c:
+        semCall c, it
     of DotX:
       semDot c, it, AlsoTryDotCall
     of EqX, NeqX, LeX, LtX:
@@ -2351,23 +2400,39 @@ proc writeOutput(c: var SemContext; outfile: string) =
   writeFile outfile, "(.nif24)\n" & toString(c.dest)
   createIndex outfile
 
+proc phaseX(c: var SemContext; n: Cursor; x: SemPhase): TokenBuf =
+  assert n == "stmts"
+  c.phase = x
+  var n = n
+  takeToken c, n
+  while n.kind != ParRi:
+    semStmt c, n
+  wantParRi c, n
+  result = move c.dest
+
 type
   ModuleFlag* = enum
     IsSystem, IsMain, SkipSystem
 
 proc semcheck*(infile, outfile: string; config: sink NifConfig; moduleFlags: set[ModuleFlag];
                commandLineArgs: sink string) =
-  var n = setupProgram(infile, outfile)
+  var n0 = setupProgram(infile, outfile)
   var c = SemContext(
     dest: createTokenBuf(),
     types: createBuiltinTypes(),
     thisModuleSuffix: prog.main,
     g: ProgramContext(config: config),
+    phase: SemcheckTopLevelSyms,
     routine: SemRoutine(kind: NoSym),
     commandLineArgs: commandLineArgs)
   c.currentScope = Scope(tab: initTable[StrId, seq[Sym]](), up: nil, kind: ToplevelScope)
 
-  assert n == "stmts"
+  assert n0 == "stmts"
+  var n1 = phaseX(c, n0, SemcheckTopLevelSyms)
+  var n2 = phaseX(c, beginRead(n1), SemcheckSignatures)
+
+  var n = beginRead(n2)
+  c.phase = SemcheckBodies
   takeToken c, n
   while n.kind != ParRi:
     semStmt c, n

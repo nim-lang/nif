@@ -53,6 +53,11 @@ type
     level*: int # inheritance level
     typ*: TypeCursor
 
+  SemPhase* = enum
+    SemcheckTopLevelSyms,
+    SemcheckSignatures,
+    SemcheckBodies
+
   SemContext* = object
     dest*: TokenBuf
     routine*: SemRoutine
@@ -71,6 +76,7 @@ type
     thisModuleSuffix*: string
     processedModules*: HashSet[string]
     usedTypevars*: int
+    phase*: SemPhase
     templateInstCounter*: int
     commandLineArgs*: string # for IC we make nimony `exec` itself. Thus it is important
                              # to forward command line args properly.
