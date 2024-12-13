@@ -1,3 +1,9 @@
+#       Nimony
+# (c) Copyright 2024 Andreas Rumpf
+#
+# See the file "license.txt", included in this
+# distribution, for details about the copyright.
+
 ## expression evaluator for simple constant expressions, not meant to be complete
 
 include nifprelude
