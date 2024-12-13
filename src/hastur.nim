@@ -287,8 +287,16 @@ proc buildNifc() =
   let exe = "nifc".addFileExt(ExeExt)
   moveFile "src/nifc/" & exe, exe
 
+proc buildGear3() =
+  exec "nim c src/gear3/gear3.nim"
+  let exe = "gear3".addFileExt(ExeExt)
+  moveFile "src/gear3/" & exe, exe
+
 proc execNifc(cmd: string) =
   exec "nifc", cmd
+
+proc execGear3(cmd: string) =
+  exec "gear3", cmd
 
 proc nifctests(overwrite: bool) =
   let t1 = "tests/nifc/selectany/t1.nif"
@@ -312,6 +320,13 @@ proc nifctests(overwrite: bool) =
   let issues = "tests/nifc/issues.nif"
   execNifc " c -r --linedir:on " & issues
   execNifc " cpp -r --linedir:off " & issues
+
+proc gear3tests(overwrite: bool) =
+  let mod1 = "tests/gear3/mod1"
+  let helloworld = "tests/gear3/gear3_helloworld"
+  execGear3 mod1 & ".nif"
+  execGear3 helloworld & ".nif"
+  execNifc " c -r " & mod1 & ".c.nif " & helloworld & ".c.nif"
 
 proc handleCmdLine =
   var primaryCmd = ""
@@ -348,12 +363,21 @@ proc handleCmdLine =
   of "all":
     buildNimony()
     buildNifc()
+    buildGear3()
     nimonytests(overwrite)
     nifctests(overwrite)
+    gear3tests(overwrite)
 
   of "nimony":
     buildNimony()
     nimonytests(overwrite)
+  of "nifc":
+    buildNifc()
+    nifctests(overwrite)
+
+  of "gear3":
+    buildGear3()
+    gear3tests(overwrite)
   of "test":
     buildNimony()
     buildNifc()
