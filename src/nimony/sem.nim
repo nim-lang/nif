@@ -680,8 +680,7 @@ proc commonType(c: var SemContext; it: var Item; argBegin: int; expected: TypeCu
   else:
     shrink c.dest, argBegin
     c.dest.add m.args
-    if m.usesConversion:
-      it.typ = expected
+    it.typ = expected
 
 proc producesVoid(c: var SemContext; info: PackedLineInfo; dest: var Cursor) =
   if typeKind(dest) in {AutoT, VoidT}:
