@@ -217,32 +217,6 @@ proc testNifGram(overwrite: bool) =
 
 testNifGram(overwrite)
 
-proc testNifc() =
-  exec "nim c src/nifc/nifc"
-  let t1 = "tests/nifc/selectany/t1.nif"
-  let t2 = "tests/nifc/selectany/t2.nif"
-  let t3 = "tests/nifc/selectany/t3.nif"
-  exec ("src" / "nifc" / "nifc").addFileExt(ExeExt) & " c -r " & t1 & " " & t2 & " " & t3
-  let app = "tests/nifc/app.c.nif"
-  exec ("src" / "nifc" / "nifc").addFileExt(ExeExt) & " c -r " & app
-
-  let hello = "tests/nifc/hello.nif"
-  exec ("src" / "nifc" / "nifc").addFileExt(ExeExt) & " c -r " & hello
-  exec ("src" / "nifc" / "nifc").addFileExt(ExeExt) & " c -r --opt:speed " & hello
-  exec ("src" / "nifc" / "nifc").addFileExt(ExeExt) & " c -r --opt:size " & hello
-  # TEST CPP
-  exec ("src" / "nifc" / "nifc").addFileExt(ExeExt) & " cpp -r " & hello
-  exec ("src" / "nifc" / "nifc").addFileExt(ExeExt) & " cpp -r --opt:speed " & hello
-
-  let tryIssues = "tests/nifc/try.nif"
-  exec ("src" / "nifc" / "nifc").addFileExt(ExeExt) & " cpp -r " & tryIssues
-
-  let issues = "tests/nifc/issues.nif"
-  exec ("src" / "nifc" / "nifc").addFileExt(ExeExt) & " c -r --linedir:on " & issues
-  exec ("src" / "nifc" / "nifc").addFileExt(ExeExt) & " cpp -r --linedir:off " & issues
-testNifc()
-
-
 proc testGear3() =
   exec "nim c src/gear3/gear3"
 
@@ -256,7 +230,7 @@ proc testGear3() =
 
 testGear3()
 
-proc testNimony() =
-  exec "nim c -r src/nimony/tests/tester"
+proc hasturTests() =
+  exec "nim c -r src/hastur"
 
-testNimony()
+hasturTests()
