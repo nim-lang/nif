@@ -1639,11 +1639,36 @@ proc maybeInlineMagic(c: var SemContext; res: LoadResult) =
           if n.kind == ParRi: break
           inc n
 
-proc semTypeSym(c: var SemContext; s: Sym; info: PackedLineInfo) =
+type
+  TypeDeclContext = enum
+    InLocalDecl, InTypeSection, InObjectDecl, InParamDecl, InInheritanceDecl, InReturnTypeDecl, AllowValues,
+    InGenericConstraint
+
+proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext)
+
+proc semTypeSym(c: var SemContext; s: Sym; info: PackedLineInfo; context: TypeDeclContext) =
   if s.kind in {TypeY, TypevarY}:
     let res = tryLoadSym(s.name)
+    let beforeMagic = c.dest.len
     maybeInlineMagic c, res
-    if s.kind == TypevarY: inc c.usedTypevars
+    let afterMagic = c.dest.len
+    if s.kind == TypevarY:
+      # likely was not magic
+      # maybe substitution performed here?
+      inc c.usedTypevars
+    elif beforeMagic != afterMagic:
+      # was magic, nothing to do
+      discard
+    else:
+      let typ = asTypeDecl(res.decl)
+      if typ.body.typeKind in {ObjectT, EnumT, DistinctT, ConceptT}:
+        # types that should stay as symbols, see sigmatch.matchSymbol
+        discard
+      else:
+        # remove symbol, inline type:
+        c.dest.shrink c.dest.len-1
+        var t = typ.body
+        semLocalTypeImpl c, t, context
   elif s.kind != NoSym:
     c.buildErr info, "type name expected, but got: " & pool.syms[s.name]
   else:
@@ -1651,13 +1676,6 @@ proc semTypeSym(c: var SemContext; s: Sym; info: PackedLineInfo) =
 
 proc semParams(c: var SemContext; n: var Cursor)
 proc semLocal(c: var SemContext; n: var Cursor; kind: SymKind)
-
-type
-  TypeDeclContext = enum
-    InLocalDecl, InTypeSection, InObjectDecl, InParamDecl, InInheritanceDecl, InReturnTypeDecl, AllowValues,
-    InGenericConstraint
-
-proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext)
 
 proc semObjectType(c: var SemContext; n: var Cursor) =
   takeToken c, n
@@ -1814,17 +1832,17 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
   case n.kind
   of Ident:
     let s = semIdent(c, n)
-    semTypeSym c, s, info
+    semTypeSym c, s, info, context
   of Symbol:
     let s = fetchSym(c, n.symId)
     inc n
-    semTypeSym c, s, info
+    semTypeSym c, s, info, context
   of ParLe:
     case typeKind(n)
     of NoType:
       if exprKind(n) == QuotedX:
         let s = semQuoted(c, n)
-        semTypeSym c, s, info
+        semTypeSym c, s, info, context
       elif context == AllowValues:
         var it = Item(n: n, typ: c.types.autoType)
         semExpr c, it
@@ -2135,7 +2153,7 @@ proc semExprSym(c: var SemContext; it: var Item; s: Sym; start: int; flags: set[
     let typeStart = c.dest.len
     c.dest.buildTree TypedescT, it.n.info:
       c.dest.add toToken(Symbol, s.name, it.n.info)
-      semTypeSym c, s, it.n.info
+      semTypeSym c, s, it.n.info, InLocalDecl
     it.typ = typeToCursor(c, typeStart)
     c.dest.shrink typeStart
     commonType c, it, start, expected
