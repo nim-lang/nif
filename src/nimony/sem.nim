@@ -791,12 +791,10 @@ proc getFnIdent(c: var SemContext): StrId =
   endRead(c.dest)
 
 type
-  DotExprMode = enum
-    OrdinaryDot, AlsoTryDotCall, CalleeDot
   DotExprState = enum
     MatchedDot, FailedDot, InvalidDot
 
-proc semDot(c: var SemContext; it: var Item; mode: DotExprMode): DotExprState
+proc tryBuiltinDot(c: var SemContext; it: var Item; recoverable: bool = false): DotExprState
 
 proc semCall(c: var SemContext; it: var Item) =
   let beforeCall = c.dest.len
@@ -810,22 +808,24 @@ proc semCall(c: var SemContext; it: var Item) =
   var argIndexes: seq[int] = @[]
   var candidates = default FnCandidates
   if fn.n.exprKind == DotX:
-    let dotState = semDot(c, fn, CalleeDot)
+    let dotState = tryBuiltinDot(c, fn, recoverable = true)
     it.n = fn.n
     if dotState == FailedDot:
       # turn a.b(...) into b(a, ...)
       # resem b and save its kind into fn.kind
       # add a as an argument, semDot sets fn.typ to its type
+      # first, interpret the output of `tryBuiltinDot`
       let lhsTyp = fn.typ
       fn.typ = c.types.autoType
       var dotBuf = createTokenBuf(16)
       swap c.dest, dotBuf
       var dotRead = beginRead(dotBuf)
       inc dotRead # skip dot tag
-      let lhsRead = dotRead
+      let lhsRead = dotRead # get a
       skip dotRead # skip lhs
+      let fieldName = dotRead # get b
       # resem b:
-      fn = Item(n: dotRead, typ: c.types.autoType)
+      fn = Item(n: fieldName, typ: c.types.autoType)
       semExpr c, fn, {KeepMagics}
       fnName = getFnIdent(c)
       # add a as argument:
@@ -948,7 +948,7 @@ proc findObjField(t: Cursor; name: StrId; level = 0): ObjField =
   else:
     result = ObjField(level: -1)
 
-proc semDot(c: var SemContext; it: var Item; mode: DotExprMode): DotExprState =
+proc tryBuiltinDot(c: var SemContext; it: var Item; recoverable: bool = false): DotExprState =
   let exprStart = c.dest.len
   let expected = it.typ
   takeToken c, it.n
@@ -1006,27 +1006,39 @@ proc semDot(c: var SemContext; it: var Item; mode: DotExprMode): DotExprState =
     wantParRi c, it.n
     commonType c, it, exprStart, expected
   of FailedDot:
-    case mode
-    of OrdinaryDot:
-      c.dest.add failedMatchError
-      wantParRi c, it.n
-    of CalleeDot:
+    if recoverable:
       c.dest.add identToken(fieldName, info)
       wantParRi c, it.n
-      it.typ = a.typ # store info of lhs type
-    of AlsoTryDotCall:
-      skipParRi it.n
-      var callBuf = createTokenBuf(16)
-      callBuf.addParLe(CallX, info)
-      callBuf.add identToken(fieldName, info)
-      callBuf.addSubtree cursorAt(c.dest, exprStart + 1) # add lhs as first argument
-      endRead(c.dest)
-      callBuf.addParRi()
-      c.dest.shrink exprStart
-      var call = Item(n: cursorAt(callBuf, 0), typ: it.typ)
-      # error messages aren't specialized for now
-      semCall c, call
-      it.typ = call.typ
+      # store info of lhs type for convenience:
+      it.typ = a.typ
+    else:
+      c.dest.add failedMatchError
+      wantParRi c, it.n
+
+proc semDot(c: var SemContext, it: var Item) =
+  let exprStart = c.dest.len
+  let info = it.n.info
+  let expected = it.typ
+  let state = tryBuiltinDot(c, it, recoverable = true)
+  if state == FailedDot:
+    # tryBuiltinDot produces a dot expression with field left as ident
+    # build a call from it
+    var dotRead = cursorAt(c.dest, exprStart)
+    inc dotRead
+    let lhs = dotRead
+    skip dotRead
+    let fieldName = dotRead
+    var callBuf = createTokenBuf(16)
+    callBuf.addParLe(CallX, info)
+    callBuf.add fieldName
+    callBuf.addSubtree lhs # add lhs as first argument
+    callBuf.addParRi()
+    endRead(c.dest)
+    c.dest.shrink exprStart
+    var call = Item(n: cursorAt(callBuf, 0), typ: expected)
+    # error messages aren't specialized for now
+    semCall c, call
+    it.typ = call.typ
 
 proc semWhile(c: var SemContext; it: var Item) =
   let info = it.n.info
@@ -2358,7 +2370,7 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
     of CallX, CmdX, CallStrLitX, InfixX, PrefixX:
       semCall c, it
     of DotX:
-      discard semDot(c, it, AlsoTryDotCall)
+      semDot c, it
     of EqX, NeqX, LeX, LtX:
       semCmp c, it
     of AshrX, AddX, SubX, MulX, DivX, ModX, ShrX, ShlX, BitandX, BitorX, BitxorX:
