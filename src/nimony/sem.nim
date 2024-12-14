@@ -1440,6 +1440,9 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
 proc semLocalType(c: var SemContext; n: var Cursor; context = InLocalDecl): TypeCursor =
   let insertPos = c.dest.len
   semLocalTypeImpl c, n, context
+  if c.dest.len <= insertPos:
+    echo "empty for? ", toString(n), " ", c.phase
+  assert c.dest.len > insertPos
   result = typeToCursor(c, insertPos)
 
 proc semReturnType(c: var SemContext; n: var Cursor): TypeCursor =
@@ -1926,17 +1929,14 @@ proc semTypeSection(c: var SemContext; n: var Cursor) =
 
     semTypePragmas c, n, beforeExportMarker
 
-    if c.phase == SemcheckBodies:
-      # body:
-      if n.kind == DotToken:
-        takeToken c, n
-      else:
-        if n.typeKind == EnumT:
-          semEnumType c, n, delayed.s.name
-        else:
-          semLocalTypeImpl c, n, InTypeSection
+    # body:
+    if n.kind == DotToken:
+      takeToken c, n
     else:
-      takeTree c, n
+      if n.typeKind == EnumT:
+        semEnumType c, n, delayed.s.name
+      else:
+        semLocalTypeImpl c, n, InTypeSection
     if isGeneric:
       closeScope c
   else:
@@ -2465,6 +2465,7 @@ proc semcheck*(infile, outfile: string; config: sink NifConfig; moduleFlags: set
   #echo "PHASE 2: ", toString(n1)
   var n2 = phaseX(c, beginRead(n1), SemcheckSignatures)
 
+  echo "PHASE 3: ", toString(n2)
   var n = beginRead(n2)
   c.phase = SemcheckBodies
   takeToken c, n
