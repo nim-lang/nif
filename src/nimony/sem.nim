@@ -192,7 +192,7 @@ proc semInclude(c: var SemContext; it: var Item) =
   var hasError = false
   let info = it.n.info
   var x = it.n
-  takeTree c, it.n
+  skip it.n
   inc x # skip the `include`
   filenameVal(x, files, hasError)
 
@@ -201,6 +201,7 @@ proc semInclude(c: var SemContext; it: var Item) =
   else:
     for f1 in items(files):
       let f2 = resolveFile(c, getFile(c, info), f1)
+      c.meta.includedFiles.add f2
       # check for recursive include files:
       var isRecursive = false
       for a in c.includeStack:
@@ -229,6 +230,7 @@ proc importSingleFile(c: var SemContext; f1, origin: string; info: PackedLineInf
   let f2 = resolveFile(c, origin, f1)
   let suffix = moduleSuffix(f2, c.g.config.paths)
   if not c.processedModules.containsOrIncl(suffix):
+    c.meta.importedFiles.add f2
     if needsRecompile(f2, suffix):
       selfExec c, f2
 
@@ -240,7 +242,7 @@ proc cyclicImport(c: var SemContext; x: var Cursor) =
 proc semImport(c: var SemContext; it: var Item) =
   let info = it.n.info
   var x = it.n
-  takeTree c, it.n
+  skip it.n
   inc x # skip the `import`
 
   if x.kind == ParLe and x == "pragmax":
