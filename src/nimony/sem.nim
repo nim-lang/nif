@@ -2431,9 +2431,9 @@ proc semcheck*(infile, outfile: string; config: sink NifConfig; moduleFlags: set
   c.currentScope = Scope(tab: initTable[StrId, seq[Sym]](), up: nil, kind: ToplevelScope)
 
   assert n0 == "stmts"
-  #echo "PHASE 1"
+  echo "PHASE 1"
   var n1 = phaseX(c, n0, SemcheckTopLevelSyms)
-  #echo "PHASE 2: ", toString(n1)
+  echo "PHASE 2: ", toString(n1)
   var n2 = phaseX(c, beginRead(n1), SemcheckSignatures)
 
   var n = beginRead(n2)
