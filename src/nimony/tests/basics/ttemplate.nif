@@ -27,9 +27,9 @@
  (var :myglob.0.tteoes9tj1 . . 17 MyGeneric.1.tteoes9tj1 .) 2,14
  (var :other.0.tteoes9tj1 . . 16 MyGeneric.2.tteoes9tj1 .) 9,16
  (asgn ~3
-  (dot ~6 myglob.0.tteoes9tj1 1 x.1.tteoes9tj1 1 +0) 2 +56) 8,17
+  (dot ~6 myglob.0.tteoes9tj1 x.1.tteoes9tj1 +0) 2 +56) 8,17
  (asgn ~3
-  (dot ~5 other.0.tteoes9tj1 1 x.2.tteoes9tj1 1 +0) 2 +79.0) ,19
+  (dot ~5 other.0.tteoes9tj1 x.2.tteoes9tj1 +0) 2 +79.0) ,19
  (proc 5 :\2B.0.tteoes9tj1 
   (add -3) . . 9
   (params 1
