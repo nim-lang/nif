@@ -1641,11 +1641,11 @@ proc semProc(c: var SemContext; it: var Item; kind: SymKind; pass: PassKind) =
 
     publishSignature c, symId, declStart
     if it.n.kind != DotToken:
-      c.openScope() # open body scope
       case pass
       of checkGenericInst:
         if it.n != "stmts":
           error "(stmts) expected, but got ", it.n
+        c.openScope() # open body scope
         takeToken c, it.n
         semProcBody c, it
         c.closeScope() # close body scope
@@ -1653,6 +1653,7 @@ proc semProc(c: var SemContext; it: var Item; kind: SymKind; pass: PassKind) =
       of checkBody:
         if it.n != "stmts":
           error "(stmts) expected, but got ", it.n
+        c.openScope() # open body scope
         takeToken c, it.n
         let resId = declareResult(c, it.n.info)
         semProcBody c, it
@@ -1662,7 +1663,9 @@ proc semProc(c: var SemContext; it: var Item; kind: SymKind; pass: PassKind) =
       of checkSignatures:
         c.dest.addDotToken()
         skip it.n
+        c.closeScope() # close parameter scope
       of checkConceptProc:
+        c.closeScope() # close parameter scope
         if it.n.kind == DotToken:
           inc it.n
         else:
@@ -2215,6 +2218,12 @@ template toplevelGuard(c: var SemContext; body: untyped) =
   else:
     c.takeTree it.n
 
+template procGuard(c: var SemContext; body: untyped) =
+  if c.phase in {SemcheckSignatures, SemcheckBodies}:
+    body
+  else:
+    c.takeTree it.n
+
 proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
   case it.n.kind
   of IntLit:
@@ -2259,19 +2268,26 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
           # should be handled in respective expression kinds
           discard
       of ProcS:
-        semProc c, it, ProcY, whichPass(c)
+        procGuard c:
+          semProc c, it, ProcY, whichPass(c)
       of FuncS:
-        semProc c, it, FuncY, whichPass(c)
+        procGuard c:
+          semProc c, it, FuncY, whichPass(c)
       of IterS:
-        semProc c, it, IterY, whichPass(c)
+        procGuard c:
+          semProc c, it, IterY, whichPass(c)
       of ConverterS:
-        semProc c, it, ConverterY, whichPass(c)
+        procGuard c:
+          semProc c, it, ConverterY, whichPass(c)
       of MethodS:
-        semProc c, it, MethodY, whichPass(c)
+        procGuard c:
+          semProc c, it, MethodY, whichPass(c)
       of TemplateS:
-        semProc c, it, TemplateY, whichPass(c)
+        procGuard c:
+          semProc c, it, TemplateY, whichPass(c)
       of MacroS:
-        semProc c, it, MacroY, whichPass(c)
+        procGuard c:
+          semProc c, it, MacroY, whichPass(c)
       of WhileS:
         toplevelGuard c:
           semWhile c, it
