@@ -170,7 +170,7 @@ proc isTypevar(s: SymId): bool =
   let typevar = asTypevar(res.decl)
   result = typevar.kind == TypevarY
 
-proc linearMatch(m: var Match; f, a: var Cursor) =
+proc linearMatch(m: var Match; f, a: var Cursor, containsStartTag = true) =
   var nested = 0
   while true:
     if f.kind == Symbol and isTypevar(f.symId):
@@ -199,7 +199,7 @@ proc linearMatch(m: var Match; f, a: var Cursor) =
           break
         inc nested
       of ParRi:
-        if nested == 0: break
+        if nested == ord(containsStartTag): break
         dec nested
     else:
       m.error expected(f, a)

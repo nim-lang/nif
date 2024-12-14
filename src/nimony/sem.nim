@@ -1380,6 +1380,7 @@ proc semInvoke(c: var SemContext; n: var Cursor) =
 
   var headId: SymId = SymId(0)
   var decl = default TypeDecl
+  var magicKind = NoType
   var ok = false
   if c.dest[typeStart+1].kind == Symbol:
     headId = c.dest[typeStart+1].symId
@@ -1391,7 +1392,17 @@ proc semInvoke(c: var SemContext; n: var Cursor) =
     else:
       ok = true
   else:
-    c.buildErr info, "cannot attempt to instantiate a non-type"
+    # symbol may have inlined into a magic
+    let head = cursorAt(c.dest, typeStart+1)
+    let kind = head.typeKind
+    endRead(c.dest)
+    if kind in {ArrayT, VarargsT,
+      PtrT, RefT, UncheckedArrayT, SetT, StaticT, TypedescT}:
+      # magics that can be invoked
+      magicKind = kind
+      ok = true
+    else:
+      c.buildErr info, "cannot attempt to instantiate a non-type"
 
   var genericArgs = 0
   swap c.usedTypevars, genericArgs
@@ -1407,8 +1418,38 @@ proc semInvoke(c: var SemContext; n: var Cursor) =
     if c.instantiatedTypes.hasKey(key):
       c.dest.add symToken(c.instantiatedTypes[key], info)
     else:
-      let targetSym = newSymId(c, headId)
       var args = cursorAt(c.dest, beforeArgs)
+      if magicKind != NoType:
+        var magicExpr = createTokenBuf(8)
+        magicExpr.addParLe(magicKind, info)
+        # reorder invocation according to type specifications:
+        case magicKind
+        of ArrayT:
+          # invoked as array[len, elem], but needs to become (array elem len)
+          let indexPart = args
+          skip args
+          magicExpr.takeTree args # element type
+          magicExpr.addSubtree indexPart
+          skipParRi args
+        of PtrT, RefT, UncheckedArrayT, SetT, StaticT, TypedescT:
+          # unary invocations
+          magicExpr.takeTree args
+          skipParRi args
+        of VarargsT:
+          magicExpr.takeTree args
+          if args.kind != ParRi:
+            # optional varargs call
+            magicExpr.takeTree args
+          skipParRi args
+        else:
+          raiseAssert "unreachable" # see type kind check for magicKind
+        magicExpr.addParRi()
+        c.dest.endRead()
+        c.dest.shrink typeStart
+        var m = cursorAt(magicExpr, 0)
+        semLocalTypeImpl c, m, InLocalDecl
+        return
+      let targetSym = newSymId(c, headId)
       var instance = createTokenBuf(30)
       instGenericType c, instance, info, headId, targetSym, decl, args
       c.dest.endRead()
@@ -1507,7 +1548,12 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
     else:
       c.buildErr info, "not a type"
   else:
-    c.buildErr info, "not a type"
+    if context == AllowValues:
+      var it = Item(n: n, typ: c.types.autoType)
+      semExpr c, it
+      n = it.n
+    else:
+      c.buildErr info, "not a type"
 
 proc semLocalType(c: var SemContext; n: var Cursor; context = InLocalDecl): TypeCursor =
   let insertPos = c.dest.len
