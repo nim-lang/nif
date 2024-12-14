@@ -976,13 +976,9 @@ proc semDot(c: var SemContext; it: var Item; mode: DotExprMode): DotExprState =
           it.kind = FldY
           result = MatchedDot
         else:
-          swap c.dest, failedMatchError
-          c.buildErr it.n.info, "undeclared field: " & pool.strings[fieldName]
-          swap c.dest, failedMatchError
+          c.buildErr failedMatchError, it.n.info, "undeclared field: " & pool.strings[fieldName]
       else:
-        swap c.dest, failedMatchError
-        c.buildErr it.n.info, "object type exptected"
-        swap c.dest, failedMatchError
+        c.buildErr failedMatchError, it.n.info, "object type exptected"
     elif t.typeKind == TupleT:
       var tup = t
       inc tup
@@ -997,13 +993,9 @@ proc semDot(c: var SemContext; it: var Item; mode: DotExprMode): DotExprState =
         skip tup
       c.dest.add intToken(pool.integers.getOrIncl(0), info)
       if result != MatchedDot:
-        swap c.dest, failedMatchError
-        c.buildErr it.n.info, "undeclared field: " & pool.strings[fieldName]
-        swap c.dest, failedMatchError
+        c.buildErr failedMatchError, it.n.info, "undeclared field: " & pool.strings[fieldName]
     else:
-      swap c.dest, failedMatchError
-      c.buildErr it.n.info, "object type exptected"
-      swap c.dest, failedMatchError
+      c.buildErr failedMatchError, it.n.info, "object type exptected"
   # skip optional inheritance depth:
   if it.n.kind == IntLit:
     inc it.n
@@ -1019,14 +1011,14 @@ proc semDot(c: var SemContext; it: var Item; mode: DotExprMode): DotExprState =
       c.dest.add failedMatchError
       wantParRi c, it.n
     of CalleeDot:
-      c.dest.add toToken(Ident, fieldName, info)
+      c.dest.add identToken(fieldName, info)
       wantParRi c, it.n
       it.typ = a.typ # store info of lhs type
     of AlsoTryDotCall:
       skipParRi it.n
       var callBuf = createTokenBuf(16)
       callBuf.addParLe(CallX, info)
-      callBuf.add toToken(Ident, fieldName, info)
+      callBuf.add identToken(fieldName, info)
       callBuf.addSubtree cursorAt(c.dest, exprStart + 1) # add lhs as first argument
       endRead(c.dest)
       callBuf.addParRi()
