@@ -15,8 +15,8 @@ type
     rem: int
 
 const
-  ErrToken = [toToken(ParLe, ErrT, NoLineInfo),
-              toToken(ParRi, 0'u32, NoLineInfo)]
+  ErrToken = [parLeToken(ErrT, NoLineInfo),
+              parRiToken(NoLineInfo)]
 
 proc errCursor*(): Cursor =
   Cursor(p: addr ErrToken[0], rem: 2)
@@ -214,18 +214,24 @@ proc grow(b: var TokenBuf; newLen: int) =
   b.len = newLen
 
 template buildTree*(dest: var TokenBuf; tag: TagId; info: PackedLineInfo; body: untyped) =
-  dest.add toToken(ParLe, tag, info)
+  dest.add parLeToken(tag, info)
   body
-  dest.add toToken(ParRi, 0'u32, info)
+  dest.add parRiToken(info)
 
 proc addParLe*(dest: var TokenBuf; tag: TagId; info = NoLineInfo) =
-  dest.add toToken(ParLe, tag, info)
+  dest.add parLeToken(tag, info)
 
 proc addParRi*(dest: var TokenBuf) =
-  dest.add toToken(ParRi, 0'u32, NoLineInfo)
+  dest.add parRiToken(NoLineInfo)
 
 proc addDotToken*(dest: var TokenBuf) =
-  dest.add toToken(DotToken, 0'u32, NoLineInfo)
+  dest.add dotToken(NoLineInfo)
+
+proc addStrLit*(dest: var TokenBuf; s: string; info = NoLineInfo) =
+  dest.add strToken(pool.strings.getOrIncl(s), info)
+
+proc addIntLit*(dest: var TokenBuf; i: BiggestInt; info = NoLineInfo) =
+  dest.add intToken(pool.integers.getOrIncl(i), info)
 
 proc span*(c: Cursor): int =
   result = 0
@@ -294,18 +300,18 @@ proc toString*(b: Cursor; produceLineInfo = true): string =
 
 proc `$`*(c: Cursor): string = toString(c, false)
 
-proc addToken[L](tree: var TokenBuf; kind: TokenKind; id: L; info: PackedLineInfo) =
-  tree.add toToken(kind, id, info)
-
 template copyInto*(dest: var TokenBuf; tag: TagId; info: PackedLineInfo; body: untyped) =
-  dest.addToken ParLe, tag, info
+  dest.add parLeToken(tag, info)
   body
-  dest.addToken ParRi, 0'u32, info
+  dest.add parRiToken()
+
+proc parLeTokenUnchecked*(tag: string; info: PackedLineInfo): PackedToken {.inline.} =
+  parLeToken(pool.tags.getOrIncl(tag), info)
 
 template copyIntoUnchecked*(dest: var TokenBuf; tag: string; info: PackedLineInfo; body: untyped) =
-  dest.addToken ParLe, pool.tags.getOrIncl(tag), info
+  dest.add parLeTokenUnchecked(tag, info)
   body
-  dest.addToken ParRi, 0'u32, info
+  dest.add parRiToken()
 
 proc parse*(r: var Stream; dest: var TokenBuf;
             parentInfo: PackedLineInfo) =

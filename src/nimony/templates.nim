@@ -32,7 +32,7 @@ proc expandTemplateImpl(c: var SemContext; dest: var TokenBuf;
       else:
         let nv = e.newVars.getOrDefault(s)
         if nv != SymId(0):
-          dest.add toToken(Symbol, nv, body.info)
+          dest.add symToken(nv, body.info)
         else:
           let tv = e.inferred[].getOrDefault(s)
           if tv != default(Cursor):
@@ -43,7 +43,7 @@ proc expandTemplateImpl(c: var SemContext; dest: var TokenBuf;
       let s = body.symId
       let newDef = newSymId(c, s)
       e.newVars[s] = newDef
-      dest.add toToken(SymbolDef, newDef, body.info)
+      dest.add symdefToken(newDef, body.info)
     of StringLit, CharLit, IntLit, UIntLit, FloatLit:
       dest.add body
     of ParLe:

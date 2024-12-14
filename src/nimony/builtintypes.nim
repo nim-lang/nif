@@ -17,7 +17,7 @@ type
     emptyTupleType*: Cursor
 
 proc tagToken(tag: string; info: PackedLineInfo = NoLineInfo): PackedToken {.inline.} =
-  toToken(ParLe, pool.tags.getOrIncl(tag), info)
+  parLeToken(pool.tags.getOrIncl(tag), info)
 
 proc createBuiltinTypes*(): BuiltinTypes =
   result = BuiltinTypes(mem: createTokenBuf(30))
@@ -33,22 +33,22 @@ proc createBuiltinTypes*(): BuiltinTypes =
 
   let minusOne = pool.integers.getOrIncl(-1)
   result.mem.add tagToken"i" # 6
-  result.mem.add toToken(IntLit, minusOne, NoLineInfo) # 7
+  result.mem.add intToken(minusOne, NoLineInfo) # 7
   result.mem.addParRi() # 8
 
   result.mem.add tagToken"u" # 9
-  result.mem.add toToken(IntLit, minusOne, NoLineInfo) # 10
+  result.mem.add intToken(minusOne, NoLineInfo) # 10
   result.mem.addParRi() # 11
 
   result.mem.add tagToken"f" # 12
-  result.mem.add toToken(IntLit, pool.integers.getOrIncl(64), NoLineInfo) # 13
+  result.mem.add intToken(pool.integers.getOrIncl(64), NoLineInfo) # 13
   result.mem.addParRi() # 14
 
   result.mem.add tagToken"c" # 15
-  result.mem.add toToken(IntLit, minusOne, NoLineInfo) # 16
+  result.mem.add intToken(minusOne, NoLineInfo) # 16
   result.mem.addParRi() # 17
 
-  result.mem.add toToken(DotToken, 0'u32, NoLineInfo) # 18
+  result.mem.add dotToken(NoLineInfo) # 18
 
   result.mem.add tagToken"nilt" # 19
   result.mem.addParRi() # 20
@@ -56,14 +56,14 @@ proc createBuiltinTypes*(): BuiltinTypes =
   template addBitsType(tag: string, bits: int) =
     # adds 3
     result.mem.add tagToken(tag) # +1
-    result.mem.add toToken(IntLit, pool.integers.getOrIncl(bits), NoLineInfo) # +2
+    result.mem.add intToken(pool.integers.getOrIncl(bits), NoLineInfo) # +2
     result.mem.addParRi() # +3
-  
+
   addBitsType "i", 8 # 21
   addBitsType "i", 16 # 24
   addBitsType "i", 32 # 27
   addBitsType "i", 64 # 30
-  
+
   addBitsType "u", 8 # 33
   addBitsType "u", 16 # 36
   addBitsType "u", 32 # 39

@@ -1,11 +1,18 @@
+#       Nimony
+# (c) Copyright 2024 Andreas Rumpf
+#
+# See the file "license.txt", included in this
+# distribution, for details about the copyright.
+
 ## expression evaluator for simple constant expressions, not meant to be complete
 
 include nifprelude
-import nimony_model, decls, programs, sigmatch # sigmatch just for addStrLit and addParLe
+import nimony_model, decls, programs, xints
 
-type EvalContext* = object
-  values: seq[TokenBuf]
-  trueValue, falseValue: Cursor
+type
+  EvalContext* = object
+    values: seq[TokenBuf]
+    trueValue, falseValue: Cursor
 
 proc isConstBoolValue*(n: Cursor): bool =
   n.exprKind in {TrueX, FalseX}
@@ -71,16 +78,17 @@ proc eval*(c: var EvalContext, n: var Cursor): Cursor =
     error "cannot evaluate undeclared ident: " & pool.strings[n.litId], n.info
     inc n
   of Symbol:
-    case n.symKind
-    of ConstY:
-      let sym = tryLoadSym(n.symId)
-      if sym.status == LacksNothing:
-        result = asLocal(sym.decl).val
-        inc n
-        return
-    else: discard
-    error "cannot evaluate symbol at compile time: " & pool.syms[n.symId], n.info
+    let symId = n.symId
+    let info = n.info
     inc n
+    let sym = tryLoadSym(symId)
+    if sym.status == LacksNothing:
+      let local = asLocal(sym.decl)
+      case local.kind
+      of ConstY, EfldY:
+        return local.val
+      else: discard
+    error "cannot evaluate symbol at compile time: " & pool.syms[symId], info
   of StringLit, CharLit, IntLit, UIntLit, FloatLit:
     result = n
     inc n
@@ -152,3 +160,17 @@ proc evalExpr*(n: var Cursor): TokenBuf =
   let val = eval(ec, n)
   result = createTokenBuf(val.span)
   result.addSubtree val
+
+proc evalOrdinal*(n: Cursor): xint =
+  var ec = initEvalContext()
+  var n0 = n
+  let val = eval(ec, n0)
+  case val.kind
+  of CharLit:
+    result = createXint val.uoperand
+  of IntLit:
+    result = createXint pool.integers[val.intId]
+  of UIntLit:
+    result = createXint pool.uintegers[val.uintId]
+  else:
+    result = createNaN()

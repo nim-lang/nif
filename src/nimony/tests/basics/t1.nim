@@ -84,6 +84,11 @@ proc createData(): tuple[a: int, b: string] =
 
 proc `==`*(x, y: int): bool {.magic: "EqI".}
 
+proc whileStmt =
+  while 1 == 2:
+    var s = 12
+    break
+
 proc ifExpr(): int =
   let x =
     if 1 == 1:
@@ -120,3 +125,9 @@ let mtb: string = mt.b
 const Inf* = 0x7FF0000000000000'f64
 
 let s: float = Inf
+
+proc `[]`*[I;T](a: T; i: I): T {.magic: "ArrGet".}
+
+proc foo2 =
+  var x = [1, 2, 3]
+  let m = x[1]
