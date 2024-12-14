@@ -1101,12 +1101,12 @@ proc semPragmas(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; ki
   elif n == "pragmas":
     takeToken c, n
     while n.kind != ParRi:
-      let isKeyValue = n == "kv"
-      if isKeyValue:
+      let hasParRi = n.kind == ParLe
+      if n == "kv":
         inc n
       semPragma c, n, crucial, kind
-      if isKeyValue:
-        skip n # skips ')'
+      if hasParRi:
+        skipParRi n
     wantParRi c, n
   else:
     buildErr c, n.info, "expected '.' or 'pragmas'"
@@ -1446,14 +1446,22 @@ proc semReturnType(c: var SemContext; n: var Cursor): TypeCursor =
 proc exportMarkerBecomesNifTag(c: var SemContext; insertPos: int; crucial: CrucialPragma) =
   assert crucial.magic.len > 0
   let info = c.dest[insertPos].info
-  c.dest[insertPos] = parLeToken(pool.tags.getOrIncl(crucial.magic), info)
+
+  var a: Cursor
   if crucial.bits != 0:
-    let arr = [intToken(pool.integers.getOrIncl(crucial.bits), info),
-               parRiToken(info)]
-    c.dest.insert arr, insertPos+1
+    let nifTag = [
+      parLeToken(pool.tags.getOrIncl(crucial.magic), info),
+      intToken(pool.integers.getOrIncl(crucial.bits), info),
+      parRiToken(info)
+    ]
+    a = fromBuffer(nifTag)
   else:
-    let arr = [parRiToken(info)]
-    c.dest.insert arr, insertPos+1
+    let nifTag = [
+      parLeToken(pool.tags.getOrIncl(crucial.magic), info),
+      parRiToken(info)
+    ]
+    a = fromBuffer(nifTag)
+  c.dest.replace a, insertPos
 
 proc semLocal(c: var SemContext; n: var Cursor; kind: SymKind) =
   let declStart = c.dest.len
@@ -1913,14 +1921,17 @@ proc semTypeSection(c: var SemContext; n: var Cursor) =
 
     semTypePragmas c, n, beforeExportMarker
 
-    if n.kind == DotToken:
-      takeToken c, n
-    else:
-      # body
-      if n.typeKind == EnumT:
-        semEnumType c, n, delayed.s.name
+    if c.phase == SemcheckBodies:
+      # body:
+      if n.kind == DotToken:
+        takeToken c, n
       else:
-        semLocalTypeImpl c, n, InTypeSection
+        if n.typeKind == EnumT:
+          semEnumType c, n, delayed.s.name
+        else:
+          semLocalTypeImpl c, n, InTypeSection
+    else:
+      takeTree c, n
     if isGeneric:
       closeScope c
   else:
@@ -2431,9 +2442,9 @@ proc semcheck*(infile, outfile: string; config: sink NifConfig; moduleFlags: set
   c.currentScope = Scope(tab: initTable[StrId, seq[Sym]](), up: nil, kind: ToplevelScope)
 
   assert n0 == "stmts"
-  echo "PHASE 1"
+  #echo "PHASE 1"
   var n1 = phaseX(c, n0, SemcheckTopLevelSyms)
-  echo "PHASE 2: ", toString(n1)
+  #echo "PHASE 2: ", toString(n1)
   var n2 = phaseX(c, beginRead(n1), SemcheckSignatures)
 
   var n = beginRead(n2)
