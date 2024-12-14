@@ -214,18 +214,15 @@ template withErrorContext*(c: var SemContext; info: PackedLineInfo; body: untype
   finally:
     popErrorContext(c)
 
-proc buildErr*(c: var SemContext; buf: var TokenBuf; info: PackedLineInfo; msg: string) =
+proc buildErr*(c: var SemContext; info: PackedLineInfo; msg: string) =
   when defined(debug):
     writeStackTrace()
     echo infoToStr(info) & " Error: " & msg
     quit msg
-  buf.buildTree ErrT, info:
+  c.dest.buildTree ErrT, info:
     for instFrom in items(c.instantiatedFrom):
-      buf.add dotToken(instFrom)
-    buf.add strToken(pool.strings.getOrIncl(msg), info)
-
-proc buildErr*(c: var SemContext; info: PackedLineInfo; msg: string) {.inline.} =
-  c.buildErr(c.dest, info, msg)
+      c.dest.add dotToken(instFrom)
+    c.dest.add strToken(pool.strings.getOrIncl(msg), info)
 
 proc buildLocalErr*(dest: var TokenBuf; info: PackedLineInfo; msg: string) =
   when defined(debug):
