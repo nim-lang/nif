@@ -841,12 +841,12 @@ proc semCall(c: var SemContext; it: var Item) =
       # add a as argument:
       let lhsIndex = c.dest.len
       c.dest.addSubtree lhs.n
-      # arg.n will be set by argIndexes:
       argIndexes.add lhsIndex
       # scope extension: If the type is Typevar and it has attached
       # a concept, use the concepts symbols too:
       if fnName != StrId(0) and lhs.typ.kind == Symbol:
         maybeAddConceptMethods c, fnName, lhs.typ.symId, candidates
+      # lhs.n escapes here, but is not read and will be set by argIndexes:
       args.add lhs
   else:
     semExpr(c, fn, {KeepMagics})
