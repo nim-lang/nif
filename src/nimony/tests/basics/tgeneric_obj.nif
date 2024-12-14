@@ -55,9 +55,9 @@
  (var :myglob.0.tge6t2h7f . . 17 MyGeneric.1.tge6t2h7f .) 2,22
  (var :other.0.tge6t2h7f . . 16 MyGeneric.2.tge6t2h7f .) 9,24
  (asgn ~3
-  (dot ~6 myglob.0.tge6t2h7f 1 x.1.tge6t2h7f 1 +0) 2 +56) 8,25
+  (dot ~6 myglob.0.tge6t2h7f x.1.tge6t2h7f +0) 2 +56) 8,25
  (asgn ~3
-  (dot ~5 other.0.tge6t2h7f 1 x.2.tge6t2h7f 1 +0) 2 +79.0) ,27
+  (dot ~5 other.0.tge6t2h7f x.2.tge6t2h7f +0) 2 +79.0) ,27
  (proc 5 :\2B.0.tge6t2h7f 
   (add -3) . . 9
   (params 1
