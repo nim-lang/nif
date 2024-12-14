@@ -1433,7 +1433,7 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
     else:
       c.buildErr info, "not a type"
   else:
-    c.buildErr info, "not a type"
+    c.buildErr info, "not a type: " & $n.kind
 
 proc semLocalType(c: var SemContext; n: var Cursor; context = InLocalDecl): TypeCursor =
   let insertPos = c.dest.len
@@ -1887,6 +1887,12 @@ proc semYield(c: var SemContext; it: var Item) =
   wantParRi c, it.n
   producesVoid c, info, it.typ
 
+proc semTypePragmas(c: var SemContext; n: var Cursor; beforeExportMarker: int) =
+  var crucial = default CrucialPragma
+  semPragmas c, n, crucial, TypeY # 2
+  if crucial.magic.len > 0:
+    exportMarkerBecomesNifTag c, beforeExportMarker, crucial
+
 proc semTypeSection(c: var SemContext; n: var Cursor) =
   let declStart = c.dest.len
   takeToken c, n
@@ -1905,10 +1911,7 @@ proc semTypeSection(c: var SemContext; n: var Cursor) =
       semGenericParams c, n
       isGeneric = true
 
-    var crucial = default CrucialPragma
-    semPragmas c, n, crucial, TypeY # 2
-    if crucial.magic.len > 0:
-      exportMarkerBecomesNifTag c, beforeExportMarker, crucial
+    semTypePragmas c, n, beforeExportMarker
 
     if n.kind == DotToken:
       takeToken c, n
@@ -1922,7 +1925,7 @@ proc semTypeSection(c: var SemContext; n: var Cursor) =
       closeScope c
   else:
     c.takeTree n # generics
-    c.takeTree n # pragmas
+    semTypePragmas c, n, beforeExportMarker
     c.takeTree n # body
 
   c.addSym delayed
@@ -2428,7 +2431,9 @@ proc semcheck*(infile, outfile: string; config: sink NifConfig; moduleFlags: set
   c.currentScope = Scope(tab: initTable[StrId, seq[Sym]](), up: nil, kind: ToplevelScope)
 
   assert n0 == "stmts"
+  #echo "PHASE 1"
   var n1 = phaseX(c, n0, SemcheckTopLevelSyms)
+  #echo "PHASE 2: ", toString(n1)
   var n2 = phaseX(c, beginRead(n1), SemcheckSignatures)
 
   var n = beginRead(n2)
