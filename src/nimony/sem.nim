@@ -166,7 +166,7 @@ proc commonType(c: var SemContext; it: var Item; argBegin: int; expected: TypeCu
   if m.err:
     when defined(debug):
       shrink c.dest, argBegin
-      c.dest.add m.args
+      c.dest.addErrorMsg m
     else:
       c.typeMismatch info, it.typ, expected
   else:
@@ -927,10 +927,14 @@ proc semCall(c: var SemContext; it: var Item) =
     buildErr c, callNode.info, "ambiguous call"
     wantParRi c, it.n
   elif m.len > 0:
-    # use the first error for now
-    # XXX Improve error messages here
-    c.dest.add m[0].args
     wantParRi c, it.n
+    var errorMsg = "Type mismatch at [position]"
+    for i in 0..<m.len:
+      errorMsg.add "\n"
+      addErrorMsg errorMsg, m[i]
+    c.dest.addParLe ErrT, callNode.info
+    c.dest.addStrLit errorMsg
+    c.dest.addParRi()
   else:
     buildErr c, callNode.info, "undeclared identifier"
     wantParRi c, it.n
