@@ -2379,7 +2379,13 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
       case stmtKind(it.n)
       of NoStmt:
         case typeKind(it.n)
-        of NoType, ObjectT, EnumT, DistinctT, ConceptT:
+        of NoType:
+          if pool.tags[it.n.tag] == "err":
+            c.takeTree it.n
+          else:
+            buildErr c, it.n.info, "expression expected"
+            inc it.n
+        of ObjectT, EnumT, DistinctT, ConceptT:
           buildErr c, it.n.info, "expression expected"
           inc it.n
         of IntT, FloatT, CharT, BoolT, UIntT, VoidT, StringT, NilT, AutoT, SymKindT,
