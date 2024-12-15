@@ -35,19 +35,21 @@ type
 
 proc createMatch*(context: ptr SemContext): Match = Match(context: context)
 
-proc error(m: var Match; msg: string) =
-  if m.err: return # first error is the important one
-  m.args.addParLe ErrT, m.argInfo
-  m.args.addStrLit "[" & $m.pos & "] " & msg # at position [x]
-  m.args.addParRi()
-  m.err = true
-
 proc concat(a: varargs[string]): string =
   result = a[0]
   for i in 1..high(a): result.add a[i]
 
 proc typeToString*(n: Cursor): string =
   result = toString(n, false)
+
+proc error(m: var Match; msg: string) =
+  if m.err: return # first error is the important one
+  m.args.addParLe ErrT, m.argInfo
+  let str = "For type " & typeToString(m.fn.typ) & " mismatch at position\n" &
+    "[" & $(m.pos+1) & "] " & msg
+  m.args.addStrLit str # at position [x]
+  m.args.addParRi()
+  m.err = true
 
 proc expected(f, a: Cursor): string =
   concat("expected: ", typeToString(f), " but got: ", typeToString(a))
