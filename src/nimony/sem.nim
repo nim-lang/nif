@@ -988,7 +988,7 @@ proc tryBuiltinDot(c: var SemContext; it: var Item; lhs: Item; fieldName: StrId;
         else:
           c.buildErr info, "undeclared field: " & pool.strings[fieldName]
       else:
-        c.buildErr info, "object type exptected"
+        c.buildErr info, "object type expected"
     elif t.typeKind == TupleT:
       var tup = t
       inc tup
@@ -1005,7 +1005,7 @@ proc tryBuiltinDot(c: var SemContext; it: var Item; lhs: Item; fieldName: StrId;
       if result != MatchedDot:
         c.buildErr info, "undeclared field: " & pool.strings[fieldName]
     else:
-      c.buildErr info, "object type exptected"
+      c.buildErr info, "object type expected"
   c.dest.addParRi()
   if result == MatchedDot:
     commonType c, it, exprStart, expected
