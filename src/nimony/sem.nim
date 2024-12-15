@@ -1468,6 +1468,7 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
     semTypeSym c, s, info, context
   of Symbol:
     let s = fetchSym(c, n.symId)
+    c.dest.add n
     inc n
     semTypeSym c, s, info, context
   of ParLe:
@@ -1560,8 +1561,6 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
 proc semLocalType(c: var SemContext; n: var Cursor; context = InLocalDecl): TypeCursor =
   let insertPos = c.dest.len
   semLocalTypeImpl c, n, context
-  if c.dest.len <= insertPos:
-    echo "empty for? ", toString(n), " ", c.phase
   assert c.dest.len > insertPos
   result = typeToCursor(c, insertPos)
 
@@ -1784,8 +1783,7 @@ proc semProc(c: var SemContext; it: var Item; kind: SymKind; pass: PassKind) =
         c.closeScope() # close parameter scope
         addReturnResult c, resId, it.n.info
       of checkSignatures:
-        c.dest.addDotToken()
-        skip it.n
+        c.takeTree it.n
         c.closeScope() # close parameter scope
       of checkConceptProc:
         c.closeScope() # close parameter scope
@@ -2381,6 +2379,7 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
         case typeKind(it.n)
         of NoType, ObjectT, EnumT, DistinctT, ConceptT:
           buildErr c, it.n.info, "expression expected"
+          inc it.n
         of IntT, FloatT, CharT, BoolT, UIntT, VoidT, StringT, NilT, AutoT, SymKindT,
             PtrT, RefT, MutT, OutT, LentT, SinkT, UncheckedArrayT, SetT, StaticT, TypedescT,
             TupleT, ArrayT, VarargsT, ProcT, IterT:
