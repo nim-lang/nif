@@ -2496,7 +2496,8 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
       toplevelGuard c:
         semCall c, it
     of DotX:
-      semDot c, it
+      toplevelGuard c:
+        semDot c, it
     of EqX, NeqX, LeX, LtX:
       semCmp c, it
     of AshrX, AddX, SubX, MulX, DivX, ModX, ShrX, ShlX, BitandX, BitorX, BitxorX:
