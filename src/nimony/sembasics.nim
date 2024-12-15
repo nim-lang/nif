@@ -423,6 +423,14 @@ proc declareOverloadableSym*(c: var SemContext; it: var Item; kind: SymKind): Sy
 proc success*(s: SymStatus): bool {.inline.} = s in {OkNew, OkExisting}
 proc success*(s: DelayedSym): bool {.inline.} = success s.status
 
+proc addSymdefOrIdent(c: var SemContext; kind: SymKind; def: SymId; lit: StrId; info: PackedLineInfo) {.inline.} =
+  if c.phase != SemcheckBodies and kind in {ParamY, TypevarY}:
+    # too early to commit to a SymbolDef which would prevent it
+    # to be added to the symbol table:
+    c.dest.add identToken(lit, info)
+  else:
+    c.dest.add symdefToken(def, info)
+
 proc handleSymDef*(c: var SemContext; n: var Cursor; kind: SymKind): DelayedSym =
   let info = n.info
   if n.kind == Ident:
@@ -431,7 +439,7 @@ proc handleSymDef*(c: var SemContext; n: var Cursor; kind: SymKind): DelayedSym 
     let s = Sym(kind: kind, name: def,
                 pos: c.dest.len)
     result = DelayedSym(status: OkNew, lit: lit, s: s, info: info)
-    c.dest.add symdefToken(def, info)
+    c.addSymdefOrIdent kind, def, lit, info
     inc n
   elif n.kind == SymbolDef:
     discard "ok, and no need to re-add it to the symbol table"
@@ -449,7 +457,7 @@ proc handleSymDef*(c: var SemContext; n: var Cursor; kind: SymKind): DelayedSym 
       let s = Sym(kind: kind, name: def,
                   pos: c.dest.len)
       result = DelayedSym(status: OkNew, lit: lit, s: s, info: info)
-      c.dest.add symdefToken(def, info)
+      c.addSymdefOrIdent kind, def, lit, info
 
 proc addSym*(c: var SemContext; s: DelayedSym) =
   if s.status == OkNew:

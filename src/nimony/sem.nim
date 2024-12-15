@@ -2364,14 +2364,12 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
     let start = c.dest.len
     let s = fetchSym(c, it.n.symId)
     takeToken c, it.n
-    it.kind = s.kind
     semExprSym c, it, s, start, flags
   of ParLe:
     case exprKind(it.n)
     of QuotedX:
       let start = c.dest.len
       let s = semQuoted(c, it.n)
-      it.kind = s.kind
       semExprSym c, it, s, start, flags
     of NoExpr:
       case stmtKind(it.n)
@@ -2586,7 +2584,7 @@ proc semcheck*(infile, outfile: string; config: sink NifConfig; moduleFlags: set
   #echo "PHASE 2: ", toString(n1)
   var n2 = phaseX(c, beginRead(n1), SemcheckSignatures)
 
-  echo "PHASE 3: ", toString(n2)
+  #echo "PHASE 3: ", toString(n2)
   var n = beginRead(n2)
   c.phase = SemcheckBodies
   takeToken c, n
