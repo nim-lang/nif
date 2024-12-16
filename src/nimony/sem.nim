@@ -1740,7 +1740,7 @@ proc semEnumField(c: var SemContext; n: var Cursor; state: var EnumTypeState) =
     if explicitValue != state.thisValue:
       state.hasHole = true
       state.thisValue = explicitValue
-  c.addSym delayed
+  c.addOverloadableSym delayed
   wantParRi c, n
   publish c, delayed.s.name, declStart
 
@@ -1988,6 +1988,45 @@ proc semIf(c: var SemContext; it: var Item) =
   wantParRi c, it.n
   if typeKind(it.typ) == AutoT:
     producesVoid c, info, it.typ
+
+proc semWhen(c: var SemContext; it: var Item) =
+  let start = c.dest.len
+  let info = it.n.info
+  takeToken c, it.n
+  var leaveUnresolved = false
+  if it.n.substructureKind == ElifS:
+    while it.n.substructureKind == ElifS:
+      takeToken c, it.n
+      let condStart = c.dest.len
+      semConstBoolExpr c, it.n
+      let condValue = cursorAt(c.dest, condStart).exprKind
+      endRead(c.dest)
+      if not leaveUnresolved:
+        if condValue == TrueX:
+          c.dest.shrink start
+          semExpr c, it
+          skipParRi it.n # finish elif
+          skipToEnd it.n
+          return
+        elif condValue != FalseX:
+          # erroring/unresolved condition, leave entire statement as unresolved
+          leaveUnresolved = true
+      takeTree c, it.n
+      wantParRi c, it.n
+  else:
+    buildErr c, it.n.info, "illformed AST: `elif` inside `if` expected"
+  if it.n.substructureKind == ElseS:
+    takeToken c, it.n
+    if not leaveUnresolved:
+      c.dest.shrink start
+      semExpr c, it
+      skipParRi it.n # finish else
+      skipToEnd it.n
+      return
+    else:
+      takeTree c, it.n
+    wantParRi c, it.n
+  wantParRi c, it.n
 
 proc isRangeNode(c: var SemContext; n: Cursor): bool =
   var n = n
@@ -2595,6 +2634,9 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
       of IfS:
         toplevelGuard c:
           semIf c, it
+      of WhenS:
+        # eager, but maybe should be delayed until later passes for `declared` etc?
+        semWhen c, it
       of RetS:
         toplevelGuard c:
           semReturn c, it

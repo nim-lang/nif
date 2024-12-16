@@ -21,6 +21,7 @@ type
     AsgnS = "asgn"
     BlockS = "block"
     IfS = "if"
+    WhenS = "when"
     BreakS = "break"
     ContinueS = "continue"
     WhileS = "while"

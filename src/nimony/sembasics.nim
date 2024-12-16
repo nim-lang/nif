@@ -460,6 +460,10 @@ proc addSym*(c: var SemContext; s: DelayedSym) =
     if addNonOverloadable(c.currentScope, s.lit, s.s) == Conflict:
       c.buildErr s.info, "attempt to redeclare: " & pool.strings[s.lit]
 
+proc addOverloadableSym*(c: var SemContext; s: DelayedSym) =
+  if s.status == OkNew:
+    addOverloadable(c.currentScope, s.lit, s.s)
+
 proc publish*(c: var SemContext; s: SymId; start: int) =
   assert s != SymId(0)
   var buf = createTokenBuf(c.dest.len - start + 1)
