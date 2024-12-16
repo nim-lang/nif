@@ -28,5 +28,6 @@ proc fib[T: Fibable](a: T): T =
     result = fib(a-1) + fib(a-2)
 
 discard fib(8)
+discard fib[int](8)
 
 #discard fib(8.0)

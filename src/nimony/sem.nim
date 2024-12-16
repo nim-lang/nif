@@ -404,6 +404,19 @@ template withFromInfo(req: InstRequest; body: untyped) =
   body
   shrink c.instantiatedFrom, oldLen
 
+type
+  TypeDeclContext = enum
+    InLocalDecl, InTypeSection, InObjectDecl, InParamDecl, InInheritanceDecl, InReturnTypeDecl, AllowValues,
+    InGenericConstraint
+
+proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext)
+
+proc semLocalType(c: var SemContext; n: var Cursor; context = InLocalDecl): TypeCursor =
+  let insertPos = c.dest.len
+  semLocalTypeImpl c, n, context
+  assert c.dest.len > insertPos
+  result = typeToCursor(c, insertPos)
+
 proc semTypeSection(c: var SemContext; n: var Cursor)
 proc instantiateGenericType(c: var SemContext; req: InstRequest) =
   var dest = createTokenBuf(30)
@@ -737,10 +750,10 @@ proc maybeAddConceptMethods(c: var SemContext; fn: StrId; typevar: SymId; cands:
             cands.addUnique FnCandidate(kind: ConceptProcY, sym: prc.symId, typ: d)
         skip ops
 
-proc considerTypeboundOps(c: var SemContext; m: var seq[Match]; candidates: FnCandidates; args: openArray[Item]) =
+proc considerTypeboundOps(c: var SemContext; m: var seq[Match]; candidates: FnCandidates; args: openArray[Item], genericArgs: Cursor) =
   for candidate in candidates.a:
     m.add createMatch(addr c)
-    sigmatch(m[^1], candidate, args, emptyNode())
+    sigmatch(m[^1], candidate, args, genericArgs)
 
 proc requestRoutineInstance(c: var SemContext; origin: SymId; m: var Match;
                             info: PackedLineInfo): ProcInstance =
@@ -807,6 +820,8 @@ type
 
 proc tryBuiltinDot(c: var SemContext; it: var Item; lhs: Item; fieldName: StrId; info: PackedLineInfo): DotExprState
 
+proc semBuiltinSubscript(c: var SemContext; lhs: Item; it: var Item)
+
 proc semCall(c: var SemContext; it: var Item) =
   let beforeCall = c.dest.len
   let callNode = it.n.load()
@@ -817,8 +832,40 @@ proc semCall(c: var SemContext; it: var Item) =
   var fnName = StrId(0)
   var args: seq[Item] = @[]
   var argIndexes: seq[int] = @[]
+  var hasGenericArgs = false
+  var genericDest = default(TokenBuf)
   var candidates = default FnCandidates
-  if fn.n.exprKind == DotX:
+  if fn.n.exprKind == AtX:
+    inc fn.n # skip tag
+    var lhsBuf = createTokenBuf(4)
+    var lhs = Item(n: fn.n, typ: c.types.autoType)
+    swap c.dest, lhsBuf
+    semExpr c, lhs, {KeepMagics}
+    swap c.dest, lhsBuf
+    fn.n = lhs.n
+    lhs.n = cursorAt(lhsBuf, 0)
+    if lhs.n.kind == Symbol and isRoutine(lhs.kind):
+      let res = tryLoadSym(lhs.n.symId)
+      assert res.status == LacksNothing
+      if isGeneric(asRoutine(res.decl)):
+        hasGenericArgs = true
+        genericDest = createTokenBuf(16)
+        swap c.dest, genericDest
+        while fn.n.kind != ParRi:
+          # XXX semLocalType should build `static` types for values
+          discard semLocalType(c, fn.n) 
+        swap c.dest, genericDest
+        skipParRi fn.n
+        it.n = fn.n
+        c.dest.addSubtree lhs.n
+        fn.typ = lhs.typ
+        fn.kind = lhs.kind
+        fnName = getFnIdent(c)
+    if not hasGenericArgs:
+      semBuiltinSubscript(c, lhs, fn)
+      fnName = getFnIdent(c)
+      it.n = fn.n
+  elif fn.n.exprKind == DotX:
     let dotStart = c.dest.len
     let dotInfo = fn.n.info
     # read through the dot expression first:
@@ -879,6 +926,9 @@ proc semCall(c: var SemContext; it: var Item) =
   fn.n = beginRead(dest)
   for i in 0 ..< args.len:
     args[i].n = cursorAt(dest, argIndexes[i])
+  let genericArgs =
+    if hasGenericArgs: cursorAt(genericDest, 0)
+    else: emptyNode()
 
   var m: seq[Match] = @[]
   if fn.n.exprKind in {OchoiceX, CchoiceX}:
@@ -890,11 +940,11 @@ proc semCall(c: var SemContext; it: var Item) =
         let s = fetchSym(c, sym)
         let candidate = FnCandidate(kind: s.kind, sym: sym, typ: fetchType(c, f, s))
         m.add createMatch(addr c)
-        sigmatch(m[^1], candidate, args, emptyNode())
+        sigmatch(m[^1], candidate, args, genericArgs)
       else:
         buildErr c, fn.n.info, "`choice` node does not contain `symbol`"
       inc f
-    considerTypeboundOps(c, m, candidates, args)
+    considerTypeboundOps(c, m, candidates, args, genericArgs)
   elif fn.n.kind == Ident:
     # error should have been given above already:
     # buildErr c, fn.n.info, "attempt to call undeclared routine"
@@ -904,8 +954,8 @@ proc semCall(c: var SemContext; it: var Item) =
     let sym = if fn.n.kind == Symbol: fn.n.symId else: SymId(0)
     let candidate = FnCandidate(kind: fnKind, sym: sym, typ: fn.typ)
     m.add createMatch(addr c)
-    sigmatch(m[^1], candidate, args, emptyNode())
-    considerTypeboundOps(c, m, candidates, args)
+    sigmatch(m[^1], candidate, args, genericArgs)
+    considerTypeboundOps(c, m, candidates, args, genericArgs)
   let idx = pickBestMatch(c, m)
 
   c.dest.add callNode
@@ -1235,13 +1285,6 @@ proc maybeInlineMagic(c: var SemContext; res: LoadResult) =
           if n.kind == ParRi: break
           inc n
 
-type
-  TypeDeclContext = enum
-    InLocalDecl, InTypeSection, InObjectDecl, InParamDecl, InInheritanceDecl, InReturnTypeDecl, AllowValues,
-    InGenericConstraint
-
-proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext)
-
 proc semTypeSym(c: var SemContext; s: Sym; info: PackedLineInfo; context: TypeDeclContext) =
   if s.kind in {TypeY, TypevarY}:
     let res = tryLoadSym(s.name)
@@ -1570,12 +1613,6 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
       n = it.n
     else:
       c.buildErr info, "not a type"
-
-proc semLocalType(c: var SemContext; n: var Cursor; context = InLocalDecl): TypeCursor =
-  let insertPos = c.dest.len
-  semLocalTypeImpl c, n, context
-  assert c.dest.len > insertPos
-  result = typeToCursor(c, insertPos)
 
 proc semReturnType(c: var SemContext; n: var Cursor): TypeCursor =
   result = semLocalType(c, n, InReturnTypeDecl)
@@ -2311,14 +2348,8 @@ proc semDeclared(c: var SemContext; it: var Item) =
   it.typ = c.types.boolType
   commonType c, it, beforeExpr, expected
 
-proc semSubscript(c: var SemContext; it: var Item) =
-  var n = it.n
-  inc n # tag
-  var lhsBuf = createTokenBuf(4)
-  swap c.dest, lhsBuf
-  var lhs = Item(n: n, typ: c.types.autoType)
-  semExpr c, lhs, {KeepMagics}
-  swap c.dest, lhsBuf
+proc semBuiltinSubscript(c: var SemContext; lhs: Item; it: var Item) =
+  # it.n is after lhs, at args
   if lhs.n.kind == Symbol and lhs.kind == TypeY and
       getTypeSection(lhs.n.symId).typevars == "typevars":
     # lhs is a generic type symbol, this is a generic invocation
@@ -2329,10 +2360,9 @@ proc semSubscript(c: var SemContext; it: var Item) =
 
   # build call:
   var callBuf = createTokenBuf(16)
-  callBuf.addParLe(CallX, it.n.info)
-  callBuf.add identToken(pool.strings.getOrIncl("[]"), it.n.info)
-  callBuf.add lhsBuf
-  it.n = lhs.n
+  callBuf.addParLe(CallX, lhs.n.info)
+  callBuf.add identToken(pool.strings.getOrIncl("[]"), lhs.n.info)
+  callBuf.addSubtree lhs.n
   while it.n.kind != ParRi:
     callBuf.takeTree it.n
   callBuf.addParRi()
@@ -2341,6 +2371,18 @@ proc semSubscript(c: var SemContext; it: var Item) =
   # error messages aren't specialized for now
   semCall c, call
   it.typ = call.typ
+
+proc semSubscript(c: var SemContext; it: var Item) =
+  var n = it.n
+  inc n # tag
+  var lhsBuf = createTokenBuf(4)
+  swap c.dest, lhsBuf
+  var lhs = Item(n: n, typ: c.types.autoType)
+  semExpr c, lhs, {KeepMagics}
+  swap c.dest, lhsBuf
+  it.n = lhs.n
+  lhs.n = cursorAt(lhsBuf, 0)
+  semBuiltinSubscript(c, lhs, it)
 
 proc whichPass(c: SemContext): PassKind =
   result = if c.phase == SemcheckSignatures: checkSignatures else: checkBody
