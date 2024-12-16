@@ -84,7 +84,8 @@ type
     mInstantiationInfo, mGetTypeInfo, mGetTypeInfoV2,
     mNimvm, mIntDefine, mStrDefine, mBoolDefine, mGenericDefine, mRunnableExamples,
     mException, mBuiltinType, mSymOwner, mUncheckedArray, mGetImplTransf,
-    mSymIsInstantiationOf, mNodeId, mPrivateAccess, mZeroDefault
+    mSymIsInstantiationOf, mNodeId, mPrivateAccess, mZeroDefault,
+    mUnpack # not in Nim 2
 
 declareMatcher parseMagic, TMagic, 1, 1
 
@@ -153,6 +154,7 @@ proc magicToTag*(m: TMagic): (string, int) =
   of mString: res StringT
   of mTypeDesc: res TypedescT
   of mVoidType: res VoidT
+  of mUnpack: res UnpackX
   else: ("", 0)
 
 when isMainModule:
