@@ -945,6 +945,7 @@ proc semCall(c: var SemContext; it: var Item) =
       addErrorMsg errorMsg, m[i]
     c.dest.addParLe ErrT, callNode.info
     c.dest.addStrLit errorMsg
+    c.dest.addDotToken()
     c.dest.addParRi()
   else:
     buildErr c, callNode.info, "undeclared identifier"

@@ -63,6 +63,7 @@ proc addErrorMsg*(dest: var TokenBuf; m: Match) =
   let str = "For type " & typeToString(m.fn.typ) & " mismatch at position\n" &
     "[" & $(m.pos+1) & "] " & m.error.msg
   dest.addStrLit str
+  dest.addDotToken()
   dest.addParRi()
 
 proc expected(f, a: Cursor): string =
