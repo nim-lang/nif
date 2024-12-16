@@ -304,6 +304,8 @@ proc typeToCursor*(c: var SemContext; buf: TokenBuf; start: int): TypeCursor =
     var newBuf = createTokenBuf(buf.len - start)
     for i in start..<buf.len:
       newBuf.add buf[i]
+    # make resilient against crashes:
+    #if newBuf.len == 0: newBuf.add dotToken(NoLineInfo)
     result = cursorAt(newBuf, 0)
     c.typeMem[key] = newBuf
 
@@ -432,9 +434,13 @@ proc handleSymDef*(c: var SemContext; n: var Cursor; kind: SymKind): DelayedSym 
     c.dest.add symdefToken(def, info)
     inc n
   elif n.kind == SymbolDef:
-    discard "ok, and no need to re-add it to the symbol table"
+    discard "ok, and no need to re-add it to the symbol table ... or is there?"
+    let status =
+      if c.phase == SemcheckBodies and kind in {ParamY, TypevarY}: OkNew
+      else: OkExisting
+
     let s = Sym(kind: kind, name: n.symId, pos: c.dest.len)
-    result = DelayedSym(status: OkExisting, s: s, info: info)
+    result = DelayedSym(status: status, lit: symToIdent(s.name), s: s, info: info)
     c.dest.add n
     inc n
   else:

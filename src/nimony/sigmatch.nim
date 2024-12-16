@@ -20,6 +20,11 @@ type
     sym*: SymId
     typ*: Cursor
 
+  MatchError* = object
+    info: PackedLineInfo
+    msg: string
+    pos: int
+
   Match* = object
     inferred*: Table[SymId, Cursor]
     tvars: HashSet[SymId]
@@ -32,15 +37,9 @@ type
     inheritanceCosts, intCosts: int
     returnType*: Cursor
     context: ptr SemContext
+    error: MatchError
 
 proc createMatch*(context: ptr SemContext): Match = Match(context: context)
-
-proc error(m: var Match; msg: string) =
-  if m.err: return # first error is the important one
-  m.args.addParLe ErrT, m.argInfo
-  m.args.addStrLit "[" & $m.pos & "] " & msg # at position [x]
-  m.args.addParRi()
-  m.err = true
 
 proc concat(a: varargs[string]): string =
   result = a[0]
@@ -48,6 +47,23 @@ proc concat(a: varargs[string]): string =
 
 proc typeToString*(n: Cursor): string =
   result = toString(n, false)
+
+proc error(m: var Match; msg: sink string) =
+  if m.err: return # first error is the important one
+  m.err = true
+  m.error = MatchError(info: m.argInfo, msg: msg, pos: m.pos+1)
+
+proc addErrorMsg*(dest: var string; m: Match) =
+  assert m.err
+  dest.add "[" & $(m.error.pos) & "] " & m.error.msg
+
+proc addErrorMsg*(dest: var TokenBuf; m: Match) =
+  assert m.err
+  dest.addParLe ErrT, m.argInfo
+  let str = "For type " & typeToString(m.fn.typ) & " mismatch at position\n" &
+    "[" & $(m.pos+1) & "] " & m.error.msg
+  dest.addStrLit str
+  dest.addParRi()
 
 proc expected(f, a: Cursor): string =
   concat("expected: ", typeToString(f), " but got: ", typeToString(a))

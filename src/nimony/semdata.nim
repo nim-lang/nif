@@ -53,6 +53,15 @@ type
     level*: int # inheritance level
     typ*: TypeCursor
 
+  SemPhase* = enum
+    SemcheckTopLevelSyms,
+    SemcheckSignatures,
+    SemcheckBodies
+
+  MetaInfo* = object
+    includedFiles*: seq[string] # will become part of the index file
+    importedFiles*: seq[string] # likewise
+
   SemContext* = object
     dest*: TokenBuf
     routine*: SemRoutine
@@ -67,11 +76,13 @@ type
     types*: BuiltinTypes
     typeMem*: Table[string, TokenBuf]
     instantiatedTypes*: OrderedTable[string, SymId]
-    instantiatedProcs*: OrderedTable[string, ProcInstance]
+    instantiatedProcs*: OrderedTable[string, SymId]
     thisModuleSuffix*: string
     processedModules*: HashSet[string]
     usedTypevars*: int
+    phase*: SemPhase
     templateInstCounter*: int
     commandLineArgs*: string # for IC we make nimony `exec` itself. Thus it is important
                              # to forward command line args properly.
     #fieldsCache: Table[SymId, Table[StrId, ObjField]]
+    meta*: MetaInfo

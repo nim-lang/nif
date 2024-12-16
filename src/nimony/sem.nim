@@ -166,7 +166,7 @@ proc commonType(c: var SemContext; it: var Item; argBegin: int; expected: TypeCu
   if m.err:
     when defined(debug):
       shrink c.dest, argBegin
-      c.dest.add m.args
+      c.dest.addErrorMsg m
     else:
       c.typeMismatch info, it.typ, expected
   else:
@@ -192,7 +192,7 @@ proc semInclude(c: var SemContext; it: var Item) =
   var hasError = false
   let info = it.n.info
   var x = it.n
-  takeTree c, it.n
+  skip it.n
   inc x # skip the `include`
   filenameVal(x, files, hasError)
 
@@ -201,6 +201,7 @@ proc semInclude(c: var SemContext; it: var Item) =
   else:
     for f1 in items(files):
       let f2 = resolveFile(c, getFile(c, info), f1)
+      c.meta.includedFiles.add f2
       # check for recursive include files:
       var isRecursive = false
       for a in c.includeStack:
@@ -229,6 +230,7 @@ proc importSingleFile(c: var SemContext; f1, origin: string; info: PackedLineInf
   let f2 = resolveFile(c, origin, f1)
   let suffix = moduleSuffix(f2, c.g.config.paths)
   if not c.processedModules.containsOrIncl(suffix):
+    c.meta.importedFiles.add f2
     if needsRecompile(f2, suffix):
       selfExec c, f2
 
@@ -240,7 +242,7 @@ proc cyclicImport(c: var SemContext; x: var Cursor) =
 proc semImport(c: var SemContext; it: var Item) =
   let info = it.n.info
   var x = it.n
-  takeTree c, it.n
+  skip it.n
   inc x # skip the `import`
 
   if x.kind == ParLe and x == "pragmax":
@@ -743,8 +745,8 @@ proc considerTypeboundOps(c: var SemContext; m: var seq[Match]; candidates: FnCa
 proc requestRoutineInstance(c: var SemContext; origin: SymId; m: var Match;
                             info: PackedLineInfo): ProcInstance =
   let key = typeToCanon(m.typeArgs, 0)
-  result = c.instantiatedProcs.getOrDefault(key)
-  if result.targetSym == SymId(0):
+  var targetSym = c.instantiatedProcs.getOrDefault(key)
+  if targetSym == SymId(0):
     let targetSym = newSymId(c, origin)
     var signature = createTokenBuf(30)
     let decl = getProcDecl(origin)
@@ -769,7 +771,7 @@ proc requestRoutineInstance(c: var SemContext; origin: SymId; m: var Match;
       returnType: cursorAt(signature, beforeRetType))
     publish targetSym, ensureMove signature
 
-    c.instantiatedProcs[key] = result
+    c.instantiatedProcs[key] = targetSym
     var req = InstRequest(
       origin: origin,
       targetSym: targetSym,
@@ -779,6 +781,15 @@ proc requestRoutineInstance(c: var SemContext; origin: SymId; m: var Match;
     req.requestFrom.add info
 
     c.procRequests.add ensureMove req
+  else:
+    let res = tryLoadSym(targetSym)
+    assert res.status == LacksNothing
+    var n = res.decl
+    skipToParams n
+    skip n
+    result = ProcInstance(targetSym: targetSym, procType: res.decl,
+      returnType: n)
+  assert result.returnType.kind != UnknownToken
 
 proc typeofCallIs(c: var SemContext; it: var Item; beforeCall: int; returnType: TypeCursor) {.inline.} =
   let expected = it.typ
@@ -925,10 +936,14 @@ proc semCall(c: var SemContext; it: var Item) =
     buildErr c, callNode.info, "ambiguous call"
     wantParRi c, it.n
   elif m.len > 0:
-    # use the first error for now
-    # XXX Improve error messages here
-    c.dest.add m[0].args
     wantParRi c, it.n
+    var errorMsg = "Type mismatch at [position]"
+    for i in 0..<m.len:
+      errorMsg.add "\n"
+      addErrorMsg errorMsg, m[i]
+    c.dest.addParLe ErrT, callNode.info
+    c.dest.addStrLit errorMsg
+    c.dest.addParRi()
   else:
     buildErr c, callNode.info, "undeclared identifier"
     wantParRi c, it.n
@@ -982,7 +997,7 @@ proc tryBuiltinDot(c: var SemContext; it: var Item; lhs: Item; fieldName: StrId;
         else:
           c.buildErr info, "undeclared field: " & pool.strings[fieldName]
       else:
-        c.buildErr info, "object type exptected"
+        c.buildErr info, "object type expected"
     elif t.typeKind == TupleT:
       var tup = t
       inc tup
@@ -999,7 +1014,7 @@ proc tryBuiltinDot(c: var SemContext; it: var Item; lhs: Item; fieldName: StrId;
       if result != MatchedDot:
         c.buildErr info, "undeclared field: " & pool.strings[fieldName]
     else:
-      c.buildErr info, "object type exptected"
+      c.buildErr info, "object type expected"
   c.dest.addParRi()
   if result == MatchedDot:
     commonType c, it, exprStart, expected
@@ -1175,12 +1190,12 @@ proc semPragmas(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; ki
   elif n == "pragmas":
     takeToken c, n
     while n.kind != ParRi:
-      let isKeyValue = n == "kv"
-      if isKeyValue:
+      let hasParRi = n.kind == ParLe
+      if n == "kv":
         inc n
       semPragma c, n, crucial, kind
-      if isKeyValue:
-        skip n # skips ')'
+      if hasParRi:
+        skipParRi n
     wantParRi c, n
   else:
     buildErr c, n.info, "expected '.' or 'pragmas'"
@@ -1466,6 +1481,7 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
     semTypeSym c, s, info, context
   of Symbol:
     let s = fetchSym(c, n.symId)
+    c.dest.add n
     inc n
     semTypeSym c, s, info, context
   of ParLe:
@@ -1558,6 +1574,7 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
 proc semLocalType(c: var SemContext; n: var Cursor; context = InLocalDecl): TypeCursor =
   let insertPos = c.dest.len
   semLocalTypeImpl c, n, context
+  assert c.dest.len > insertPos
   result = typeToCursor(c, insertPos)
 
 proc semReturnType(c: var SemContext; n: var Cursor): TypeCursor =
@@ -1566,14 +1583,22 @@ proc semReturnType(c: var SemContext; n: var Cursor): TypeCursor =
 proc exportMarkerBecomesNifTag(c: var SemContext; insertPos: int; crucial: CrucialPragma) =
   assert crucial.magic.len > 0
   let info = c.dest[insertPos].info
-  c.dest[insertPos] = parLeToken(pool.tags.getOrIncl(crucial.magic), info)
+
+  var a: Cursor
   if crucial.bits != 0:
-    let arr = [intToken(pool.integers.getOrIncl(crucial.bits), info),
-               parRiToken(info)]
-    c.dest.insert arr, insertPos+1
+    let nifTag = [
+      parLeToken(pool.tags.getOrIncl(crucial.magic), info),
+      intToken(pool.integers.getOrIncl(crucial.bits), info),
+      parRiToken(info)
+    ]
+    a = fromBuffer(nifTag)
   else:
-    let arr = [parRiToken(info)]
-    c.dest.insert arr, insertPos+1
+    let nifTag = [
+      parLeToken(pool.tags.getOrIncl(crucial.magic), info),
+      parRiToken(info)
+    ]
+    a = fromBuffer(nifTag)
+  c.dest.replace a, insertPos
 
 proc semLocal(c: var SemContext; n: var Cursor; kind: SymKind) =
   let declStart = c.dest.len
@@ -1751,11 +1776,11 @@ proc semProc(c: var SemContext; it: var Item; kind: SymKind; pass: PassKind) =
 
     publishSignature c, symId, declStart
     if it.n.kind != DotToken:
-      c.openScope() # open body scope
       case pass
       of checkGenericInst:
         if it.n != "stmts":
           error "(stmts) expected, but got ", it.n
+        c.openScope() # open body scope
         takeToken c, it.n
         semProcBody c, it
         c.closeScope() # close body scope
@@ -1763,6 +1788,7 @@ proc semProc(c: var SemContext; it: var Item; kind: SymKind; pass: PassKind) =
       of checkBody:
         if it.n != "stmts":
           error "(stmts) expected, but got ", it.n
+        c.openScope() # open body scope
         takeToken c, it.n
         let resId = declareResult(c, it.n.info)
         semProcBody c, it
@@ -1770,9 +1796,10 @@ proc semProc(c: var SemContext; it: var Item; kind: SymKind; pass: PassKind) =
         c.closeScope() # close parameter scope
         addReturnResult c, resId, it.n.info
       of checkSignatures:
-        c.dest.addDotToken()
-        skip it.n
+        c.takeTree it.n
+        c.closeScope() # close parameter scope
       of checkConceptProc:
+        c.closeScope() # close parameter scope
         if it.n.kind == DotToken:
           inc it.n
         else:
@@ -2007,6 +2034,12 @@ proc semYield(c: var SemContext; it: var Item) =
   wantParRi c, it.n
   producesVoid c, info, it.typ
 
+proc semTypePragmas(c: var SemContext; n: var Cursor; beforeExportMarker: int) =
+  var crucial = default CrucialPragma
+  semPragmas c, n, crucial, TypeY # 2
+  if crucial.magic.len > 0:
+    exportMarkerBecomesNifTag c, beforeExportMarker, crucial
+
 proc semTypeSection(c: var SemContext; n: var Cursor) =
   let declStart = c.dest.len
   takeToken c, n
@@ -2015,30 +2048,33 @@ proc semTypeSection(c: var SemContext; n: var Cursor) =
   let beforeExportMarker = c.dest.len
   wantExportMarker c, n # 1
 
-  var isGeneric: bool
-  if n.kind == DotToken:
-    takeToken c, n
-    isGeneric = false
-  else:
-    openScope c
-    semGenericParams c, n
-    isGeneric = true
-
-  var crucial = default CrucialPragma
-  semPragmas c, n, crucial, TypeY # 2
-  if crucial.magic.len > 0:
-    exportMarkerBecomesNifTag c, beforeExportMarker, crucial
-
-  if n.kind == DotToken:
-    takeToken c, n
-  else:
-    # body
-    if n.typeKind == EnumT:
-      semEnumType c, n, delayed.s.name
+  if c.phase == SemcheckSignatures or (delayed.status == OkNew and c.phase != SemcheckTopLevelSyms):
+    var isGeneric: bool
+    if n.kind == DotToken:
+      takeToken c, n
+      isGeneric = false
     else:
-      semLocalTypeImpl c, n, InTypeSection
-  if isGeneric:
-    closeScope c
+      openScope c
+      semGenericParams c, n
+      isGeneric = true
+
+    semTypePragmas c, n, beforeExportMarker
+
+    # body:
+    if n.kind == DotToken:
+      takeToken c, n
+    else:
+      if n.typeKind == EnumT:
+        semEnumType c, n, delayed.s.name
+      else:
+        semLocalTypeImpl c, n, InTypeSection
+    if isGeneric:
+      closeScope c
+  else:
+    c.takeTree n # generics
+    semTypePragmas c, n, beforeExportMarker
+    c.takeTree n # body
+
   c.addSym delayed
   wantParRi c, n
   publish c, delayed.s.name, declStart
@@ -2306,6 +2342,21 @@ proc semSubscript(c: var SemContext; it: var Item) =
   semCall c, call
   it.typ = call.typ
 
+proc whichPass(c: SemContext): PassKind =
+  result = if c.phase == SemcheckSignatures: checkSignatures else: checkBody
+
+template toplevelGuard(c: var SemContext; body: untyped) =
+  if c.phase == SemcheckBodies:
+    body
+  else:
+    c.takeTree it.n
+
+template procGuard(c: var SemContext; body: untyped) =
+  if c.phase in {SemcheckSignatures, SemcheckBodies}:
+    body
+  else:
+    c.takeTree it.n
+
 proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
   case it.n.kind
   of IntLit:
@@ -2326,21 +2377,26 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
     let start = c.dest.len
     let s = fetchSym(c, it.n.symId)
     takeToken c, it.n
-    it.kind = s.kind
     semExprSym c, it, s, start, flags
   of ParLe:
     case exprKind(it.n)
     of QuotedX:
       let start = c.dest.len
       let s = semQuoted(c, it.n)
-      it.kind = s.kind
       semExprSym c, it, s, start, flags
     of NoExpr:
       case stmtKind(it.n)
       of NoStmt:
         case typeKind(it.n)
-        of NoType, ObjectT, EnumT, DistinctT, ConceptT:
+        of NoType:
+          if pool.tags[it.n.tag] == "err":
+            c.takeTree it.n
+          else:
+            buildErr c, it.n.info, "expression expected"
+            skip it.n
+        of ObjectT, EnumT, DistinctT, ConceptT:
           buildErr c, it.n.info, "expression expected"
+          skip it.n
         of IntT, FloatT, CharT, BoolT, UIntT, VoidT, StringT, NilT, AutoT, SymKindT,
             PtrT, RefT, MutT, OutT, LentT, SinkT, UncheckedArrayT, SetT, StaticT, TypedescT,
             TupleT, ArrayT, VarargsT, ProcT, IterT:
@@ -2350,49 +2406,89 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
           # should be handled in respective expression kinds
           discard
       of ProcS:
-        semProc c, it, ProcY, checkBody
+        procGuard c:
+          semProc c, it, ProcY, whichPass(c)
       of FuncS:
-        semProc c, it, FuncY, checkBody
+        procGuard c:
+          semProc c, it, FuncY, whichPass(c)
       of IterS:
-        semProc c, it, IterY, checkBody
+        procGuard c:
+          semProc c, it, IterY, whichPass(c)
       of ConverterS:
-        semProc c, it, ConverterY, checkBody
+        procGuard c:
+          semProc c, it, ConverterY, whichPass(c)
       of MethodS:
-        semProc c, it, MethodY, checkBody
+        procGuard c:
+          semProc c, it, MethodY, whichPass(c)
       of TemplateS:
-        semProc c, it, TemplateY, checkBody
+        procGuard c:
+          semProc c, it, TemplateY, whichPass(c)
       of MacroS:
-        semProc c, it, MacroY, checkBody
-      of WhileS: semWhile c, it
-      of VarS: semLocal c, it, VarY
-      of LetS: semLocal c, it, LetY
-      of CursorS: semLocal c, it, CursorY
-      of ResultS: semLocal c, it, ResultY
-      of ConstS: semLocal c, it, ConstY
+        procGuard c:
+          semProc c, it, MacroY, whichPass(c)
+      of WhileS:
+        toplevelGuard c:
+          semWhile c, it
+      of VarS:
+        toplevelGuard c:
+          semLocal c, it, VarY
+      of LetS:
+        toplevelGuard c:
+          semLocal c, it, LetY
+      of CursorS:
+        toplevelGuard c:
+          semLocal c, it, CursorY
+      of ResultS:
+        toplevelGuard c:
+          semLocal c, it, ResultY
+      of ConstS:
+        toplevelGuard c:
+          semLocal c, it, ConstY
       of StmtsS: semStmtsExpr c, it
-      of BreakS: semBreak c, it
-      of ContinueS: semContinue c, it
-      of CallS, CmdS: semCall c, it
+      of BreakS:
+        toplevelGuard c:
+          semBreak c, it
+      of ContinueS:
+        toplevelGuard c:
+          semContinue c, it
+      of CallS, CmdS:
+        toplevelGuard c:
+          semCall c, it
       of IncludeS: semInclude c, it
       of ImportS: semImport c, it
-      of AsgnS: semAsgn c, it
-      of EmitS: semEmit c, it
-      of DiscardS: semDiscard c, it
-      of IfS: semIf c, it
-      of RetS: semReturn c, it
-      of YieldS: semYield c, it
+      of AsgnS:
+        toplevelGuard c:
+          semAsgn c, it
+      of EmitS:
+        toplevelGuard c:
+          semEmit c, it
+      of DiscardS:
+        toplevelGuard c:
+          semDiscard c, it
+      of IfS:
+        toplevelGuard c:
+          semIf c, it
+      of RetS:
+        toplevelGuard c:
+          semReturn c, it
+      of YieldS:
+        toplevelGuard c:
+          semYield c, it
       of TypeS:
         let info = it.n.info
         semTypeSection c, it.n
         producesVoid c, info, it.typ
       of BlockS:
-        semBlock c, it
+        toplevelGuard c:
+          semBlock c, it
       of CaseS:
-        semCase c, it
+        toplevelGuard c:
+          semCase c, it
       of ForS:
         # XXX
-        buildErr c, it.n.info, "statement not implemented"
-        skip it.n
+        toplevelGuard c:
+          buildErr c, it.n.info, "statement not implemented"
+          skip it.n
     of FalseX, TrueX:
       literalB c, it, c.types.boolType
     of InfX, NegInfX, NanX:
@@ -2412,9 +2508,11 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
       semExpr c, it
       wantParRi c, it.n
     of CallX, CmdX, CallStrLitX, InfixX, PrefixX:
-      semCall c, it
+      toplevelGuard c:
+        semCall c, it
     of DotX:
-      semDot c, it
+      toplevelGuard c:
+        semDot c, it
     of EqX, NeqX, LeX, LtX:
       semCmp c, it
     of AshrX, AddX, SubX, MulX, DivX, ModX, ShrX, ShlX, BitandX, BitorX, BitxorX:
@@ -2473,23 +2571,42 @@ proc writeOutput(c: var SemContext; outfile: string) =
   writeFile outfile, "(.nif24)\n" & toString(c.dest)
   createIndex outfile
 
+proc phaseX(c: var SemContext; n: Cursor; x: SemPhase): TokenBuf =
+  assert n == "stmts"
+  c.phase = x
+  var n = n
+  takeToken c, n
+  while n.kind != ParRi:
+    semStmt c, n
+  wantParRi c, n
+  result = move c.dest
+
 type
   ModuleFlag* = enum
     IsSystem, IsMain, SkipSystem
 
 proc semcheck*(infile, outfile: string; config: sink NifConfig; moduleFlags: set[ModuleFlag];
                commandLineArgs: sink string) =
-  var n = setupProgram(infile, outfile)
+  var n0 = setupProgram(infile, outfile)
   var c = SemContext(
     dest: createTokenBuf(),
     types: createBuiltinTypes(),
     thisModuleSuffix: prog.main,
     g: ProgramContext(config: config),
+    phase: SemcheckTopLevelSyms,
     routine: SemRoutine(kind: NoSym),
     commandLineArgs: commandLineArgs)
   c.currentScope = Scope(tab: initTable[StrId, seq[Sym]](), up: nil, kind: ToplevelScope)
 
-  assert n == "stmts"
+  assert n0 == "stmts"
+  #echo "PHASE 1"
+  var n1 = phaseX(c, n0, SemcheckTopLevelSyms)
+  #echo "PHASE 2: ", toString(n1)
+  var n2 = phaseX(c, beginRead(n1), SemcheckSignatures)
+
+  #echo "PHASE 3: ", toString(n2)
+  var n = beginRead(n2)
+  c.phase = SemcheckBodies
   takeToken c, n
   while n.kind != ParRi:
     semStmt c, n
