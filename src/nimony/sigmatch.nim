@@ -493,10 +493,16 @@ proc sigmatch*(m: var Match; fn: FnCandidate; args: openArray[Item];
     for v in typeVars(fn.sym):
       m.tvars.incl v
       if e.kind != DotToken and e.kind != ParRi:
-        m.inferred[v] = e
+        if matchesConstraint(m, v, e):
+          m.inferred[v] = e
+        else:
+          let res = tryLoadSym(v)
+          assert res.status == LacksNothing
+          var typevar = asTypevar(res.decl)
+          assert typevar.kind == TypevarY
+          m.error concat(typeToString(e), " does not match constraint ", typeToString(typevar.typ))
         skip e
-
-  if explicitTypeVars.kind != DotToken:
+  elif explicitTypeVars.kind != DotToken:
     # aka there are explicit type vars
     if m.tvars.len == 0:
       m.error "routine is not generic"

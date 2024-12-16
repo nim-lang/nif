@@ -111,7 +111,9 @@
          (infix \2D ~1 a.1 1 +2))))))) ~2,~1
    (ret result.0))) ,28
  (discard 11
-  (call ~3 fib.1.tfie0imm3 1 +8)) 11,28
+  (call ~3 fib.1.tfie0imm3 1 +8)) ,29
+ (discard 16
+  (call ~8 fib.1.tfie0imm3 1 +8)) 11,28
  (proc :fib.1.tfie0imm3 . ~11,~6 . 
   (at fib.0.tfie0imm3
    (i -1)) 9,~6
