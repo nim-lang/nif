@@ -6,7 +6,7 @@
 
 import std / [syncio, os, tables, times]
 include nifprelude
-import nifindexes, symparser
+import nifindexes, symparser, reporters
 
 type
   Iface* = OrderedTable[StrId, seq[SymId]] # eg. "foo" -> @["foo.1.mod", "foo.3.mod"]
@@ -58,18 +58,21 @@ proc loadInterface*(suffix: string; importTab: var Iface) =
     importTab.mgetOrPut(strId, @[]).add symId
 
 proc error*(msg: string; c: Cursor) {.noreturn.} =
+  when defined(debug):
+    writeStackTrace()
   write stdout, "[Error] "
+  if isValid(c.info):
+    write stdout, infoToStr(c.info)
+    write stdout, " "
   write stdout, msg
   writeLine stdout, toString(c, false)
-  when defined(debug):
-    echo getStackTrace()
   quit 1
 
 proc error*(msg: string) {.noreturn.} =
+  when defined(debug):
+    writeStackTrace()
   write stdout, "[Error] "
   write stdout, msg
-  when defined(debug):
-    echo getStackTrace()
   quit 1
 
 type
