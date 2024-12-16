@@ -452,6 +452,7 @@ proc instantiateGenerics(c: var SemContext) =
 type
   SemFlag = enum
     KeepMagics
+    PreferIterators
 
 proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {})
 
@@ -853,7 +854,7 @@ proc semCall(c: var SemContext; it: var Item) =
         swap c.dest, genericDest
         while fn.n.kind != ParRi:
           # XXX semLocalType should build `static` types for values
-          discard semLocalType(c, fn.n) 
+          discard semLocalType(c, fn.n)
         swap c.dest, genericDest
         skipParRi fn.n
         it.n = fn.n
@@ -2039,6 +2040,77 @@ proc semCase(c: var SemContext; it: var Item) =
   if typeKind(it.typ) == AutoT:
     producesVoid c, info, it.typ
 
+proc semForLoopVar(c: var SemContext; it: var Item; loopvarType: TypeCursor) =
+  if stmtKind(it.n) == LetS:
+    let declStart = c.dest.len
+    takeToken c, it.n
+    let delayed = handleSymDef(c, it.n, LetY)
+    c.addSym delayed
+    wantDot c, it.n # export marker must be empty
+    wantDot c, it.n # pragmas
+    copyTree c.dest, loopvarType
+    skip it.n # skip over the type which might have been set already as we tend to re-sem stuff
+    wantDot c, it.n # value
+    wantParRi c, it.n
+    publish c, delayed.s.name, declStart
+  else:
+    buildErr c, it.n.info, "illformed AST: `let` inside `unpackflat` expected"
+    skip it.n
+
+proc isIterator(c: var SemContext; s: SymId): bool =
+  let sym = fetchSym(c, s)
+  let res = declToCursor(c, sym)
+  result = res.status == LacksNothing and res.decl == $IterY
+
+proc semFor(c: var SemContext; it: var Item) =
+  let info = it.n.info
+  takeToken c, it.n
+  var iterCall = Item(n: it.n, typ: c.types.autoType)
+  let beforeCall = c.dest.len
+  semExpr c, iterCall, {PreferIterators, KeepMagics}
+  if c.dest[beforeCall+1].kind == Symbol and c.isIterator(c.dest[beforeCall+1].symId):
+    discard "fine"
+  else:
+    buildErr c, it.n.info, "iterator expected"
+  it.n = iterCall.n
+  withNewScope c:
+    case substructureKind(it.n)
+    of UnpackFlatS:
+      takeToken c, it.n
+      if iterCall.typ.typeKind == TupleT:
+        var tup = iterCall.typ
+        inc tup
+        while it.n.kind != ParRi and tup.kind != ParRi:
+          semForLoopVar c, it, tup
+          skip tup
+        if it.n.kind == ParRi:
+          inc it.n
+          if tup.kind == ParRi:
+            discard "all fine"
+          else:
+            buildErr c, it.n.info, "too few for loop variables"
+        else:
+          buildErr c, it.n.info, "too many for loop variables"
+          skipToEnd it.n
+      else:
+        semForLoopVar c, it, iterCall.typ
+
+      wantParRi c, it.n
+    of UnpackTupS:
+      # XXX To implement
+      buildErr c, it.n.info, "`unpacktup` inside `for` not implemented"
+      skip it.n
+    else:
+      buildErr c, it.n.info, "illformed AST: `unpackflat` inside `for` expected"
+      skip it.n
+
+    inc c.routine.inLoop
+    semStmt c, it.n
+    dec c.routine.inLoop
+
+  wantParRi c, it.n
+  producesNoReturn c, info, it.typ
+
 proc semReturn(c: var SemContext; it: var Item) =
   let info = it.n.info
   takeToken c, it.n
@@ -2527,10 +2599,8 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
         toplevelGuard c:
           semCase c, it
       of ForS:
-        # XXX
         toplevelGuard c:
-          buildErr c, it.n.info, "statement not implemented"
-          skip it.n
+          semFor c, it
     of FalseX, TrueX:
       literalB c, it, c.types.boolType
     of InfX, NegInfX, NanX:

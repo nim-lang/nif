@@ -197,6 +197,7 @@ type
     RestrictS = "restrict"
     PragmasS = "pragmas"
     UnpackFlatS = "unpackflat"
+    UnpackTupS = "unpacktup"
 
   CallConv* = enum
     NoCallConv
