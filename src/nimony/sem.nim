@@ -2635,8 +2635,8 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
         toplevelGuard c:
           semIf c, it
       of WhenS:
-        # eager, but maybe should be delayed until later passes for `declared` etc?
-        semWhen c, it
+        toplevelGuard c:
+          semWhen c, it
       of RetS:
         toplevelGuard c:
           semReturn c, it
