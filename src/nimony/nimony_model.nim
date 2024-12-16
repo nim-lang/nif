@@ -55,7 +55,7 @@ type
     FldY = "fld"
     ProcY = "proc"
     FuncY = "func"
-    IterY = "iter"
+    IterY = "iterator"
     ConverterY = "converter"
     MethodY = "method"
     MacroY = "macro"
