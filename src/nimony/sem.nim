@@ -745,8 +745,8 @@ proc considerTypeboundOps(c: var SemContext; m: var seq[Match]; candidates: FnCa
 proc requestRoutineInstance(c: var SemContext; origin: SymId; m: var Match;
                             info: PackedLineInfo): ProcInstance =
   let key = typeToCanon(m.typeArgs, 0)
-  result = c.instantiatedProcs.getOrDefault(key)
-  if result.targetSym == SymId(0):
+  var targetSym = c.instantiatedProcs.getOrDefault(key)
+  if targetSym == SymId(0):
     let targetSym = newSymId(c, origin)
     var signature = createTokenBuf(30)
     let decl = getProcDecl(origin)
@@ -771,7 +771,7 @@ proc requestRoutineInstance(c: var SemContext; origin: SymId; m: var Match;
       returnType: cursorAt(signature, beforeRetType))
     publish targetSym, ensureMove signature
 
-    c.instantiatedProcs[key] = result
+    c.instantiatedProcs[key] = targetSym
     var req = InstRequest(
       origin: origin,
       targetSym: targetSym,
@@ -781,6 +781,15 @@ proc requestRoutineInstance(c: var SemContext; origin: SymId; m: var Match;
     req.requestFrom.add info
 
     c.procRequests.add ensureMove req
+  else:
+    let res = tryLoadSym(targetSym)
+    assert res.status == LacksNothing
+    var n = res.decl
+    skipToParams n
+    skip n
+    result = ProcInstance(targetSym: targetSym, procType: res.decl,
+      returnType: n)
+  assert result.returnType.kind != UnknownToken
 
 proc typeofCallIs(c: var SemContext; it: var Item; beforeCall: int; returnType: TypeCursor) {.inline.} =
   let expected = it.typ
@@ -2384,10 +2393,10 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
             c.takeTree it.n
           else:
             buildErr c, it.n.info, "expression expected"
-            inc it.n
+            skip it.n
         of ObjectT, EnumT, DistinctT, ConceptT:
           buildErr c, it.n.info, "expression expected"
-          inc it.n
+          skip it.n
         of IntT, FloatT, CharT, BoolT, UIntT, VoidT, StringT, NilT, AutoT, SymKindT,
             PtrT, RefT, MutT, OutT, LentT, SinkT, UncheckedArrayT, SetT, StaticT, TypedescT,
             TupleT, ArrayT, VarargsT, ProcT, IterT:

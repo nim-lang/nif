@@ -76,7 +76,7 @@ type
     types*: BuiltinTypes
     typeMem*: Table[string, TokenBuf]
     instantiatedTypes*: OrderedTable[string, SymId]
-    instantiatedProcs*: OrderedTable[string, ProcInstance]
+    instantiatedProcs*: OrderedTable[string, SymId]
     thisModuleSuffix*: string
     processedModules*: HashSet[string]
     usedTypevars*: int
