@@ -1,5 +1,5 @@
 (.nif24)
-,2,src/nimony/tests/basics/tgeneric_obj.nim(stmts 2,1
+,2,tests/nimony/basics/tgeneric_obj.nim(stmts 2,1
  (type :int.0.tge6t2h7f 
   (i -1) . 5
   (pragmas 2

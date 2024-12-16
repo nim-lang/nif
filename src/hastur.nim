@@ -200,7 +200,7 @@ proc testDir(c: var TestCounters; dir: string; overwrite, useTrack: bool) =
 
 proc nimonytests(overwrite: bool) =
   ## Run all the nimonytests in the test-suite.
-  const TestDir = "src/nimony/tests"
+  const TestDir = "tests/nimony"
   let t0 = epochTime()
   var c = TestCounters(total: 0, failures: 0)
   for x in walkDir(TestDir, relative = true):
@@ -391,7 +391,7 @@ proc handleCmdLine =
       let inp = args[0].addFileExt(".nim")
       let outp = args[1].addFileExt(".nim")
       if splitFile(args[1]).dir == "":
-        record inp, "tests/basics" / outp, flags
+        record inp, "tests/nimony/basics" / outp, flags
       else:
         record inp, outp, flags
     else:

@@ -1,5 +1,5 @@
 (.nif24)
-,2,src/nimony/tests/basics/t2.nim(stmts 2,1
+,2,tests/nimony/basics/t2.nim(stmts 2,1
  (type :int.0.t27hh87f1 
   (i -1) . 5
   (pragmas 2
