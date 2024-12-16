@@ -190,6 +190,7 @@ proc producesNoReturn(c: var SemContext; info: PackedLineInfo; dest: var Cursor)
 proc semInclude(c: var SemContext; it: var Item) =
   var files: seq[string] = @[]
   var hasError = false
+  let orig = it.n
   let info = it.n.info
   var x = it.n
   skip it.n
@@ -197,7 +198,7 @@ proc semInclude(c: var SemContext; it: var Item) =
   filenameVal(x, files, hasError)
 
   if hasError:
-    c.buildErr info, "wrong `include` statement"
+    c.buildErr info, "wrong `include` statement", orig
   else:
     for f1 in items(files):
       let f2 = resolveFile(c, getFile(c, info), f1)
@@ -241,6 +242,7 @@ proc cyclicImport(c: var SemContext; x: var Cursor) =
 
 proc semImport(c: var SemContext; it: var Item) =
   let info = it.n.info
+  let orig = it.n
   var x = it.n
   skip it.n
   inc x # skip the `import`
@@ -259,7 +261,7 @@ proc semImport(c: var SemContext; it: var Item) =
   var hasError = false
   filenameVal(x, files, hasError)
   if hasError:
-    c.buildErr info, "wrong `import` statement"
+    c.buildErr info, "wrong `import` statement", orig
   else:
     let origin = getFile(c, info)
     for f in files:
@@ -995,8 +997,10 @@ proc tryBuiltinDot(c: var SemContext; it: var Item; lhs: Item; fieldName: StrId;
           it.kind = FldY
           result = MatchedDot
         else:
+          c.dest.add identToken(fieldName, info)
           c.buildErr info, "undeclared field: " & pool.strings[fieldName]
       else:
+        c.dest.add identToken(fieldName, info)
         c.buildErr info, "object type expected"
     elif t.typeKind == TupleT:
       var tup = t
@@ -1010,10 +1014,12 @@ proc tryBuiltinDot(c: var SemContext; it: var Item; lhs: Item; fieldName: StrId;
           result = MatchedDot
           break
         skip tup
-      c.dest.add intToken(pool.integers.getOrIncl(0), info)
       if result != MatchedDot:
+        c.dest.add identToken(fieldName, info)
         c.buildErr info, "undeclared field: " & pool.strings[fieldName]
+      c.dest.add intToken(pool.integers.getOrIncl(0), info)
     else:
+      c.dest.add identToken(fieldName, info)
       c.buildErr info, "object type expected"
   c.dest.addParRi()
   if result == MatchedDot:
@@ -1086,10 +1092,11 @@ proc semBlock(c: var SemContext; it: var Item) =
 
 proc semBreak(c: var SemContext; it: var Item) =
   let info = it.n.info
-  takeToken c, it.n
   if c.routine.inLoop+c.routine.inBlock == 0:
-    buildErr c, it.n.info, "`break` only possible within a `while` or `block` statement"
+    buildErr c, it.n.info, "`break` only possible within a `while` or `block` statement", it.n
+    skip it.n
   else:
+    takeToken c, it.n
     if it.n.kind == DotToken:
       wantDot c, it.n
     else:
@@ -1098,17 +1105,18 @@ proc semBreak(c: var SemContext; it: var Item) =
       if a.kind != LabelY:
         buildErr c, it.n.info, "`break` needs a block label"
       it.n = a.n
-  wantParRi c, it.n
+    wantParRi c, it.n
   producesNoReturn c, info, it.typ
 
 proc semContinue(c: var SemContext; it: var Item) =
   let info = it.n.info
-  takeToken c, it.n
   if c.routine.inLoop == 0:
-    buildErr c, it.n.info, "`continue` only possible within a `while` statement"
+    buildErr c, it.n.info, "`continue` only possible within a `while` statement", it.n
+    skip it.n
   else:
+    takeToken c, it.n
     wantDot c, it.n
-  wantParRi c, it.n
+    wantParRi c, it.n
   producesNoReturn c, info, it.typ
 
 proc wantExportMarker(c: var SemContext; n: var Cursor) =
@@ -1117,7 +1125,7 @@ proc wantExportMarker(c: var SemContext; n: var Cursor) =
     inc n
   elif n.kind == Ident and pool.strings[n.litId] == "x":
     if c.currentScope.kind != ToplevelScope:
-      buildErr c, n.info, "only toplevel declarations can be exported"
+      buildErr c, n.info, "only toplevel declarations can be exported", n
     else:
       c.dest.add n
     inc n
@@ -1125,7 +1133,7 @@ proc wantExportMarker(c: var SemContext; n: var Cursor) =
     # export marker could have been turned into a NIF tag
     takeTree c, n
   else:
-    buildErr c, n.info, "expected '.' or 'x' for an export marker"
+    buildErr c, n.info, "expected '.' or 'x' for an export marker", n
 
 proc insertType(c: var SemContext; typ: TypeCursor; patchPosition: int) =
   let t = skipModifier(typ)
@@ -1149,8 +1157,8 @@ proc semPragma(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; kin
       inc n
       c.dest.addParRi()
     else:
-      buildErr c, n.info, "expected pragma"
-      inc n
+      buildErr c, n.info, "expected pragma", n
+      skip n
       c.dest.addParRi()
       #skip n
   of Magic:
@@ -1166,7 +1174,8 @@ proc semPragma(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; kin
         crucial.bits = bits
       takeToken c, n
     else:
-      buildErr c, n.info, "`magic` pragma takes a string literal"
+      buildErr c, n.info, "`magic` pragma takes a string literal", n
+      skip n
     c.dest.addParRi()
   of ImportC, ImportCpp, ExportC, Header:
     c.dest.add parLeToken(pool.tags.getOrIncl($pk), n.info)
@@ -1198,7 +1207,8 @@ proc semPragmas(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; ki
         skipParRi n
     wantParRi c, n
   else:
-    buildErr c, n.info, "expected '.' or 'pragmas'"
+    buildErr c, n.info, "expected '.' or 'pragmas'", n
+    skip n
 
 proc semIdentImpl(c: var SemContext; n: var Cursor; ident: StrId): Sym =
   let insertPos = c.dest.len
@@ -1495,7 +1505,8 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
         semExpr c, it
         n = it.n
       else:
-        c.buildErr info, "not a type"
+        c.buildErr info, "not a type", n
+        skip n
     of IntT, FloatT, CharT, BoolT, UIntT, VoidT, StringT, NilT, AutoT, SymKindT:
       takeTree c, n
     of PtrT, RefT, MutT, OutT, LentT, SinkT, NotT, UncheckedArrayT, SetT, StaticT, TypedescT:
@@ -1527,22 +1538,22 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
       wantParRi c, n
     of ObjectT:
       if context != InTypeSection:
-        c.buildErr info, "`object` type must be defined in a `type` section"
+        c.buildErr info, "`object` type must be defined in a `type` section", n
         skip n
       else:
         semObjectType c, n
     of EnumT:
-      c.buildErr info, "`enum` type must be defined in a `type` section"
+      c.buildErr info, "`enum` type must be defined in a `type` section", n
       skip n
     of ConceptT:
       if context != InTypeSection:
-        c.buildErr info, "`concept` type must be defined in a `type` section"
+        c.buildErr info, "`concept` type must be defined in a `type` section", n
         skip n
       else:
         semConceptType c, n
     of DistinctT:
       if context != InTypeSection:
-        c.buildErr info, "`distinct` type must be defined in a `type` section"
+        c.buildErr info, "`distinct` type must be defined in a `type` section", n
         skip n
       else:
         takeToken c, n
@@ -1562,14 +1573,16 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
     if context in {InReturnTypeDecl, InGenericConstraint}:
       takeToken c, n
     else:
-      c.buildErr info, "not a type"
+      c.buildErr info, "not a type", n
+      inc n
   else:
     if context == AllowValues:
       var it = Item(n: n, typ: c.types.autoType)
       semExpr c, it
       n = it.n
     else:
-      c.buildErr info, "not a type"
+      c.buildErr info, "not a type", n
+      inc n
 
 proc semLocalType(c: var SemContext; n: var Cursor; context = InLocalDecl): TypeCursor =
   let insertPos = c.dest.len
@@ -1678,7 +1691,7 @@ proc semEnumField(c: var SemContext; n: var Cursor; state: var EnumTypeState) =
     c.dest.add symToken(state.enumType, n.info)
     inc n # 3
   else:
-    c.buildErr n.info, "enum field's type must be empty"
+    c.buildErr n.info, "enum field's type must be empty", n
 
   if n.kind == DotToken:
     # empty value
@@ -1697,7 +1710,8 @@ proc semGenericParam(c: var SemContext; n: var Cursor) =
   if n == "typevar":
     semLocal c, n, TypevarY
   else:
-    buildErr c, n.info, "expected 'typevar'"
+    buildErr c, n.info, "expected 'typevar'", n
+    skip n
 
 proc semGenericParams(c: var SemContext; n: var Cursor) =
   if n.kind == DotToken:
@@ -1711,13 +1725,15 @@ proc semGenericParams(c: var SemContext; n: var Cursor) =
   elif n == $InvokeT:
     takeTree c, n
   else:
-    buildErr c, n.info, "expected '.' or 'typevars'"
+    buildErr c, n.info, "expected '.' or 'typevars'", n
+    skip n
 
 proc semParam(c: var SemContext; n: var Cursor) =
   if n == "param":
     semLocal c, n, ParamY
   else:
-    buildErr c, n.info, "expected 'param'"
+    buildErr c, n.info, "expected 'param'", n
+    skip n
 
 proc semParams(c: var SemContext; n: var Cursor) =
   if n.kind == DotToken:
@@ -1728,7 +1744,8 @@ proc semParams(c: var SemContext; n: var Cursor) =
       semParam c, n
     wantParRi c, n
   else:
-    buildErr c, n.info, "expected '.' or 'params'"
+    buildErr c, n.info, "expected '.' or 'params'", n
+    skip n
 
 proc addReturnResult(c: var SemContext; resId: SymId; info: PackedLineInfo) =
   if resId != SymId(0):
@@ -1750,7 +1767,7 @@ proc semProc(c: var SemContext; it: var Item; kind: SymKind; pass: PassKind) =
   if it.n.kind == DotToken:
     takeToken c, it.n
   else:
-    buildErr c, it.n.info, "TR pattern not implemented"
+    buildErr c, it.n.info, "TR pattern not implemented", it.n
     skip it.n
   c.routine = createSemRoutine(kind, c.routine)
   # 'break' and 'continue' are valid in a template regardless of whether we
@@ -1771,7 +1788,7 @@ proc semProc(c: var SemContext; it: var Item; kind: SymKind; pass: PassKind) =
     if it.n.kind == DotToken:
       takeToken c, it.n
     else:
-      buildErr c, it.n.info, "`effects` must be empty"
+      buildErr c, it.n.info, "`effects` must be empty", it.n
       skip it.n
 
     publishSignature c, symId, declStart
@@ -2198,8 +2215,9 @@ proc semSuf(c: var SemContext, it: var Item) =
   semExpr c, num
   it.n = num.n
   if it.n.kind != StringLit:
-    c.buildErr it.n.info, "string literal expected for suf"
+    c.buildErr it.n.info, "string literal expected for suf", it.n
     skip it.n
+    wantParRi c, it.n
     return
   let expected = it.typ
   case pool.strings[it.n.litId]
@@ -2392,10 +2410,10 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
           if pool.tags[it.n.tag] == "err":
             c.takeTree it.n
           else:
-            buildErr c, it.n.info, "expression expected"
+            buildErr c, it.n.info, "expression expected", it.n
             skip it.n
         of ObjectT, EnumT, DistinctT, ConceptT:
-          buildErr c, it.n.info, "expression expected"
+          buildErr c, it.n.info, "expression expected", it.n
           skip it.n
         of IntT, FloatT, CharT, BoolT, UIntT, VoidT, StringT, NilT, AutoT, SymKindT,
             PtrT, RefT, MutT, OutT, LentT, SinkT, UncheckedArrayT, SetT, StaticT, TypedescT,
@@ -2487,7 +2505,7 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
       of ForS:
         # XXX
         toplevelGuard c:
-          buildErr c, it.n.info, "statement not implemented"
+          buildErr c, it.n.info, "statement not implemented", it.n
           skip it.n
     of FalseX, TrueX:
       literalB c, it, c.types.boolType
@@ -2542,7 +2560,7 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
       wantParRi c, it.n
 
   of ParRi, EofToken, SymbolDef, UnknownToken, DotToken:
-    buildErr c, it.n.info, "expression expected"
+    buildErr c, it.n.info, "expression expected", it.n
 
 proc reportErrors(c: var SemContext): int =
   let errTag = pool.tags.getOrIncl("err")

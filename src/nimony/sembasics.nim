@@ -214,7 +214,7 @@ template withErrorContext*(c: var SemContext; info: PackedLineInfo; body: untype
   finally:
     popErrorContext(c)
 
-proc buildErr*(c: var SemContext; info: PackedLineInfo; msg: string) =
+proc buildErr*(c: var SemContext; info: PackedLineInfo; msg: string; orig: Cursor) =
   when defined(debug):
     writeStackTrace()
     echo infoToStr(info) & " Error: " & msg
@@ -223,14 +223,26 @@ proc buildErr*(c: var SemContext; info: PackedLineInfo; msg: string) =
     for instFrom in items(c.instantiatedFrom):
       c.dest.add dotToken(instFrom)
     c.dest.add strToken(pool.strings.getOrIncl(msg), info)
+    c.dest.addSubtree orig
 
-proc buildLocalErr*(dest: var TokenBuf; info: PackedLineInfo; msg: string) =
+proc buildErr*(c: var SemContext; info: PackedLineInfo; msg: string) =
+  var orig = createTokenBuf(1)
+  orig.addDotToken()
+  c.buildErr info, msg, cursorAt(orig, 0)
+
+proc buildLocalErr*(dest: var TokenBuf; info: PackedLineInfo; msg: string; orig: Cursor) =
   when defined(debug):
     writeStackTrace()
     echo infoToStr(info) & " Error: " & msg
     quit msg
   dest.buildTree ErrT, info:
     dest.add strToken(pool.strings.getOrIncl(msg), info)
+    dest.addSubtree orig
+
+proc buildLocalErr*(dest: var TokenBuf; info: PackedLineInfo; msg: string) =
+  var orig = createTokenBuf(1)
+  orig.addDotToken()
+  dest.buildLocalErr info, msg, cursorAt(orig, 0)
 
 # -------------------------- type handling ---------------------------
 
