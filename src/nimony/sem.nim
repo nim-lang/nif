@@ -2027,6 +2027,9 @@ proc semWhen(c: var SemContext; it: var Item) =
       takeTree c, it.n
     wantParRi c, it.n
   wantParRi c, it.n
+  if not leaveUnresolved:
+    # none of the branches evaluated, output nothing
+    c.dest.shrink start
 
 proc isRangeNode(c: var SemContext; n: Cursor): bool =
   var n = n
