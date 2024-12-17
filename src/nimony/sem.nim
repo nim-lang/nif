@@ -1545,6 +1545,7 @@ proc addVarargsParameter(c: var SemContext; paramsAt: int; info: PackedLineInfo)
   else:
     var n = cursorAt(c.dest, paramsAt)
     if n.substructureKind == ParamsS:
+      inc n
       while n.kind != ParRi:
         if n.substructureKind == ParamS:
           inc n
