@@ -29,8 +29,8 @@ proc addWithoutErrorsImpl(result: var TokenBuf; c: var Cursor) =
     var nested = 0
     while true:
       let item = c.load
-      result.add item
       if item.kind == ParRi:
+        result.add item
         dec nested
         inc c
         if nested == 0: break
@@ -38,6 +38,7 @@ proc addWithoutErrorsImpl(result: var TokenBuf; c: var Cursor) =
         if item.tagId == ErrT:
           addWithoutErrorsImpl(result, c)
         else:
+          result.add item
           inc nested
           inc c
 
