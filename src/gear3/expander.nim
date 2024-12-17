@@ -345,7 +345,8 @@ proc parsePragmas(e: var EContext; c: var Cursor): CollectedPragmas =
           inc c
         of Magic:
           inc c
-          expectStrLit e, c
+          if c.kind notin {StringLit, Ident}:
+            error e, "expected string literal or ident, but got: ", c
           result.flags.incl Nodecl
           inc c
         of ImportC, ImportCpp, ExportC:
