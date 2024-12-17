@@ -1527,9 +1527,10 @@ proc semInvoke(c: var SemContext; n: var Cursor) =
       c.dest.add symToken(targetSym, info)
 
 proc addVarargsParameter(c: var SemContext; paramsAt: int; info: PackedLineInfo) =
+  const vanon = "vanon"
   var varargsParam = @[
     parLeToken(ParamS, info),
-    dotToken(info), # leave name empty
+    identToken(pool.strings.getOrIncl(vanon), info),
     dotToken(info), # export marker
     dotToken(info), # pragmas
     parLeToken(VarargsT, info),
@@ -1547,8 +1548,9 @@ proc addVarargsParameter(c: var SemContext; paramsAt: int; info: PackedLineInfo)
       while n.kind != ParRi:
         if n.substructureKind == ParamS:
           inc n
-          if n.kind == DotToken:
-            # already with empty name implies we already added the hidden parameter
+          let lit = getIdent(c, n)
+          if lit != StrId(0) and pool.strings[lit] == vanon:
+            # already added:
             endRead(c.dest)
             return
           skipToEnd n
@@ -1601,14 +1603,15 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
       wantParRi c, n
     of VarargsT:
       takeToken c, n
-      semLocalTypeImpl c, n, context
-      if n.kind == DotToken:
-        takeToken c, n
-      else:
-        var it = Item(n: n, typ: c.types.autoType)
-        semExpr c, it
-        # XXX Check the expression is a symchoice or a sym
-        n = it.n
+      if n.kind != ParRi:
+        semLocalTypeImpl c, n, context
+        if n.kind == DotToken:
+          takeToken c, n
+        else:
+          var it = Item(n: n, typ: c.types.autoType)
+          semExpr c, it
+          # XXX Check the expression is a symchoice or a sym
+          n = it.n
       wantParRi c, n
     of ObjectT:
       if context != InTypeSection:
@@ -2115,8 +2118,11 @@ proc semFor(c: var SemContext; it: var Item) =
   var iterCall = Item(n: it.n, typ: c.types.autoType)
   let beforeCall = c.dest.len
   semExpr c, iterCall, {PreferIterators, KeepMagics}
+  var isMacroLike = false
   if c.dest[beforeCall+1].kind == Symbol and c.isIterator(c.dest[beforeCall+1].symId):
     discard "fine"
+  elif iterCall.typ.typeKind == UntypedT:
+    isMacroLike = true
   else:
     buildErr c, it.n.info, "iterator expected"
   it.n = iterCall.n
@@ -2151,9 +2157,12 @@ proc semFor(c: var SemContext; it: var Item) =
       buildErr c, it.n.info, "illformed AST: `unpackflat` inside `for` expected"
       skip it.n
 
-    inc c.routine.inLoop
-    semStmt c, it.n
-    dec c.routine.inLoop
+    if isMacroLike:
+      takeTree c.dest, it.n # don't touch the body
+    else:
+      inc c.routine.inLoop
+      semStmt c, it.n
+      dec c.routine.inLoop
 
   wantParRi c, it.n
   producesNoReturn c, info, it.typ

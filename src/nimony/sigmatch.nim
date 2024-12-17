@@ -38,8 +38,9 @@ type
     returnType*: Cursor
     context: ptr SemContext
     error: MatchError
+    firstVarargPosition*: int
 
-proc createMatch*(context: ptr SemContext): Match = Match(context: context)
+proc createMatch*(context: ptr SemContext): Match = Match(context: context, firstVarargPosition: -1)
 
 proc concat(a: varargs[string]): string =
   result = a[0]
@@ -389,7 +390,11 @@ proc singleArgImpl(m: var Match; f: var Cursor; arg: Item) =
       var a = arg.typ
       linearMatch m, f, a
       expectParRi m, f
-    of VarargsT, UntypedT:
+    of VarargsT:
+      discard "do not even advance f here"
+      if m.firstVarargPosition < 0:
+        m.firstVarargPosition = m.args.len
+    of UntypedT:
       # `varargs` and `untyped` simply match everything:
       inc f
       expectParRi m, f
@@ -456,8 +461,9 @@ proc sigmatchLoop(m: var Match; f: var Cursor; args: openArray[Item]) =
     let param = asLocal(f)
     var ftyp = param.typ
     if ftyp != "varargs":
-      isVarargs = true
       skip f
+    else:
+      isVarargs = true
 
     singleArg m, ftyp, args[i]
     if m.err: break
@@ -532,7 +538,7 @@ proc sigmatch*(m: var Match; fn: FnCandidate; args: openArray[Item];
     let moreArgs = collectDefaultValues(f)
     sigmatchLoop m, f, moreArgs
     if f.kind != ParRi:
-      m.error "too many parameters"
+      m.error "too few arguments"
 
   if f.kind == ParRi:
     inc f
