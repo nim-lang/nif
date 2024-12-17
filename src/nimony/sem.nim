@@ -1740,7 +1740,7 @@ proc semEnumField(c: var SemContext; n: var Cursor; state: var EnumTypeState) =
     if explicitValue != state.thisValue:
       state.hasHole = true
       state.thisValue = explicitValue
-  c.addOverloadableSym delayed
+  c.addSym delayed
   wantParRi c, n
   publish c, delayed.s.name, declStart
 
