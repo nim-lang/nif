@@ -10,6 +10,7 @@ proc addWithoutErrorsImpl(result: var TokenBuf; c: var Cursor) =
     result.add c.load
     inc c
   elif c.tagId == ErrT:
+    # only add final child unless final child is `.`, in which case delete completely
     var last = c
     inc c
     if c.kind == ParRi:
@@ -18,7 +19,10 @@ proc addWithoutErrorsImpl(result: var TokenBuf; c: var Cursor) =
     while c.kind != ParRi:
       last = c
       skip c
-    addWithoutErrorsImpl(result, last)
+    if last.kind == DotToken:
+      inc last
+    else:
+      addWithoutErrorsImpl(result, last)
     assert last == c
     inc c
   else:
