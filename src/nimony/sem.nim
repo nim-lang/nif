@@ -666,9 +666,9 @@ proc addFn(c: var SemContext; fn: FnCandidate; fnOrig: Cursor; args: openArray[I
       if n.kind == SymbolDef:
         inc n # skip the SymbolDef
         if n.kind == ParLe:
-          if n.exprKind in {DefinedX, DeclaredX}:
-            # magics that opt in to semchecking after overloading
-            # probably should be all of them but not ready yet i.e. (at)
+          if n.exprKind notin {AtX}:
+            # magic needs semchecking after overloading
+            # (at) currently produces itself so it needs to opt out
             result = MagicCallNeedsSemcheck
           else:
             result = MagicCall
@@ -991,6 +991,7 @@ proc semCall(c: var SemContext; it: var Item) =
       c.dest.shrink beforeCall
       var magicExpr = Item(n: cursorAt(magicExprBuf, 0), typ: it.typ)
       semExpr c, magicExpr
+      it.typ = magicExpr.typ
     elif c.routine.inGeneric == 0 and m[idx].inferred.len > 0 and isMagic == NonMagicCall:
       assert fn.n.kind == Symbol
       let inst = c.requestRoutineInstance(fn.n.symId, m[idx], callNode.info)
@@ -2218,18 +2219,26 @@ proc semTypeSection(c: var SemContext; n: var Cursor) =
   publish c, delayed.s.name, declStart
 
 proc semTypedBinaryArithmetic(c: var SemContext; it: var Item) =
+  let beforeExpr = c.dest.len
   takeToken c, it.n
+  let typeStart = c.dest.len
   semLocalTypeImpl c, it.n, InLocalDecl
+  let typ = typeToCursor(c, typeStart)
   semExpr c, it
   semExpr c, it
   wantParRi c, it.n
+  commonType c, it, beforeExpr, typ
 
 proc semCmp(c: var SemContext; it: var Item) =
   let beforeExpr = c.dest.len
   takeToken c, it.n
+  let typeStart = c.dest.len
   semLocalTypeImpl c, it.n, InLocalDecl
-  semExpr c, it
-  semExpr c, it
+  let typ = typeToCursor(c, typeStart)
+  var operand = Item(n: it.n, typ: typ)
+  semExpr c, operand
+  semExpr c, operand
+  it.n = operand.n
   wantParRi c, it.n
   commonType c, it, beforeExpr, c.types.boolType
 
@@ -2249,10 +2258,14 @@ proc literalB(c: var SemContext; it: var Item; literalType: TypeCursor) =
   commonType c, it, beforeExpr, expected
 
 proc semTypedUnaryArithmetic(c: var SemContext; it: var Item) =
+  let beforeExpr = c.dest.len
   takeToken c, it.n
+  let typeStart = c.dest.len
   semLocalTypeImpl c, it.n, InLocalDecl
+  let typ = typeToCursor(c, typeStart)
   semExpr c, it
   wantParRi c, it.n
+  commonType c, it, beforeExpr, typ
 
 proc semArrayConstr(c: var SemContext, it: var Item) =
   let exprStart = c.dest.len
