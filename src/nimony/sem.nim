@@ -1190,6 +1190,7 @@ type
   CrucialPragma* = object
     magic: string
     bits: int
+    hasVarargs: PackedLineInfo
 
 proc semPragma(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; kind: SymKind) =
   let pk = pragmaKind(n)
@@ -1231,6 +1232,11 @@ proc semPragma(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; kin
     semConstIntExpr(c, n)
     c.dest.addParRi()
   of Nodecl, Selectany, Threadvar, Globalvar, Discardable, Noreturn:
+    c.dest.add parLeToken(pool.tags.getOrIncl($pk), n.info)
+    c.dest.addParRi()
+    inc n
+  of Varargs:
+    crucial.hasVarargs = n.info
     c.dest.add parLeToken(pool.tags.getOrIncl($pk), n.info)
     c.dest.addParRi()
     inc n
@@ -1324,10 +1330,13 @@ proc semObjectType(c: var SemContext; n: var Cursor) =
     takeToken c, n
   else:
     semLocalTypeImpl c, n, InLocalDecl
-  # object fields:
-  withNewScope c:
-    while n.substructureKind == FldS:
-      semLocal(c, n, FldY)
+  if n.kind == DotToken:
+    takeToken c, n
+  else:
+    # object fields:
+    withNewScope c:
+      while n.substructureKind == FldS:
+        semLocal(c, n, FldY)
   wantParRi c, n
 
 proc semTupleType(c: var SemContext; n: var Cursor) =
@@ -1517,6 +1526,38 @@ proc semInvoke(c: var SemContext; n: var Cursor) =
       c.dest.shrink typeStart
       c.dest.add symToken(targetSym, info)
 
+proc addVarargsParameter(c: var SemContext; paramsAt: int; info: PackedLineInfo) =
+  var varargsParam = @[
+    parLeToken(ParamS, info),
+    dotToken(info), # leave name empty
+    dotToken(info), # export marker
+    dotToken(info), # pragmas
+    parLeToken(VarargsT, info),
+    parRiToken(info),
+    dotToken(info), # value
+    parRiToken(info)
+  ]
+  if c.dest[paramsAt].kind == DotToken:
+    c.dest[paramsAt] = parLeToken(ParamsS, info)
+    varargsParam.add parRiToken(info)
+    c.dest.insert fromBuffer(varargsParam), paramsAt+1
+  else:
+    var n = cursorAt(c.dest, paramsAt)
+    if n.substructureKind == ParamsS:
+      while n.kind != ParRi:
+        if n.substructureKind == ParamS:
+          inc n
+          if n.kind == DotToken:
+            # already with empty name implies we already added the hidden parameter
+            endRead(c.dest)
+            return
+          skipToEnd n
+        else:
+          break
+      let insertPos = cursorToPosition(c.dest, n)
+      endRead(c.dest)
+      c.dest.insert fromBuffer(varargsParam), insertPos+1
+
 proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext) =
   let info = n.info
   case n.kind
@@ -1540,7 +1581,7 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
         n = it.n
       else:
         c.buildErr info, "not a type"
-    of IntT, FloatT, CharT, BoolT, UIntT, VoidT, StringT, NilT, AutoT, SymKindT:
+    of IntT, FloatT, CharT, BoolT, UIntT, VoidT, StringT, NilT, AutoT, SymKindT, UntypedT:
       takeTree c, n
     of PtrT, RefT, MutT, OutT, LentT, SinkT, NotT, UncheckedArrayT, SetT, StaticT, TypedescT:
       takeToken c, n
@@ -1595,11 +1636,14 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
     of ProcT, IterT:
       takeToken c, n
       wantDot c, n # name
+      let beforeParams = c.dest.len
       semParams c, n
       semLocalTypeImpl c, n, InReturnTypeDecl
-      var ignored = default CrucialPragma
-      semPragmas c, n, ignored, ProcY
+      var crucial = default CrucialPragma
+      semPragmas c, n, crucial, ProcY
       wantParRi c, n
+      if crucial.hasVarargs.isValid:
+        addVarargsParameter c, beforeParams, crucial.hasVarargs
     of InvokeT:
       semInvoke c, n
   of DotToken:
@@ -1800,10 +1844,13 @@ proc semProc(c: var SemContext; it: var Item; kind: SymKind; pass: PassKind) =
   try:
     c.openScope() # open parameter scope
     semGenericParams c, it.n
+    let beforeParams = c.dest.len
     semParams c, it.n
     c.routine.returnType = semReturnType(c, it.n)
     var crucial = default CrucialPragma
     semPragmas c, it.n, crucial, kind
+    if crucial.hasVarargs.isValid:
+      addVarargsParameter c, beforeParams, crucial.hasVarargs
     if crucial.magic.len > 0:
       exportMarkerBecomesNifTag c, beforeExportMarker, crucial
     if it.n.kind == DotToken:
@@ -2513,7 +2560,7 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
           skip it.n
         of IntT, FloatT, CharT, BoolT, UIntT, VoidT, StringT, NilT, AutoT, SymKindT,
             PtrT, RefT, MutT, OutT, LentT, SinkT, UncheckedArrayT, SetT, StaticT, TypedescT,
-            TupleT, ArrayT, VarargsT, ProcT, IterT:
+            TupleT, ArrayT, VarargsT, ProcT, IterT, UntypedT:
           # every valid local type expression
           semLocalTypeExpr c, it
         of OrT, AndT, NotT, InvokeT:

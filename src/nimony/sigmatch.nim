@@ -389,6 +389,10 @@ proc singleArgImpl(m: var Match; f: var Cursor; arg: Item) =
       var a = arg.typ
       linearMatch m, f, a
       expectParRi m, f
+    of VarargsT, UntypedT:
+      # `varargs` and `untyped` simply match everything:
+      inc f
+      expectParRi m, f
     of TupleT:
       let fOrig = f
       let aOrig = arg.typ
@@ -443,6 +447,7 @@ proc usesConversion*(m: Match): bool {.inline.} =
 
 proc sigmatchLoop(m: var Match; f: var Cursor; args: openArray[Item]) =
   var i = 0
+  var isVarargs = false
   while i < args.len and f.kind != ParRi:
     m.skippedMod = NoType
     m.argInfo = args[i].n.info
@@ -450,12 +455,16 @@ proc sigmatchLoop(m: var Match; f: var Cursor; args: openArray[Item]) =
     assert f.symKind == ParamY
     let param = asLocal(f)
     var ftyp = param.typ
-    skip f
+    if ftyp != "varargs":
+      isVarargs = true
+      skip f
 
     singleArg m, ftyp, args[i]
     if m.err: break
     inc m.pos
     inc i
+  if isVarargs:
+    skip f
 
 
 iterator typeVars(fn: SymId): SymId =
