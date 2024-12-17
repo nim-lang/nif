@@ -165,6 +165,8 @@ type
     AutoT = "auto"
     SymKindT = "symkind"
     TypedescT = "typedesc"
+    UntypedT = "untyped"
+    TypedT = "typed"
 
   PragmaKind* = enum
     NoPragma

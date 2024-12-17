@@ -1,0 +1,17 @@
+(.nif24)
+,1,tests/nimony/basics/tuntypedarg.nim(stmts 5
+ (type :untyped.0.tunl4m78c1 
+  (untyped) . 9
+  (pragmas 2
+   (magic 7 Expr)) .) ,2
+ (proc 5 :defined.0.tunl4m78c1 
+  (defined) . . 12
+  (params 1
+   (param :x.0 . . ~8,~2
+    (untyped) .)) . 25
+  (pragmas 2
+   (magic 7 Defined)) . .) 4,4
+ (let :x.0.tunl4m78c1 . . ~4,~2 . 11
+  (defined 1 abc)) 4,5
+ (let :y.0.tunl4m78c1 . . ~4,~3 . 11
+  (defined 1 nimony)))

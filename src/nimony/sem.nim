@@ -1552,7 +1552,7 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
       else:
         c.buildErr info, "not a type", n
         skip n
-    of IntT, FloatT, CharT, BoolT, UIntT, VoidT, StringT, NilT, AutoT, SymKindT:
+    of IntT, FloatT, CharT, BoolT, UIntT, VoidT, StringT, NilT, AutoT, SymKindT, UntypedT, TypedT:
       takeTree c, n
     of PtrT, RefT, MutT, OutT, LentT, SinkT, NotT, UncheckedArrayT, SetT, StaticT, TypedescT:
       takeToken c, n
@@ -2532,7 +2532,7 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
           skip it.n
         of IntT, FloatT, CharT, BoolT, UIntT, VoidT, StringT, NilT, AutoT, SymKindT,
             PtrT, RefT, MutT, OutT, LentT, SinkT, UncheckedArrayT, SetT, StaticT, TypedescT,
-            TupleT, ArrayT, VarargsT, ProcT, IterT:
+            TupleT, ArrayT, VarargsT, ProcT, IterT, UntypedT, TypedT:
           # every valid local type expression
           semLocalTypeExpr c, it
         of OrT, AndT, NotT, InvokeT:

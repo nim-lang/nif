@@ -8,7 +8,7 @@ import std / [sets, tables, assertions]
 
 import bitabs, nifreader, nifstreams, nifcursors, lineinfos
 
-import nimony_model, decls, programs, semdata
+import nimony_model, decls, programs, semdata, asthelpers
 
 type
   Item* = object
@@ -32,6 +32,7 @@ type
     args*, typeArgs*: TokenBuf
     err*: bool
     skippedMod: TypeKind
+    removeArgErrors: bool
     argInfo: PackedLineInfo
     pos, opened: int
     inheritanceCosts, intCosts: int
@@ -251,7 +252,11 @@ proc useArg(m: var Match; arg: Item) =
   if arg.typ.typeKind in {MutT, LentT, OutT} and m.skippedMod notin {MutT, LentT, OutT}:
     m.args.addParLe HderefX, arg.n.info
     usedDeref = true
-  m.args.addSubtree arg.n
+  if m.removeArgErrors:
+    var n = arg.n
+    m.args.addWithoutErrors n
+  else:
+    m.args.addSubtree arg.n
   if usedDeref:
     m.args.addParRi()
 
@@ -415,6 +420,15 @@ proc singleArgImpl(m: var Match; f: var Cursor; arg: Item) =
         if a.kind != ParRi:
           # len(a) > len(f)
           m.error expected(fOrig, aOrig)
+    of UntypedT:
+      # always matches, but needs errors removed from typed arg
+      m.removeArgErrors = true
+      inc f
+      expectParRi m, f
+    of TypedT:
+      # always matches
+      inc f
+      expectParRi m, f
     else:
       m.error "BUG: unhandled type: " & pool.tags[f.tagId]
   else:
@@ -446,6 +460,7 @@ proc sigmatchLoop(m: var Match; f: var Cursor; args: openArray[Item]) =
   var i = 0
   while i < args.len and f.kind != ParRi:
     m.skippedMod = NoType
+    m.removeArgErrors = false
     m.argInfo = args[i].n.info
 
     assert f.symKind == ParamY
