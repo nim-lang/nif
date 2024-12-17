@@ -1340,16 +1340,19 @@ proc semTupleType(c: var SemContext; n: var Cursor) =
 
 type
   EnumTypeState = object
+    isBoolType: bool # `bool` is a magic enum and needs special handling
     enumType: SymId
     thisValue: xint
     hasHole: bool
 
 proc semEnumField(c: var SemContext; n: var Cursor; state: var EnumTypeState)
 
-proc semEnumType(c: var SemContext; n: var Cursor; enumType: SymId) =
+proc semEnumType(c: var SemContext; n: var Cursor; enumType: SymId; beforeExportMarker: int) =
   # XXX Propagate hasHole somehow
   takeToken c, n
-  var state = EnumTypeState(enumType: enumType, thisValue: createXint(0'i64), hasHole: false)
+  let magicToken = c.dest[beforeExportMarker]
+  var state = EnumTypeState(enumType: enumType, thisValue: createXint(0'i64), hasHole: false,
+    isBoolType: magicToken.kind == ParLe and pool.tags[magicToken.tagId] == $BoolT)
   while n.substructureKind == EfldS:
     semEnumField(c, n, state)
     inc state.thisValue
@@ -1710,10 +1713,20 @@ proc semEnumField(c: var SemContext; n: var Cursor; state: var EnumTypeState) =
   wantExportMarker c, n # 1
   var crucial = default CrucialPragma
   semPragmas c, n, crucial, EfldY # 2
+  if state.isBoolType and crucial.magic.len == 0:
+    # bool type, set magic to fields if unset
+    if state.thisValue == zero():
+      crucial.magic = "false"
+    else:
+      crucial.magic = "true"
   if crucial.magic.len > 0:
     exportMarkerBecomesNifTag c, beforeExportMarker, crucial
   if n.kind == DotToken or n.kind == Symbol:
-    c.dest.add symToken(state.enumType, n.info)
+    if state.isBoolType:
+      c.dest.addParLe(BoolT, n.info)
+      c.dest.addParRi()
+    else:
+      c.dest.add symToken(state.enumType, n.info)
     inc n # 3
   else:
     c.buildErr n.info, "enum field's type must be empty"
@@ -2174,7 +2187,7 @@ proc semTypeSection(c: var SemContext; n: var Cursor) =
       takeToken c, n
     else:
       if n.typeKind == EnumT:
-        semEnumType c, n, delayed.s.name
+        semEnumType c, n, delayed.s.name, beforeExportMarker
       else:
         semLocalTypeImpl c, n, InTypeSection
     if isGeneric:
