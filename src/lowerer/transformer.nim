@@ -128,7 +128,8 @@ proc getIteratorParams(e: var Context; c: var Cursor): seq[SymId] =
 proc collectIterCalls(e: var Context; c: var Cursor): (SymId, seq[SymId], seq[TokenBuf]) =
   result = default((SymId, seq[SymId], seq[TokenBuf]))
   inc c # skips `call`
-  result[0] = getSymDef(e, c)
+  result[0] = c.symId
+  inc c
   e.demand result[0]
   result[1] = getIteratorParams(e, c)
   e.loop(c):
@@ -325,7 +326,7 @@ proc inlineIterator(e: var Context; c: var Cursor) =
   for i in 0..<params.len:
     createDecl(e, c, params[i], values[i], "let")
 
-  var tok = e.iterdecls[name]
+  var tok {.cursor.} = e.iterdecls[name]
   var body = beginRead(tok)
   inlineIteratorBody(e, body)
 
@@ -389,6 +390,7 @@ proc transformForStmt(e: var Context; c: var Cursor) =
           use x
   ]#
   e.dest.add c
+  inc c
   e.iterCalls = collectIterCalls(e, c)
   e.forVars = collectVars(e, c)
 
