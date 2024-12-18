@@ -32,7 +32,7 @@ Options:
   --isSystem                passed module is a `system.nim` module
   --isMain                  passed module is the main module of a project
   --noSystem                do not auto-import `system.nim`
-  --bits:N                  (int M) has N bits; possible values: 64, 32, 16
+  --bits:N                  `int` has N bits; possible values: 64, 32, 16
   --version                 show the version
   --help                    show this help
 """
