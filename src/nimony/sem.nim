@@ -1945,7 +1945,7 @@ proc semProc(c: var SemContext; it: var Item; kind: SymKind; pass: PassKind) =
           c.buildErr it.n.info, "inside a `concept` a routine cannot have a body"
           skip it.n
     else:
-      if Borrow in crucial.flags:
+      if Borrow in crucial.flags and pass in {checkGenericInst, checkBody}:
         if kind notin {ProcY, FuncY, ConverterY, TemplateY, MethodY}:
           c.buildErr it.n.info, ".borrow only valid for proc, func, converter, template or method"
         else:
@@ -2623,16 +2623,19 @@ proc semDconv(c: var SemContext; it: var Item) =
   var x = Item(n: it.n, typ: c.types.autoType)
   let beforeArg = c.dest.len
   semExpr c, x
+  it.n = x.n
 
   var isDistinct = false
   let destBase = skipDistinct(destType, isDistinct)
-  x.typ = skipDistinct(x.typ, isDistinct)
+  let srcBase = skipDistinct(x.typ, isDistinct)
   if not isDistinct:
     shrink c.dest, beforeExpr
     c.buildErr info, "`dconv` operation only valid for type conversions involving `distinct` types"
   else:
+    var arg = Item(n: cursorAt(c.dest, beforeArg), typ: srcBase)
     var m = createMatch(addr c)
-    typematch m, destBase, x
+    typematch m, destBase, arg
+    endRead c.dest
     if m.err:
       when defined(debug):
         shrink c.dest, beforeExpr
