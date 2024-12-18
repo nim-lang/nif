@@ -665,6 +665,8 @@ proc traverseCase(e: var EContext; c: var Cursor) =
         while c.kind != ParRi:
           traverseExpr e, c
         wantParRi e, c
+      else:
+        traverseExpr e, c
       traverseStmt e, c
       wantParRi e, c
     of ElseS:
