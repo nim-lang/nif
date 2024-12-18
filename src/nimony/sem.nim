@@ -13,7 +13,7 @@ include nifprelude
 import nimony_model, symtabs, builtintypes, decls, symparser,
   programs, sigmatch, magics, reporters, nifconfig, nifindexes,
   intervals, xints,
-  semdata, sembasics, semos, expreval
+  semdata, sembasics, semos, expreval, semborrow
 
 import ".." / gear2 / modnames
 
@@ -1218,6 +1218,7 @@ type
     magic: string
     bits: int
     hasVarargs: PackedLineInfo
+    flags: set[PragmaKind]
 
 proc semPragma(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; kind: SymKind) =
   let pk = pragmaKind(n)
@@ -1258,7 +1259,8 @@ proc semPragma(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; kin
     inc n
     semConstIntExpr(c, n)
     c.dest.addParRi()
-  of Nodecl, Selectany, Threadvar, Globalvar, Discardable, Noreturn:
+  of Nodecl, Selectany, Threadvar, Globalvar, Discardable, Noreturn, Borrow:
+    crucial.flags.incl pk
     c.dest.add parLeToken(pool.tags.getOrIncl($pk), n.info)
     c.dest.addParRi()
     inc n
@@ -2598,6 +2600,40 @@ proc semSubscript(c: var SemContext; it: var Item) =
   lhs.n = cursorAt(lhsBuf, 0)
   semBuiltinSubscript(c, lhs, it)
 
+proc semDconv(c: var SemContext; it: var Item) =
+  let beforeExpr = c.dest.len
+  let info = it.n.info
+  takeToken c, it.n
+  var destType = semLocalType(c, it.n)
+  var x = Item(n: it.n, typ: c.types.autoType)
+  let beforeArg = c.dest.len
+  semExpr c, x
+
+  var isDistinct = false
+  let destBase = skipDistinct(destType, isDistinct)
+  x.typ = skipDistinct(x.typ, isDistinct)
+  if not isDistinct:
+    shrink c.dest, beforeExpr
+    c.buildErr info, "`dconv` operation only valid for type conversions involving `distinct` types"
+  else:
+    var m = createMatch(addr c)
+    typematch m, destBase, x
+    if m.err:
+      when defined(debug):
+        shrink c.dest, beforeExpr
+        c.dest.addErrorMsg m
+      else:
+        c.typeMismatch info, x.typ, destType
+    else:
+      # distinct type conversions can also involve conversions
+      # between different integer sizes or object types and then
+      # `m.args` contains these so use them here:
+      shrink c.dest, beforeArg
+      c.dest.add m.args
+  it.n = x.n
+  wantParRi c, it.n
+  commonType c, it, beforeExpr, destType
+
 proc whichPass(c: SemContext): PassKind =
   result = if c.phase == SemcheckSignatures: checkSignatures else: checkBody
 
@@ -2770,6 +2806,9 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
     of DotX:
       toplevelGuard c:
         semDot c, it
+    of DconvX:
+      toplevelGuard c:
+        semDconv c, it
     of EqX, NeqX, LeX, LtX:
       semCmp c, it
     of AshrX, AddX, SubX, MulX, DivX, ModX, ShrX, ShlX, BitandX, BitorX, BitxorX:
