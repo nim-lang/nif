@@ -652,8 +652,11 @@ proc pickBestMatch(c: var SemContext; m: openArray[Match]): int =
 const
   ConceptProcY = CchoiceY
 
-proc addFn(c: var SemContext; fn: FnCandidate; fnOrig: Cursor; args: openArray[Item]): bool =
-  result = false
+type MagicCallKind = enum
+  NonMagicCall, MagicCall, MagicCallNeedsSemcheck
+
+proc addFn(c: var SemContext; fn: FnCandidate; fnOrig: Cursor; args: openArray[Item]): MagicCallKind =
+  result = NonMagicCall
   if fn.kind in RoutineKinds:
     assert fn.sym != SymId(0)
     let res = tryLoadSym(fn.sym)
@@ -663,7 +666,12 @@ proc addFn(c: var SemContext; fn: FnCandidate; fnOrig: Cursor; args: openArray[I
       if n.kind == SymbolDef:
         inc n # skip the SymbolDef
         if n.kind == ParLe:
-          result = true
+          if n.exprKind in {DefinedX, DeclaredX, CompilesX, TypeofX,
+              SizeofX, LowX, HighX, AddrX}:
+            # magic needs semchecking after overloading
+            result = MagicCallNeedsSemcheck
+          else:
+            result = MagicCall
           # ^ export marker position has a `(`? If so, it is a magic!
           copyKeepLineInfo c.dest[c.dest.len-1], n.load # overwrite the `(call` node with the magic itself
           inc n
@@ -675,7 +683,7 @@ proc addFn(c: var SemContext; fn: FnCandidate; fnOrig: Cursor; args: openArray[I
             inc n
           if n.kind != ParRi:
             error "broken `magic`: expected ')', but got: ", n
-    if not result:
+    if result == NonMagicCall:
       c.dest.add symToken(fn.sym, fnOrig.info)
   elif fn.kind == ConceptProcY and fn.sym != SymId(0):
     c.dest.add identToken(symToIdent(fn.sym), fnOrig.info)
@@ -892,7 +900,16 @@ proc resolveOverloads(c: var SemContext; it: var Item; cs: var CallState) =
         dec c.templateInstCounter
       else:
         buildErr c, cs.callNode.info, "recursion limit exceeded for template expansions"
-    elif c.routine.inGeneric == 0 and m[idx].inferred.len > 0 and not isMagic:
+    elif isMagic == MagicCallNeedsSemcheck:
+      # semcheck produced magic expression
+      var magicExprBuf = createTokenBuf(c.dest.len - cs.beforeCall)
+      magicExprBuf.addUnstructured cursorAt(c.dest, cs.beforeCall)
+      endRead(c.dest)
+      c.dest.shrink cs.beforeCall
+      var magicExpr = Item(n: cursorAt(magicExprBuf, 0), typ: it.typ)
+      semExpr c, magicExpr
+      it.typ = magicExpr.typ
+    elif c.routine.inGeneric == 0 and m[idx].inferred.len > 0 and isMagic == NonMagicCall:
       assert cs.fn.n.kind == Symbol
       let inst = c.requestRoutineInstance(cs.fn.n.symId, m[idx], cs.callNode.info)
       c.dest[cs.beforeCall+1].setSymId inst.targetSym
@@ -2331,17 +2348,26 @@ proc semTypeSection(c: var SemContext; n: var Cursor) =
   publish c, delayed.s.name, declStart
 
 proc semTypedBinaryArithmetic(c: var SemContext; it: var Item) =
+  let beforeExpr = c.dest.len
   takeToken c, it.n
+  let typeStart = c.dest.len
   semLocalTypeImpl c, it.n, InLocalDecl
+  let typ = typeToCursor(c, typeStart)
   semExpr c, it
   semExpr c, it
   wantParRi c, it.n
+  commonType c, it, beforeExpr, typ
 
 proc semCmp(c: var SemContext; it: var Item) =
   let beforeExpr = c.dest.len
   takeToken c, it.n
-  semExpr c, it
-  semExpr c, it
+  let typeStart = c.dest.len
+  semLocalTypeImpl c, it.n, InLocalDecl
+  let typ = typeToCursor(c, typeStart)
+  var operand = Item(n: it.n, typ: typ)
+  semExpr c, operand
+  semExpr c, operand
+  it.n = operand.n
   wantParRi c, it.n
   commonType c, it, beforeExpr, c.types.boolType
 
@@ -2361,10 +2387,14 @@ proc literalB(c: var SemContext; it: var Item; literalType: TypeCursor) =
   commonType c, it, beforeExpr, expected
 
 proc semTypedUnaryArithmetic(c: var SemContext; it: var Item) =
+  let beforeExpr = c.dest.len
   takeToken c, it.n
+  let typeStart = c.dest.len
   semLocalTypeImpl c, it.n, InLocalDecl
+  let typ = typeToCursor(c, typeStart)
   semExpr c, it
   wantParRi c, it.n
+  commonType c, it, beforeExpr, typ
 
 proc semArrayConstr(c: var SemContext, it: var Item) =
   let exprStart = c.dest.len
