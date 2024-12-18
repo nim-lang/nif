@@ -11,7 +11,7 @@ type
     breaks: seq[SymId] # how to translate `break`
     continues: seq[SymId] # how to translate `continue`
     forVars: seq[SymId]
-    iterCalls: (SymId, seq[SymId], seq[TokenBuf])
+    iterCalls: (SymId, seq[SymId], Cursor)
     moduleSyms: HashSet[SymId] # thisModule: ModuleId
     loopBody: TokenBuf
 
@@ -55,19 +55,17 @@ template loop(e: var Context; c: var Cursor; body: untyped) =
     else: discard
     body
 
-proc extract(e: var Context; c: var Cursor; dest: var TokenBuf) =
+proc extract(e: var Context; c: var Cursor) =
   var nested = 0
   while true:
     case c.kind
     of EofToken: break
     of ParLe:
       inc nested
-      dest.add c
+      e.dest.add c
     of ParRi:
-      if nested == 0:
-        break
       dec nested
-      dest.add c
+      e.dest.add c
       if nested == 0:
         inc c
         break
@@ -78,8 +76,11 @@ proc extract(e: var Context; c: var Cursor; dest: var TokenBuf) =
       e.dest.add c
       e.demand c.symId
     else:
-      dest.add c
+      e.dest.add c
     inc c
+
+    if nested == 0:
+      break
 
 proc want(e: var Context; c: var Cursor) =
   e.dest.add c
@@ -113,8 +114,10 @@ proc extractParam(e: var Context; c: var Cursor): SymId =
   inc c
   result = getSymDef(e, c)
   var skipped = createTokenBuf()
+  swap(e.dest, skipped)
   e.loop(c):
-    extract(e, c, skipped)
+    extract(e, c)
+  swap(e.dest, skipped)
 
 proc getIteratorParams(e: var Context; c: var Cursor): seq[SymId] =
   result = @[]
@@ -125,17 +128,19 @@ proc getIteratorParams(e: var Context; c: var Cursor): seq[SymId] =
     loop e, c:
       result.add extractParam(e, c)
 
-proc collectIterCalls(e: var Context; c: var Cursor): (SymId, seq[SymId], seq[TokenBuf]) =
-  result = default((SymId, seq[SymId], seq[TokenBuf]))
+proc collectIterCalls(e: var Context; c: var Cursor): (SymId, seq[SymId], Cursor) =
+  result = default((SymId, seq[SymId], Cursor))
   inc c # skips `call`
   result[0] = c.symId
   inc c
   e.demand result[0]
   result[1] = getIteratorParams(e, c)
+  result[2] = c
+  var skipped = createTokenBuf()
+  swap(e.dest, skipped)
   e.loop(c):
-    var dest = createTokenBuf()
-    extract(e, c, dest)
-    result[2].add dest
+    extract(e, c)
+  swap(e.dest, skipped)
 
 proc collectVars*(e: var Context; c: var Cursor): seq[SymId] =
   inc c # skips `let`
@@ -173,7 +178,7 @@ proc createTupleAccess(e: var Context; c: var Cursor; lvalue: SymId; i: uint32):
 proc transformLocal(e: var Context; c: var Cursor) =
   want e, c, SymbolDef #
   e.loop(c):
-    extract(e, c, e.dest)
+    extract(e, c)
 
 proc transformBreakStmt(e: var Context; c: var Cursor) =
   want e, c
@@ -227,9 +232,9 @@ proc inlineLoopBody(e: var Context; c: var Cursor; mapping: Table[SymId, SymId])
       e.loop c:
         inlineLoopBody(e, c, mapping)
     else:
-      extract(e, c, e.dest)
+      extract(e, c)
   else:
-    extract(e, c, e.dest)
+    extract(e, c)
 
 proc connectSingleExprToLoopVar(e: var Context; c: var Cursor;
                   destSym: SymId; res: var Table[SymId, SymId]) =
@@ -240,11 +245,15 @@ proc connectSingleExprToLoopVar(e: var Context; c: var Cursor;
   else:
     if destSym in e.moduleSyms:
       var dest = createTokenBuf()
-      extract(e, c, dest)
+      swap(e.dest, dest)
+      extract(e, c)
+      swap(e.dest, dest)
       createAsgn(e, c, destSym, dest)
     else:
       var dest = createTokenBuf()
-      extract(e, c, dest)
+      swap(e.dest, dest)
+      extract(e, c)
+      swap(e.dest, dest)
       createDecl(e, c, destSym, dest, "var")
       e.moduleSyms.incl destSym
 
@@ -261,7 +270,9 @@ proc createYieldMapping(e: var Context; c: var Cursor): Table[SymId, SymId] =
         connectSingleExprToLoopVar(e, c,  e.forVars[i], result)
     else:
       var dest = createTokenBuf()
-      extract(e, c, dest)
+      swap(e.dest, dest)
+      extract(e, c)
+      swap(e.dest, dest)
       let yieldExpr = beginRead(dest)
 
       let tmpId: SymId
@@ -317,14 +328,18 @@ proc inlineIteratorBody(e: var Context; c: var Cursor) =
         discard e.continues.pop()
         e.dest.addParRi()
     else:
-      extract(e, c, e.dest)
+      extract(e, c)
   else:
-    extract(e, c, e.dest)
+    extract(e, c)
 
 proc inlineIterator(e: var Context; c: var Cursor) =
-  let (name, params, values) = e.iterCalls
+  var (name, params, valueCursor) = e.iterCalls
   for i in 0..<params.len:
-    createDecl(e, c, params[i], values[i], "let")
+    var value = createTokenBuf()
+    swap(e.dest, value)
+    extract(e, valueCursor)
+    swap(e.dest, value)
+    createDecl(e, c, params[i], value, "let")
 
   var tok {.cursor.} = e.iterdecls[name]
   var body = beginRead(tok)
@@ -423,9 +438,9 @@ proc transformStmt(e: var Context; c: var Cursor; dest: var TokenBuf) =
     of ForS:
       transformForStmt(e, c)
     else:
-      extract(e, c, e.dest)
+      extract(e, c)
   else:
-    extract(e, c, e.dest)
+    extract(e, c)
 
 
 type
