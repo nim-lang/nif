@@ -683,16 +683,17 @@ proc addFn(c: var SemContext; fn: FnCandidate; fnOrig: Cursor; args: openArray[I
     c.dest.addSubtree fnOrig
 
 proc semTemplateCall(c: var SemContext; it: var Item; fnId: SymId; beforeCall: int;
-                    inferred: ptr Table[SymId, Cursor]) =
+                     m: Match) =
   var expandedInto = createTokenBuf(30)
 
   let s = fetchSym(c, fnId)
   let res = declToCursor(c, s)
   if res.status == LacksNothing:
-    let args = cursorAt(c.dest, beforeCall+2)
-    let firstVarargMatch = default(Cursor)
-    # XXX implement varargs here
-    expandTemplate(c, expandedInto, res.decl, args, firstVarargMatch, inferred)
+    let args = cursorAt(c.dest, beforeCall + 2)
+    let firstVarargMatch = cursorAt(c.dest, beforeCall + 2 + m.firstVarargPosition)
+    expandTemplate(c, expandedInto, res.decl, args, firstVarargMatch, addr m.inferred)
+    # We took 2 cursors, so we have to do the `endRead` twice too:
+    endRead(c.dest)
     endRead(c.dest)
     shrink c.dest, beforeCall
     var a = Item(n: cursorAt(expandedInto, 0), typ: c.types.autoType)
@@ -971,7 +972,7 @@ proc semCall(c: var SemContext; it: var Item) =
       if c.templateInstCounter <= MaxNestedTemplates:
         inc c.templateInstCounter
         withErrorContext c, callNode.info:
-          semTemplateCall c, it, finalFn.sym, beforeCall, addr m[idx].inferred
+          semTemplateCall c, it, finalFn.sym, beforeCall, m[idx]
         dec c.templateInstCounter
       else:
         buildErr c, callNode.info, "recursion limit exceeded for template expansions"
@@ -1559,7 +1560,7 @@ proc addVarargsParameter(c: var SemContext; paramsAt: int; info: PackedLineInfo)
           break
       let insertPos = cursorToPosition(c.dest, n)
       endRead(c.dest)
-      c.dest.insert fromBuffer(varargsParam), insertPos+1
+      c.dest.insert fromBuffer(varargsParam), insertPos
 
 proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext) =
   let info = n.info
