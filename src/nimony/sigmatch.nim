@@ -30,7 +30,7 @@ type
     tvars: HashSet[SymId]
     fn*: FnCandidate
     args*, typeArgs*: TokenBuf
-    err*: bool
+    err*, flipped*: bool
     skippedMod: TypeKind
     argInfo: PackedLineInfo
     pos, opened: int
@@ -278,7 +278,10 @@ proc matchSymbol(m: var Match; f: Cursor; arg: Item) =
         if fparent == a.symId:
           m.args.addParLe OconvX, m.argInfo
           m.args.addIntLit diff, m.argInfo
-          inc m.inheritanceCosts, diff
+          if m.flipped:
+            dec m.inheritanceCosts, diff
+          else:
+            inc m.inheritanceCosts, diff
           inc m.opened
           diff = 0 # mark as success
           break
@@ -448,7 +451,7 @@ type
     EqualMatch
 
 proc usesConversion*(m: Match): bool {.inline.} =
-  result = m.inheritanceCosts + m.intCosts > 0
+  result = abs(m.inheritanceCosts) + m.intCosts > 0
 
 proc sigmatchLoop(m: var Match; f: var Cursor; args: openArray[Item]) =
   var i = 0

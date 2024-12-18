@@ -835,13 +835,67 @@ type
     hasGenericArgs: bool
     candidates: FnCandidates
 
-proc untypedCall(c: var SemContext; it: var Item; cs: var CallState) =
+proc untypedCall(c: var SemContext; it: var Item; cs: CallState) =
   c.dest.add cs.callNode
   c.dest.addSubtree cs.fn.n
   for a in cs.args:
     c.dest.addSubtree a.n
   typeofCallIs c, it, cs.beforeCall, c.types.autoType
   wantParRi c, it.n
+
+proc semConvFromCall(c: var SemContext; it: var Item; cs: CallState) =
+  const IntegralTypes = {FloatT, CharT, IntT, UIntT, BoolT}
+  let beforeExpr = c.dest.len
+  let info = cs.callNode.info
+  c.dest.add parLeToken(ConvX, info)
+  var destType = cs.fn.typ
+  if destType.typeKind == TypedescT: inc destType
+  c.dest.copyTree destType
+
+  var srcType = skipModifier(cs.args[0].typ)
+  if destType.typeKind in IntegralTypes and srcType.typeKind in IntegralTypes:
+    discard "ok"
+    c.dest.addSubtree cs.args[0].n
+  else:
+    # maybe object types with an inheritance relation?
+    var arg = cs.args[0]
+    var m = createMatch(addr c)
+    typematch m, destType, arg
+    if not m.err:
+      c.dest.add m.args
+    else:
+      # also try the other direction:
+      var m = createMatch(addr c)
+      m.flipped = true
+      arg.typ = destType
+      typematch m, srcType, arg
+      if not m.err:
+        c.dest.add m.args
+      else:
+        # distinct type conversion?
+        var isDistinct = false
+        let destBase = skipDistinct(destType, isDistinct)
+        let srcBase = skipDistinct(srcType, isDistinct)
+        if isDistinct:
+          var arg = Item(n: cs.args[0].n, typ: srcBase)
+          var m = createMatch(addr c)
+          typematch m, destBase, arg
+          if m.err:
+            when defined(debug):
+              shrink c.dest, beforeExpr
+              c.dest.addErrorMsg m
+            else:
+              c.typeMismatch info, cs.args[0].typ, destType
+          else:
+            # distinct type conversions can also involve conversions
+            # between different integer sizes or object types and then
+            # `m.args` contains these so use them here:
+            c.dest.add m.args
+        else:
+          c.typeMismatch info, cs.args[0].typ, destType
+
+  wantParRi c, it.n
+  commonType c, it, beforeExpr, destType
 
 proc resolveOverloads(c: var SemContext; it: var Item; cs: var CallState) =
   let genericArgs =
@@ -867,6 +921,9 @@ proc resolveOverloads(c: var SemContext; it: var Item; cs: var CallState) =
     # error should have been given above already:
     # buildErr c, fn.n.info, "attempt to call undeclared routine"
     discard
+  elif cs.fn.typ.typeKind == TypedescT and cs.args.len == 1:
+    semConvFromCall c, it, cs
+    return
   else:
     # Keep in mind that proc vars are a thing:
     let sym = if cs.fn.n.kind == Symbol: cs.fn.n.symId else: SymId(0)
