@@ -1871,8 +1871,9 @@ proc semBorrow(c: var SemContext; fn: StrId; beforeParams: int) =
   let signature = cursorAt(c.dest, beforeParams)
   var procBody = genBorrowedProcBody(c, fn, signature, signature.info)
   endRead(c.dest)
-  var it = Item(n: cursorAt(procBody, 1), typ: c.types.autoType)
-  # semProcBody expects we skipped    ^ the `(stmts` already.
+  var n = cursorAt(procBody, 0)
+  takeToken c, n # `(stmts`
+  var it = Item(n: n, typ: c.types.autoType)
   semProcBody c, it
 
 proc semProc(c: var SemContext; it: var Item; kind: SymKind; pass: PassKind) =
