@@ -345,7 +345,8 @@ proc parsePragmas(e: var EContext; c: var Cursor): CollectedPragmas =
           inc c
         of Magic:
           inc c
-          expectStrLit e, c
+          if c.kind notin {StringLit, Ident}:
+            error e, "expected string literal or ident, but got: ", c
           result.flags.incl Nodecl
           inc c
         of ImportC, ImportCpp, ExportC:
@@ -717,7 +718,7 @@ proc traverseStmt(e: var EContext; c: var Cursor; mode = TraverseAll) =
       skip c
     of TypeS:
       traverseTypeDecl e, c
-    of ContinueS:
+    of ContinueS, WhenS:
       error e, "unreachable: ", c
   else:
     error e, "statement expected, but got: ", c

@@ -1376,16 +1376,19 @@ proc semTupleType(c: var SemContext; n: var Cursor) =
 
 type
   EnumTypeState = object
+    isBoolType: bool # `bool` is a magic enum and needs special handling
     enumType: SymId
     thisValue: xint
     hasHole: bool
 
 proc semEnumField(c: var SemContext; n: var Cursor; state: var EnumTypeState)
 
-proc semEnumType(c: var SemContext; n: var Cursor; enumType: SymId) =
+proc semEnumType(c: var SemContext; n: var Cursor; enumType: SymId; beforeExportMarker: int) =
   # XXX Propagate hasHole somehow
   takeToken c, n
-  var state = EnumTypeState(enumType: enumType, thisValue: createXint(0'i64), hasHole: false)
+  let magicToken = c.dest[beforeExportMarker]
+  var state = EnumTypeState(enumType: enumType, thisValue: createXint(0'i64), hasHole: false,
+    isBoolType: magicToken.kind == ParLe and pool.tags[magicToken.tagId] == $BoolT)
   while n.substructureKind == EfldS:
     semEnumField(c, n, state)
     inc state.thisValue
@@ -1785,10 +1788,20 @@ proc semEnumField(c: var SemContext; n: var Cursor; state: var EnumTypeState) =
   wantExportMarker c, n # 1
   var crucial = default CrucialPragma
   semPragmas c, n, crucial, EfldY # 2
+  if state.isBoolType and crucial.magic.len == 0:
+    # bool type, set magic to fields if unset
+    if state.thisValue == zero():
+      crucial.magic = "false"
+    else:
+      crucial.magic = "true"
   if crucial.magic.len > 0:
     exportMarkerBecomesNifTag c, beforeExportMarker, crucial
   if n.kind == DotToken or n.kind == Symbol:
-    c.dest.add symToken(state.enumType, n.info)
+    if state.isBoolType:
+      c.dest.addParLe(BoolT, n.info)
+      c.dest.addParRi()
+    else:
+      c.dest.add symToken(state.enumType, n.info)
     inc n # 3
   else:
     c.buildErr n.info, "enum field's type must be empty"
@@ -2057,6 +2070,48 @@ proc semIf(c: var SemContext; it: var Item) =
   if typeKind(it.typ) == AutoT:
     producesVoid c, info, it.typ
 
+proc semWhen(c: var SemContext; it: var Item) =
+  let start = c.dest.len
+  let info = it.n.info
+  takeToken c, it.n
+  var leaveUnresolved = false
+  if it.n.substructureKind == ElifS:
+    while it.n.substructureKind == ElifS:
+      takeToken c, it.n
+      let condStart = c.dest.len
+      semConstBoolExpr c, it.n
+      let condValue = cursorAt(c.dest, condStart).exprKind
+      endRead(c.dest)
+      if not leaveUnresolved:
+        if condValue == TrueX:
+          c.dest.shrink start
+          semExpr c, it
+          skipParRi it.n # finish elif
+          skipToEnd it.n
+          return
+        elif condValue != FalseX:
+          # erroring/unresolved condition, leave entire statement as unresolved
+          leaveUnresolved = true
+      takeTree c, it.n
+      wantParRi c, it.n
+  else:
+    buildErr c, it.n.info, "illformed AST: `elif` inside `if` expected"
+  if it.n.substructureKind == ElseS:
+    takeToken c, it.n
+    if not leaveUnresolved:
+      c.dest.shrink start
+      semExpr c, it
+      skipParRi it.n # finish else
+      skipToEnd it.n
+      return
+    else:
+      takeTree c, it.n
+    wantParRi c, it.n
+  wantParRi c, it.n
+  if not leaveUnresolved:
+    # none of the branches evaluated, output nothing
+    c.dest.shrink start
+
 proc isRangeNode(c: var SemContext; n: Cursor): bool =
   var n = n
   if n.exprKind notin {CallX, InfixX}:
@@ -2261,7 +2316,7 @@ proc semTypeSection(c: var SemContext; n: var Cursor) =
       takeToken c, n
     else:
       if n.typeKind == EnumT:
-        semEnumType c, n, delayed.s.name
+        semEnumType c, n, delayed.s.name, beforeExportMarker
       else:
         semLocalTypeImpl c, n, InTypeSection
     if isGeneric:
@@ -2669,6 +2724,9 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
       of IfS:
         toplevelGuard c:
           semIf c, it
+      of WhenS:
+        toplevelGuard c:
+          semWhen c, it
       of RetS:
         toplevelGuard c:
           semReturn c, it

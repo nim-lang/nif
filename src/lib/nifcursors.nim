@@ -120,7 +120,7 @@ proc endRead*(b: var TokenBuf) =
 proc add*(b: var TokenBuf; item: PackedToken) {.inline.} =
   assert isMutable(b), "attempt to mutate frozen TokenBuf"
   if b.len >= b.cap:
-    b.cap = max(b.cap * 3 div 2, 8)
+    b.cap = max(b.cap div 2 + b.cap, 8)
     b.data = cast[Storage](realloc(b.data, sizeof(PackedToken)*b.cap))
   b.data[b.len] = item
   inc b.len
@@ -212,7 +212,7 @@ proc grow(b: var TokenBuf; newLen: int) =
   assert isMutable(b), "attempt to mutate frozen TokenBuf"
   assert newLen > b.len
   if b.cap < newLen:
-    b.cap = max(b.cap * 3 div 2, newLen)
+    b.cap = max(b.cap div 2 + b.cap, newLen)
     b.data = cast[Storage](realloc(b.data, sizeof(PackedToken)*b.cap))
   b.len = newLen
 
