@@ -666,9 +666,9 @@ proc addFn(c: var SemContext; fn: FnCandidate; fnOrig: Cursor; args: openArray[I
       if n.kind == SymbolDef:
         inc n # skip the SymbolDef
         if n.kind == ParLe:
-          if n.exprKind notin {AtX}:
+          if n.exprKind in {DefinedX, DeclaredX, CompilesX, TypeofX,
+              SizeofX, LowX, HighX, AddrX}:
             # magic needs semchecking after overloading
-            # (at) currently produces itself so it needs to opt out
             result = MagicCallNeedsSemcheck
           else:
             result = MagicCall
