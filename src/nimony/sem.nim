@@ -1867,6 +1867,13 @@ proc addReturnResult(c: var SemContext; resId: SymId; info: PackedLineInfo) =
       c.dest.addSymUse resId, info
     c.dest.addParRi() # add it back
 
+proc semBorrow(c: var SemContext; fn: StrId; beforeParams: int) =
+  let signature = cursorAt(c.dest, beforeParams)
+  var procBody = genBorrowedProcBody(c, fn, signature, signature.info)
+  endRead(c.dest)
+  var it = Item(n: cursorAt(procBody, 0), typ: c.types.autoType)
+  semProcBody c, it
+
 proc semProc(c: var SemContext; it: var Item; kind: SymKind; pass: PassKind) =
   let info = it.n.info
   let declStart = c.dest.len
@@ -1937,7 +1944,14 @@ proc semProc(c: var SemContext; it: var Item; kind: SymKind; pass: PassKind) =
           c.buildErr it.n.info, "inside a `concept` a routine cannot have a body"
           skip it.n
     else:
-      takeToken c, it.n
+      if Borrow in crucial.flags:
+        if kind notin {ProcY, FuncY, ConverterY, TemplateY, MethodY}:
+          c.buildErr it.n.info, ".borrow only valid for proc, func, converter, template or method"
+        else:
+          semBorrow(c, symToIdent(symId), beforeParams)
+        inc it.n # skip DotToken
+      else:
+        takeToken c, it.n
       c.closeScope() # close parameter scope
   finally:
     c.routine = c.routine.parent

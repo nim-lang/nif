@@ -13,8 +13,7 @@ import nimony_model, symtabs, builtintypes, decls, symparser,
   semdata, sembasics
 
 proc skipDistinct*(n: TypeCursor; isDistinct: var bool): TypeCursor =
-  # XXX Consider generic types here and construct `DistinctType[Params...]` for
-  # these!
+  # XXX Consider generic types here and construct `DistinctType[Params...]` for these!
   var n = n
   var i = 0
   while i < 10:
@@ -27,9 +26,11 @@ proc skipDistinct*(n: TypeCursor; isDistinct: var bool): TypeCursor =
           isDistinct = true
           inc n
       inc i
+    else:
+      break
   result = n
 
-proc semBorrow*(c: var SemContext; fn: StrId; signature: Cursor; info: PackedLineInfo): TokenBuf =
+proc genBorrowedProcBody*(c: var SemContext; fn: StrId; signature: Cursor; info: PackedLineInfo): TokenBuf =
   #[
 
   Consider:
@@ -50,6 +51,7 @@ proc semBorrow*(c: var SemContext; fn: StrId; signature: Cursor; info: PackedLin
   assert n == $ParamsS
   inc n
   result = createTokenBuf(10)
+  result.add parLeToken(StmtsS, info)
   result.add parLeToken(CallS, info)
   result.add identToken(fn, info)
   var distinctParams = 0
@@ -77,9 +79,10 @@ proc semBorrow*(c: var SemContext; fn: StrId; signature: Cursor; info: PackedLin
       var finalConv = createTokenBuf(4)
       finalConv.add parLeToken(DconvX, info)
       finalConv.copyTree n
-      result.insert finalConv, 0
+      result.insert finalConv, 1
       result.add parRiToken(info)
 
+  result.add parRiToken(info)
   result.add parRiToken(info)
   if distinctParams == 0:
     result.shrink 0
