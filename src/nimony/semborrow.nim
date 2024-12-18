@@ -69,7 +69,7 @@ proc genBorrowedProcBody*(c: var SemContext; fn: StrId; signature: Cursor; info:
       else:
         result.add symToken(param.name.symId, info)
     skip n
-
+  inc n # skip ParRi
   if n.kind == DotToken:
     discard "fine: no return type"
   else:
