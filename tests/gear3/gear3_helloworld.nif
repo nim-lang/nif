@@ -133,11 +133,11 @@
     (var :m.c . . (bool) (true))
     (case m.c
     (of
-     (ranges (true))
+     (set (true))
      (stmts
       (call foo.c +1 +2)))
     (of
-     (ranges (false))
+     (set (false))
      (stmts
       (call foo.c +2 +2))))
 
