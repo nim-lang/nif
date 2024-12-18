@@ -271,6 +271,9 @@ proc insert*(dest: var TokenBuf; src: openArray[PackedToken]; pos: int) =
 proc insert*(dest: var TokenBuf; src: Cursor; pos: int) =
   insert dest, toOpenArray(cast[ptr  UncheckedArray[PackedToken]](src.p), 0, span(src)-1), pos
 
+proc insert*(dest: var TokenBuf; src: TokenBuf; pos: int) =
+  insert dest, toOpenArray(src.data, 0, src.len-1), pos
+
 proc replace*(dest: var TokenBuf; by: Cursor; pos: int) =
   let len = span(Cursor(p: addr dest.data[pos], rem: dest.len-pos))
   let actualLen = min(len, dest.len - pos)

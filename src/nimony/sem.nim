@@ -13,7 +13,7 @@ include nifprelude
 import nimony_model, symtabs, builtintypes, decls, symparser,
   programs, sigmatch, magics, reporters, nifconfig, nifindexes,
   intervals, xints,
-  semdata, sembasics, semos, expreval
+  semdata, sembasics, semos, expreval, semborrow
 
 import ".." / gear2 / modnames
 
@@ -843,13 +843,65 @@ type
     hasGenericArgs: bool
     candidates: FnCandidates
 
-proc untypedCall(c: var SemContext; it: var Item; cs: var CallState) =
+proc untypedCall(c: var SemContext; it: var Item; cs: CallState) =
   c.dest.add cs.callNode
   c.dest.addSubtree cs.fn.n
   for a in cs.args:
     c.dest.addSubtree a.n
   typeofCallIs c, it, cs.beforeCall, c.types.autoType
   wantParRi c, it.n
+
+proc semConvFromCall(c: var SemContext; it: var Item; cs: CallState) =
+  const IntegralTypes = {FloatT, CharT, IntT, UIntT, BoolT}
+  let beforeExpr = c.dest.len
+  let info = cs.callNode.info
+  c.dest.add parLeToken(ConvX, info)
+  var destType = cs.fn.typ
+  if destType.typeKind == TypedescT: inc destType
+  c.dest.copyTree destType
+
+  var srcType = skipModifier(cs.args[0].typ)
+
+  # distinct type conversion?
+  var isDistinct = false
+  let destBase = skipDistinct(destType, isDistinct)
+  let srcBase = skipDistinct(srcType, isDistinct)
+
+  if destBase.typeKind in IntegralTypes and srcBase.typeKind in IntegralTypes:
+    discard "ok"
+    # XXX Add hderef here somehow
+    c.dest.addSubtree cs.args[0].n
+  elif isDistinct:
+    var arg = Item(n: cs.args[0].n, typ: srcBase)
+    var m = createMatch(addr c)
+    typematch m, destBase, arg
+    if m.err:
+      c.typeMismatch info, cs.args[0].typ, destType
+    else:
+      # distinct type conversions can also involve conversions
+      # between different integer sizes or object types and then
+      # `m.args` contains these so use them here:
+      c.dest.add m.args
+  else:
+    # maybe object types with an inheritance relation?
+    var arg = cs.args[0]
+    var m = createMatch(addr c)
+    typematch m, destType, arg
+    if not m.err:
+      c.dest.add m.args
+    else:
+      # also try the other direction:
+      var m = createMatch(addr c)
+      m.flipped = true
+      arg.typ = destType
+      typematch m, srcType, arg
+      if not m.err:
+        c.dest.add m.args
+      else:
+        c.typeMismatch info, cs.args[0].typ, destType
+
+  wantParRi c, it.n
+  commonType c, it, beforeExpr, destType
 
 proc resolveOverloads(c: var SemContext; it: var Item; cs: var CallState) =
   let genericArgs =
@@ -875,6 +927,9 @@ proc resolveOverloads(c: var SemContext; it: var Item; cs: var CallState) =
     # error should have been given above already:
     # buildErr c, fn.n.info, "attempt to call undeclared routine"
     discard
+  elif cs.fn.typ.typeKind == TypedescT and cs.args.len == 1:
+    semConvFromCall c, it, cs
+    return
   else:
     # Keep in mind that proc vars are a thing:
     let sym = if cs.fn.n.kind == Symbol: cs.fn.n.symId else: SymId(0)
@@ -1235,6 +1290,7 @@ type
     magic: string
     bits: int
     hasVarargs: PackedLineInfo
+    flags: set[PragmaKind]
 
 proc semPragma(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; kind: SymKind) =
   let pk = pragmaKind(n)
@@ -1275,7 +1331,8 @@ proc semPragma(c: var SemContext; n: var Cursor; crucial: var CrucialPragma; kin
     inc n
     semConstIntExpr(c, n)
     c.dest.addParRi()
-  of Nodecl, Selectany, Threadvar, Globalvar, Discardable, Noreturn:
+  of Nodecl, Selectany, Threadvar, Globalvar, Discardable, Noreturn, Borrow:
+    crucial.flags.incl pk
     c.dest.add parLeToken(pool.tags.getOrIncl($pk), n.info)
     c.dest.addParRi()
     inc n
@@ -1882,6 +1939,15 @@ proc addReturnResult(c: var SemContext; resId: SymId; info: PackedLineInfo) =
       c.dest.addSymUse resId, info
     c.dest.addParRi() # add it back
 
+proc semBorrow(c: var SemContext; fn: StrId; beforeParams: int) =
+  let signature = cursorAt(c.dest, beforeParams)
+  var procBody = genBorrowedProcBody(c, fn, signature, signature.info)
+  endRead(c.dest)
+  var n = cursorAt(procBody, 0)
+  takeToken c, n # `(stmts`
+  var it = Item(n: n, typ: c.types.autoType)
+  semProcBody c, it
+
 proc semProc(c: var SemContext; it: var Item; kind: SymKind; pass: PassKind) =
   let info = it.n.info
   let declStart = c.dest.len
@@ -1952,7 +2018,14 @@ proc semProc(c: var SemContext; it: var Item; kind: SymKind; pass: PassKind) =
           c.buildErr it.n.info, "inside a `concept` a routine cannot have a body"
           skip it.n
     else:
-      takeToken c, it.n
+      if Borrow in crucial.flags and pass in {checkGenericInst, checkBody}:
+        if kind notin {ProcY, FuncY, ConverterY, TemplateY, MethodY}:
+          c.buildErr it.n.info, ".borrow only valid for proc, func, converter, template or method"
+        else:
+          semBorrow(c, symToIdent(symId), beforeParams)
+        inc it.n # skip DotToken
+      else:
+        takeToken c, it.n
       c.closeScope() # close parameter scope
   finally:
     c.routine = c.routine.parent
@@ -2628,6 +2701,43 @@ proc semSubscript(c: var SemContext; it: var Item) =
   lhs.n = cursorAt(lhsBuf, 0)
   semBuiltinSubscript(c, lhs, it)
 
+proc semDconv(c: var SemContext; it: var Item) =
+  let beforeExpr = c.dest.len
+  let info = it.n.info
+  takeToken c, it.n
+  var destType = semLocalType(c, it.n)
+  var x = Item(n: it.n, typ: c.types.autoType)
+  let beforeArg = c.dest.len
+  semExpr c, x
+  it.n = x.n
+
+  var isDistinct = false
+  let destBase = skipDistinct(destType, isDistinct)
+  let srcBase = skipDistinct(x.typ, isDistinct)
+  if not isDistinct:
+    shrink c.dest, beforeExpr
+    c.buildErr info, "`dconv` operation only valid for type conversions involving `distinct` types"
+  else:
+    var arg = Item(n: cursorAt(c.dest, beforeArg), typ: srcBase)
+    var m = createMatch(addr c)
+    typematch m, destBase, arg
+    endRead c.dest
+    if m.err:
+      when defined(debug):
+        shrink c.dest, beforeExpr
+        c.dest.addErrorMsg m
+      else:
+        c.typeMismatch info, x.typ, destType
+    else:
+      # distinct type conversions can also involve conversions
+      # between different integer sizes or object types and then
+      # `m.args` contains these so use them here:
+      shrink c.dest, beforeArg
+      c.dest.add m.args
+  it.n = x.n
+  wantParRi c, it.n
+  commonType c, it, beforeExpr, destType
+
 proc whichPass(c: SemContext): PassKind =
   result = if c.phase == SemcheckSignatures: checkSignatures else: checkBody
 
@@ -2800,6 +2910,9 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
     of DotX:
       toplevelGuard c:
         semDot c, it
+    of DconvX:
+      toplevelGuard c:
+        semDconv c, it
     of EqX, NeqX, LeX, LtX:
       semCmp c, it
     of AshrX, AddX, SubX, MulX, DivX, ModX, ShrX, ShlX, BitandX, BitorX, BitxorX:

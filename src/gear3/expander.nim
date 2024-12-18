@@ -354,7 +354,7 @@ proc parsePragmas(e: var EContext; c: var Cursor): CollectedPragmas =
           expectStrLit e, c
           result.externName = pool.strings[c.litId]
           inc c
-        of Nodecl, Selectany, Threadvar, Globalvar, Discardable, NoReturn, Varargs:
+        of Nodecl, Selectany, Threadvar, Globalvar, Discardable, NoReturn, Varargs, Borrow:
           result.flags.incl pk
           inc c
         of Header:
