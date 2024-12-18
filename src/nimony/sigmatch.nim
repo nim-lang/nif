@@ -303,10 +303,20 @@ proc matchSymbol(m: var Match; f: Cursor; arg: Item) =
       else:
         singleArgImpl(m, impl, arg)
 
-proc cmpTypeBits(f, a: Cursor): int =
+proc typebits*(context: ptr SemContext; n: PackedToken): int =
+  if n.kind == IntLit:
+    result = pool.integers[n.intId]
+  elif n.kind == InlineInt:
+    result = n.soperand
+  else:
+    result = 0
+  if result == -1:
+    result = context.g.config.bits
+
+proc cmpTypeBits(context: ptr SemContext; f, a: Cursor): int =
   if (f.kind == IntLit or f.kind == InlineInt) and
      (a.kind == IntLit or a.kind == InlineInt):
-    result = typebits(f.load) - typebits(a.load)
+    result = typebits(context, f.load) - typebits(context, a.load)
   else:
     result = -1
 
@@ -319,7 +329,7 @@ proc matchIntegralType(m: var Match; f: var Cursor; arg: Item) =
     return
   let forig = f
   inc f
-  let cmp = cmpTypeBits(f, a)
+  let cmp = cmpTypeBits(m.context, f, a)
   if cmp == 0:
     discard "same types"
   elif cmp > 0:
@@ -328,6 +338,7 @@ proc matchIntegralType(m: var Match; f: var Cursor; arg: Item) =
       m.error "implicit conversion to " & typeToString(forig) & " is not mutable"
     else:
       m.args.addParLe HconvX, m.argInfo
+      m.args.addSubtree forig
       inc m.intCosts
       inc m.opened
   else:

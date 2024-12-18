@@ -32,6 +32,7 @@ Options:
   --isSystem                passed module is a `system.nim` module
   --isMain                  passed module is the main module of a project
   --noSystem                do not auto-import `system.nim`
+  --bits:N                  (int M) has N bits; possible values: 64, 32, 16
   --version                 show the version
   --help                    show this help
 """
@@ -75,6 +76,7 @@ proc handleCmdLine() =
   var moduleFlags: set[ModuleFlag] = {}
   var config = NifConfig()
   config.defines.incl "nimony"
+  config.bits = sizeof(int)*8
   var commandLineArgs = ""
 
   for kind, key, val in getopt():
@@ -105,6 +107,12 @@ proc handleCmdLine() =
       of "ismain":
         moduleFlags.incl IsMain
         forwardArg = false
+      of "bits":
+        case val
+        of "64": config.bits = 64
+        of "32": config.bits = 32
+        of "16": config.bits = 16
+        else: quit "invalid value for --bits"
       else: writeHelp()
       if forwardArg:
         commandLineArgs.add " --" & key

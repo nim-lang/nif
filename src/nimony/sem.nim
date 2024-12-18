@@ -853,9 +853,27 @@ proc semConvFromCall(c: var SemContext; it: var Item; cs: CallState) =
   c.dest.copyTree destType
 
   var srcType = skipModifier(cs.args[0].typ)
-  if destType.typeKind in IntegralTypes and srcType.typeKind in IntegralTypes:
+
+  # distinct type conversion?
+  var isDistinct = false
+  let destBase = skipDistinct(destType, isDistinct)
+  let srcBase = skipDistinct(srcType, isDistinct)
+
+  if destBase.typeKind in IntegralTypes and srcBase.typeKind in IntegralTypes:
     discard "ok"
+    # XXX Add hderef here somehow
     c.dest.addSubtree cs.args[0].n
+  elif isDistinct:
+    var arg = Item(n: cs.args[0].n, typ: srcBase)
+    var m = createMatch(addr c)
+    typematch m, destBase, arg
+    if m.err:
+      c.typeMismatch info, cs.args[0].typ, destType
+    else:
+      # distinct type conversions can also involve conversions
+      # between different integer sizes or object types and then
+      # `m.args` contains these so use them here:
+      c.dest.add m.args
   else:
     # maybe object types with an inheritance relation?
     var arg = cs.args[0]
@@ -872,27 +890,7 @@ proc semConvFromCall(c: var SemContext; it: var Item; cs: CallState) =
       if not m.err:
         c.dest.add m.args
       else:
-        # distinct type conversion?
-        var isDistinct = false
-        let destBase = skipDistinct(destType, isDistinct)
-        let srcBase = skipDistinct(srcType, isDistinct)
-        if isDistinct:
-          var arg = Item(n: cs.args[0].n, typ: srcBase)
-          var m = createMatch(addr c)
-          typematch m, destBase, arg
-          if m.err:
-            when defined(debug):
-              shrink c.dest, beforeExpr
-              c.dest.addErrorMsg m
-            else:
-              c.typeMismatch info, cs.args[0].typ, destType
-          else:
-            # distinct type conversions can also involve conversions
-            # between different integer sizes or object types and then
-            # `m.args` contains these so use them here:
-            c.dest.add m.args
-        else:
-          c.typeMismatch info, cs.args[0].typ, destType
+        c.typeMismatch info, cs.args[0].typ, destType
 
   wantParRi c, it.n
   commonType c, it, beforeExpr, destType

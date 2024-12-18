@@ -73,5 +73,4 @@
  (let :y.0.tdikoa9tc1 . . ~2,~22
   (i +8) 8
   (conv ~10,~22
-   (i +8)
-   (hconv 13,30,tests/nimony/basics/tdistinct.nim x.0.tdikoa9tc1))))
+   (i +8) 1 x.0.tdikoa9tc1)))
