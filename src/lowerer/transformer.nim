@@ -13,7 +13,7 @@ type
     forVars: seq[SymId]
     iterCalls: (SymId, seq[SymId], Cursor)
     moduleSyms: HashSet[SymId] # thisModule: ModuleId
-    loopBody: TokenBuf
+    loopBody: Cursor
 
     declaredSyms: HashSet[SymId]
     requires: seq[SymId]
@@ -28,7 +28,7 @@ proc demand(e: var Context; s: SymId) =
 proc offer(e: var Context; s: SymId) =
   e.declaredSyms.incl s
 
-proc transformStmt*(e: var Context; c: var Cursor; dest: var TokenBuf)
+proc transformStmt*(e: var Context; c: var Cursor)
 
 proc error(e: var Context; msg: string; c: Cursor) {.noreturn.}=
   write stdout, "[Error] "
@@ -99,6 +99,12 @@ proc wantParRi(e: var Context; c: var Cursor) =
   else:
     error e, "expected ')', but got: ", c
 
+proc skipParRi(e: var Context; c: var Cursor) =
+  if c.kind == ParRi:
+    inc c
+  else:
+    error e, "expected ')', but got: ", c
+
 proc expectSymdef(e: var Context; c: var Cursor) =
   if c.kind != SymbolDef:
     error e, "expected symbol definition, but got: ", c
@@ -143,10 +149,18 @@ proc collectIterCalls(e: var Context; c: var Cursor): (SymId, seq[SymId], Cursor
   swap(e.dest, skipped)
 
 proc collectVars*(e: var Context; c: var Cursor): seq[SymId] =
-  inc c # skips `let`
-  # TODO: unpack
   result = @[]
-  result.add getSymDef(e, c)
+  if c.kind == ParLe and pool.tags[c.tag] == $UnpackFlatS:
+    inc c # skips `unpackflat`
+    while c.kind == ParLe:
+      inc c # skips `let`
+      result.add getSymDef(e, c)
+      extract(e, c)
+      extract(e, c)
+      extract(e, c)
+      extract(e, c)
+      skipParRi(e, c)
+    skipParRi(e, c)
 
 proc toSymId(s: string): SymId =
   result = pool.syms.getOrIncl(s)
@@ -312,8 +326,7 @@ proc inlineIteratorBody(e: var Context; c: var Cursor) =
       e.loop c:
         inlineIteratorBody e, c
     of YieldS:
-      var loopBody = beginRead(e.loopBody)
-      let loopBodyHasContinueStmt = hasContinueStmt(loopBody)
+      let loopBodyHasContinueStmt = hasContinueStmt(e.loopBody)
       if loopBodyHasContinueStmt:
         let lab = toSymId("continueLabel")
         e.dest.add tagToken($BlockS, c.info)
@@ -344,6 +357,9 @@ proc inlineIterator(e: var Context; c: var Cursor) =
   var tok {.cursor.} = e.iterdecls[name]
   var body = beginRead(tok)
   inlineIteratorBody(e, body)
+
+proc transformIterator(e: var Context; c: var Cursor) =
+  discard
 
 proc transformForStmt(e: var Context; c: var Cursor) =
   #[ Transforming a `for` statement is quite involved. We have:
@@ -409,7 +425,11 @@ proc transformForStmt(e: var Context; c: var Cursor) =
   e.iterCalls = collectIterCalls(e, c)
   e.forVars = collectVars(e, c)
 
-  transformStmt(e, c, e.loopBody)
+  e.loopBody = c
+  var skipped = createTokenBuf()
+  swap(e.dest, skipped)
+  transformStmt(e, c)
+  swap(e.dest, skipped)
 
   let lab = toSymId("forStmtLabel")
   e.dest.add tagToken($BlockS, c.info)
@@ -421,7 +441,10 @@ proc transformForStmt(e: var Context; c: var Cursor) =
   e.dest.addParRi()
   e.dest.addParRi()
 
-proc transformStmt(e: var Context; c: var Cursor; dest: var TokenBuf) =
+  # let r = beginRead(e.dest)
+  # echo r
+
+proc transformStmt(e: var Context; c: var Cursor) =
   case c.kind
   of DotToken:
     e.dest.add c
@@ -431,12 +454,14 @@ proc transformStmt(e: var Context; c: var Cursor; dest: var TokenBuf) =
     of StmtsS:
       inc c
       while c.kind notin {EofToken, ParRi}:
-        transformStmt(e, c, dest)
+        transformStmt(e, c)
       inc c # skipParRi
     of VarS, LetS, CursorS, ResultS:
       transformLocal(e, c)
     of ForS:
       transformForStmt(e, c)
+    # of IterS:
+    #   transformIterator(e, c)
     else:
       extract(e, c)
   else:
@@ -469,4 +494,4 @@ proc transformCode*(infile: string) =
 
   var e = Context(dest: createTokenBuf())
 
-  transformStmt(e, c, e.dest)
+  transformStmt(e, c)
