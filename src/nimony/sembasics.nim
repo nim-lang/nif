@@ -443,6 +443,14 @@ proc handleSymDef*(c: var SemContext; n: var Cursor; kind: SymKind): DelayedSym 
     result = DelayedSym(status: status, lit: symToIdent(s.name), s: s, info: info)
     c.dest.add n
     inc n
+  elif n.kind == DotToken:
+    var name = "`anon"
+    c.makeLocalSym(name)
+    let symId = pool.syms.getOrIncl(name)
+    let s = Sym(kind: kind, name: symId, pos: c.dest.len)
+    result = DelayedSym(status: OkExisting, s: s, info: info)
+    c.dest.add symdefToken(symId, info)
+    inc n
   else:
     let lit = getIdent(c, n)
     if lit == StrId(0):

@@ -155,6 +155,7 @@ proc magicToTag*(m: TMagic): (string, int) =
   of mTypeDesc: res TypedescT
   of mVoidType: res VoidT
   of mUnpack: res UnpackX
+  of mExpr: res UntypedT
   else: ("", 0)
 
 when isMainModule:

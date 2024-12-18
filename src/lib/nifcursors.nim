@@ -145,6 +145,9 @@ proc cursorAt*(b: var TokenBuf; i: int): Cursor {.inline.} =
   inc b.readers
   result = Cursor(p: addr b.data[i], rem: b.len-i)
 
+proc cursorToPosition*(b: TokenBuf; c: Cursor): int {.inline.} =
+  result = (cast[int](c) - cast[int](b.data)) div sizeof(PackedToken)
+
 proc add*(result: var TokenBuf; c: Cursor) =
   result.add c.load
 

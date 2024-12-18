@@ -166,6 +166,7 @@ type
     AutoT = "auto"
     SymKindT = "symkind"
     TypedescT = "typedesc"
+    UntypedT = "untyped"
 
   PragmaKind* = enum
     NoPragma
@@ -182,6 +183,7 @@ type
     Globalvar = "global"
     Discardable = "discardable"
     NoReturn = "noreturn"
+    Varargs = "varargs"
 
   SubstructureKind* = enum
     NoSub
@@ -280,3 +282,6 @@ const
 
 proc addParLe*(dest: var TokenBuf; kind: TypeKind|SymKind|ExprKind|StmtKind; info = NoLineInfo) =
   dest.add parLeToken(pool.tags.getOrIncl($kind), info)
+
+proc parLeToken*(kind: TypeKind|SymKind|ExprKind|StmtKind|SubstructureKind; info = NoLineInfo): PackedToken =
+  parLeToken(pool.tags.getOrIncl($kind), info)
