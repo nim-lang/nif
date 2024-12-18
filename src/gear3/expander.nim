@@ -214,7 +214,7 @@ proc traverseType(e: var EContext; c: var Cursor; flags: set[TypeFlag] = {}) =
     inc c
   of ParLe:
     case c.typeKind
-    of NoType, OrT, AndT, NotT, TypedescT:
+    of NoType, OrT, AndT, NotT, TypedescT, UntypedT:
       error e, "type expected but got: ", c
     of IntT, UIntT, FloatT, CharT, BoolT, AutoT, SymKindT:
       e.loop c:
@@ -345,7 +345,8 @@ proc parsePragmas(e: var EContext; c: var Cursor): CollectedPragmas =
           inc c
         of Magic:
           inc c
-          expectStrLit e, c
+          if c.kind notin {StringLit, Ident}:
+            error e, "expected string literal or ident, but got: ", c
           result.flags.incl Nodecl
           inc c
         of ImportC, ImportCpp, ExportC:
@@ -353,7 +354,7 @@ proc parsePragmas(e: var EContext; c: var Cursor): CollectedPragmas =
           expectStrLit e, c
           result.externName = pool.strings[c.litId]
           inc c
-        of Nodecl, Selectany, Threadvar, Globalvar, Discardable, NoReturn:
+        of Nodecl, Selectany, Threadvar, Globalvar, Discardable, NoReturn, Varargs:
           result.flags.incl pk
           inc c
         of Header:
@@ -518,9 +519,7 @@ proc traverseExpr(e: var EContext; c: var Cursor) =
         e.dest.add c
         inc nested
         inc c
-    of ParRi: # TODO: refactoring: take the whole statement into consideration
-      if nested == 0:
-        break
+    of ParRi:
       e.dest.add c
       dec nested
       if nested == 0:
@@ -538,6 +537,9 @@ proc traverseExpr(e: var EContext; c: var Cursor) =
     of UnknownToken, DotToken, Ident, StringLit, CharLit, IntLit, UIntLit, FloatLit:
       e.dest.add c
       inc c
+
+    if nested == 0:
+      break
 
 proc traverseLocal(e: var EContext; c: var Cursor; tag: string; mode: TraverseMode) =
   let toPatch = e.dest.len
@@ -657,7 +659,14 @@ proc traverseCase(e: var EContext; c: var Cursor) =
     of OfS:
       e.dest.add c
       inc c
-      traverseExpr e, c
+      if c.kind == ParLe and pool.tags[c.tag] == $SetX:
+        inc c
+        e.add "ranges", c.info
+        while c.kind != ParRi:
+          traverseExpr e, c
+        wantParRi e, c
+      else:
+        traverseExpr e, c
       traverseStmt e, c
       wantParRi e, c
     of ElseS:
@@ -717,7 +726,7 @@ proc traverseStmt(e: var EContext; c: var Cursor; mode = TraverseAll) =
       skip c
     of TypeS:
       traverseTypeDecl e, c
-    of ContinueS:
+    of ContinueS, WhenS:
       error e, "unreachable: ", c
   else:
     error e, "statement expected, but got: ", c

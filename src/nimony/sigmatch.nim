@@ -38,8 +38,9 @@ type
     returnType*: Cursor
     context: ptr SemContext
     error: MatchError
+    firstVarargPosition*: int
 
-proc createMatch*(context: ptr SemContext): Match = Match(context: context)
+proc createMatch*(context: ptr SemContext): Match = Match(context: context, firstVarargPosition: -1)
 
 proc concat(a: varargs[string]): string =
   result = a[0]
@@ -389,6 +390,14 @@ proc singleArgImpl(m: var Match; f: var Cursor; arg: Item) =
       var a = arg.typ
       linearMatch m, f, a
       expectParRi m, f
+    of VarargsT:
+      discard "do not even advance f here"
+      if m.firstVarargPosition < 0:
+        m.firstVarargPosition = m.args.len
+    of UntypedT:
+      # `varargs` and `untyped` simply match everything:
+      inc f
+      expectParRi m, f
     of TupleT:
       let fOrig = f
       let aOrig = arg.typ
@@ -443,19 +452,31 @@ proc usesConversion*(m: Match): bool {.inline.} =
 
 proc sigmatchLoop(m: var Match; f: var Cursor; args: openArray[Item]) =
   var i = 0
-  while i < args.len and f.kind != ParRi:
+  var isVarargs = false
+  while f.kind != ParRi:
     m.skippedMod = NoType
-    m.argInfo = args[i].n.info
 
     assert f.symKind == ParamY
     let param = asLocal(f)
     var ftyp = param.typ
-    skip f
+    # This is subtle but only this order of `i >= args.len` checks
+    # is correct for all cases (varargs/too few args/too many args)
+    if ftyp != "varargs":
+      if i >= args.len: break
+      skip f
+    else:
+      isVarargs = true
+      if i >= args.len: break
+    m.argInfo = args[i].n.info
 
     singleArg m, ftyp, args[i]
     if m.err: break
     inc m.pos
     inc i
+  if isVarargs:
+    if m.firstVarargPosition < 0:
+      m.firstVarargPosition = m.args.len
+    skip f
 
 
 iterator typeVars(fn: SymId): SymId =
@@ -523,7 +544,7 @@ proc sigmatch*(m: var Match; fn: FnCandidate; args: openArray[Item];
     let moreArgs = collectDefaultValues(f)
     sigmatchLoop m, f, moreArgs
     if f.kind != ParRi:
-      m.error "too many parameters"
+      m.error "too few arguments"
 
   if f.kind == ParRi:
     inc f
