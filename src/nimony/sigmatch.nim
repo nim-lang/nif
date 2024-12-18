@@ -453,23 +453,29 @@ proc usesConversion*(m: Match): bool {.inline.} =
 proc sigmatchLoop(m: var Match; f: var Cursor; args: openArray[Item]) =
   var i = 0
   var isVarargs = false
-  while i < args.len and f.kind != ParRi:
+  while f.kind != ParRi:
     m.skippedMod = NoType
-    m.argInfo = args[i].n.info
 
     assert f.symKind == ParamY
     let param = asLocal(f)
     var ftyp = param.typ
+    # This is subtle but only this order of `i >= args.len` checks
+    # is correct for all cases (varargs/too few args/too many args)
     if ftyp != "varargs":
+      if i >= args.len: break
       skip f
     else:
       isVarargs = true
+      if i >= args.len: break
+    m.argInfo = args[i].n.info
 
     singleArg m, ftyp, args[i]
     if m.err: break
     inc m.pos
     inc i
   if isVarargs:
+    if m.firstVarargPosition < 0:
+      m.firstVarargPosition = m.args.len
     skip f
 
 
