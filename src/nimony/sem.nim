@@ -844,7 +844,6 @@ proc untypedCall(c: var SemContext; it: var Item; cs: var CallState) =
   wantParRi c, it.n
 
 proc resolveOverloads(c: var SemContext; it: var Item; cs: var CallState) =
-  cs.fn.n = beginRead(cs.dest)
   let genericArgs =
     if cs.hasGenericArgs: cursorAt(cs.genericDest, 0)
     else: emptyNode()
@@ -1019,6 +1018,7 @@ proc semCall(c: var SemContext; it: var Item) =
     cs.args.add arg
   assert cs.args.len == argIndexes.len
   swap c.dest, cs.dest
+  cs.fn.n = beginRead(cs.dest)
   for i in 0 ..< cs.args.len:
     cs.args[i].n = cursorAt(cs.dest, argIndexes[i])
   if skipSemCheck:
@@ -2732,10 +2732,21 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
       semDeclared c, it
     of AtX:
       semSubscript c, it
+    of UnpackX:
+      takeToken c, it.n
+      wantParRi c, it.n
+    of OchoiceX, CchoiceX:
+      takeTree c, it.n
+    of HaddrX, HderefX:
+      takeToken c, it.n
+      # this is exactly what we need here as these operators have the same
+      # type as the operand:
+      semExpr c, it
+      wantParRi c, it.n
     of DerefX, PatX, AddrX, NilX, SizeofX, OconstrX, KvX,
        CastX, ConvX, RangeX, RangesX,
-       HderefX, HaddrX, OconvX, HconvX, OchoiceX, CchoiceX,
-       CompilesX, HighX, LowX, TypeofX, UnpackX:
+       OconvX, HconvX,
+       CompilesX, HighX, LowX, TypeofX:
       # XXX To implement
       takeToken c, it.n
       wantParRi c, it.n
