@@ -824,79 +824,170 @@ proc tryBuiltinDot(c: var SemContext; it: var Item; lhs: Item; fieldName: StrId;
 
 proc semBuiltinSubscript(c: var SemContext; lhs: Item; it: var Item)
 
+type
+  CallState = object
+    beforeCall: int
+    fn: Item
+    fnKind: SymKind
+    callNode: PackedToken
+    dest, genericDest: TokenBuf
+    args: seq[Item]
+    hasGenericArgs: bool
+    candidates: FnCandidates
+
+proc untypedCall(c: var SemContext; it: var Item; cs: var CallState) =
+  c.dest.add cs.callNode
+  c.dest.addSubtree cs.fn.n
+  for a in cs.args:
+    c.dest.addSubtree a.n
+  typeofCallIs c, it, cs.beforeCall, c.types.autoType
+  wantParRi c, it.n
+
+proc resolveOverloads(c: var SemContext; it: var Item; cs: var CallState) =
+  cs.fn.n = beginRead(cs.dest)
+  let genericArgs =
+    if cs.hasGenericArgs: cursorAt(cs.genericDest, 0)
+    else: emptyNode()
+
+  var m: seq[Match] = @[]
+  if cs.fn.n.exprKind in {OchoiceX, CchoiceX}:
+    var f = cs.fn.n
+    inc f
+    while f.kind != ParRi:
+      if f.kind == Symbol:
+        let sym = f.symId
+        let s = fetchSym(c, sym)
+        let candidate = FnCandidate(kind: s.kind, sym: sym, typ: fetchType(c, f, s))
+        m.add createMatch(addr c)
+        sigmatch(m[^1], candidate, cs.args, genericArgs)
+      else:
+        buildErr c, cs.fn.n.info, "`choice` node does not contain `symbol`"
+      inc f
+    considerTypeboundOps(c, m, cs.candidates, cs.args, genericArgs)
+  elif cs.fn.n.kind == Ident:
+    # error should have been given above already:
+    # buildErr c, fn.n.info, "attempt to call undeclared routine"
+    discard
+  else:
+    # Keep in mind that proc vars are a thing:
+    let sym = if cs.fn.n.kind == Symbol: cs.fn.n.symId else: SymId(0)
+    let candidate = FnCandidate(kind: cs.fnKind, sym: sym, typ: cs.fn.typ)
+    m.add createMatch(addr c)
+    sigmatch(m[^1], candidate, cs.args, genericArgs)
+    considerTypeboundOps(c, m, cs.candidates, cs.args, genericArgs)
+  let idx = pickBestMatch(c, m)
+
+  c.dest.add cs.callNode
+  if idx >= 0:
+    let finalFn = m[idx].fn
+    let isMagic = c.addFn(finalFn, cs.fn.n, cs.args)
+    c.dest.add m[idx].args
+    wantParRi c, it.n
+
+    if finalFn.kind == TemplateY:
+      typeofCallIs c, it, cs.beforeCall, m[idx].returnType
+      if c.templateInstCounter <= MaxNestedTemplates:
+        inc c.templateInstCounter
+        withErrorContext c, cs.callNode.info:
+          semTemplateCall c, it, finalFn.sym, cs.beforeCall, m[idx]
+        dec c.templateInstCounter
+      else:
+        buildErr c, cs.callNode.info, "recursion limit exceeded for template expansions"
+    elif c.routine.inGeneric == 0 and m[idx].inferred.len > 0 and not isMagic:
+      assert cs.fn.n.kind == Symbol
+      let inst = c.requestRoutineInstance(cs.fn.n.symId, m[idx], cs.callNode.info)
+      c.dest[cs.beforeCall+1].setSymId inst.targetSym
+      typeofCallIs c, it, cs.beforeCall, inst.returnType
+    else:
+      typeofCallIs c, it, cs.beforeCall, m[idx].returnType
+
+  elif idx == -2:
+    buildErr c, cs.callNode.info, "ambiguous call"
+    wantParRi c, it.n
+  elif m.len > 0:
+    wantParRi c, it.n
+    var errorMsg = "Type mismatch at [position]"
+    for i in 0..<m.len:
+      errorMsg.add "\n"
+      addErrorMsg errorMsg, m[i]
+    c.dest.addParLe ErrT, cs.callNode.info
+    c.dest.addStrLit errorMsg
+    c.dest.addParRi()
+  else:
+    buildErr c, cs.callNode.info, "undeclared identifier"
+    wantParRi c, it.n
+
 proc semCall(c: var SemContext; it: var Item) =
-  let beforeCall = c.dest.len
-  let callNode = it.n.load()
+  var cs = CallState(
+    beforeCall: c.dest.len,
+    callNode: it.n.load(),
+    dest: createTokenBuf(16)
+  )
   inc it.n
-  var dest = createTokenBuf(16)
-  swap c.dest, dest
-  var fn = Item(n: it.n, typ: c.types.autoType)
+  swap c.dest, cs.dest
+  cs.fn = Item(n: it.n, typ: c.types.autoType)
   var fnName = StrId(0)
-  var args: seq[Item] = @[]
   var argIndexes: seq[int] = @[]
-  var hasGenericArgs = false
-  var genericDest = default(TokenBuf)
-  var candidates = default FnCandidates
-  if fn.n.exprKind == AtX:
-    inc fn.n # skip tag
+  if cs.fn.n.exprKind == AtX:
+    inc cs.fn.n # skip tag
     var lhsBuf = createTokenBuf(4)
-    var lhs = Item(n: fn.n, typ: c.types.autoType)
+    var lhs = Item(n: cs.fn.n, typ: c.types.autoType)
     swap c.dest, lhsBuf
     semExpr c, lhs, {KeepMagics}
     swap c.dest, lhsBuf
-    fn.n = lhs.n
+    cs.fn.n = lhs.n
     lhs.n = cursorAt(lhsBuf, 0)
     if lhs.n.kind == Symbol and isRoutine(lhs.kind):
       let res = tryLoadSym(lhs.n.symId)
       assert res.status == LacksNothing
       if isGeneric(asRoutine(res.decl)):
-        hasGenericArgs = true
-        genericDest = createTokenBuf(16)
-        swap c.dest, genericDest
-        while fn.n.kind != ParRi:
+        cs.hasGenericArgs = true
+        cs.genericDest = createTokenBuf(16)
+        swap c.dest, cs.genericDest
+        while cs.fn.n.kind != ParRi:
           # XXX semLocalType should build `static` types for values
-          discard semLocalType(c, fn.n)
-        swap c.dest, genericDest
-        skipParRi fn.n
-        it.n = fn.n
+          discard semLocalType(c, cs.fn.n)
+        swap c.dest, cs.genericDest
+        skipParRi cs.fn.n
+        it.n = cs.fn.n
         c.dest.addSubtree lhs.n
-        fn.typ = lhs.typ
-        fn.kind = lhs.kind
+        cs.fn.typ = lhs.typ
+        cs.fn.kind = lhs.kind
         fnName = getFnIdent(c)
-    if not hasGenericArgs:
-      semBuiltinSubscript(c, lhs, fn)
+    if not cs.hasGenericArgs:
+      semBuiltinSubscript(c, lhs, cs.fn)
       fnName = getFnIdent(c)
-      it.n = fn.n
-  elif fn.n.exprKind == DotX:
+      it.n = cs.fn.n
+  elif cs.fn.n.exprKind == DotX:
     let dotStart = c.dest.len
-    let dotInfo = fn.n.info
+    let dotInfo = cs.fn.n.info
     # read through the dot expression first:
-    inc fn.n # skip tag
+    inc cs.fn.n # skip tag
     var lhsBuf = createTokenBuf(4)
-    var lhs = Item(n: fn.n, typ: c.types.autoType)
+    var lhs = Item(n: cs.fn.n, typ: c.types.autoType)
     swap c.dest, lhsBuf
     semExpr c, lhs
     swap c.dest, lhsBuf
-    fn.n = lhs.n
+    cs.fn.n = lhs.n
     lhs.n = cursorAt(lhsBuf, 0)
-    let fieldNameCursor = fn.n
-    let fieldName = getIdent(c, fn.n)
+    let fieldNameCursor = cs.fn.n
+    let fieldName = getIdent(c, cs.fn.n)
     # skip optional inheritance depth:
-    if fn.n.kind == IntLit:
-      inc fn.n
-    skipParRi fn.n
-    it.n = fn.n
+    if cs.fn.n.kind == IntLit:
+      inc cs.fn.n
+    skipParRi cs.fn.n
+    it.n = cs.fn.n
     # now interpret the dot expression:
-    let dotState = tryBuiltinDot(c, fn, lhs, fieldName, dotInfo)
+    let dotState = tryBuiltinDot(c, cs.fn, lhs, fieldName, dotInfo)
     if dotState == FailedDot or
         # also ignore non-proc fields:
-        (dotState == MatchedDot and fn.typ.typeKind != ProcT):
+        (dotState == MatchedDot and cs.fn.typ.typeKind != ProcT):
       # turn a.b(...) into b(a, ...)
       # first, delete the output of `tryBuiltinDot`:
       c.dest.shrink dotStart
       # sem b:
-      fn = Item(n: fieldNameCursor, typ: c.types.autoType)
-      semExpr c, fn, {KeepMagics}
+      cs.fn = Item(n: fieldNameCursor, typ: c.types.autoType)
+      semExpr c, cs.fn, {KeepMagics}
       fnName = getFnIdent(c)
       # add a as argument:
       let lhsIndex = c.dest.len
@@ -905,100 +996,35 @@ proc semCall(c: var SemContext; it: var Item) =
       # scope extension: If the type is Typevar and it has attached
       # a concept, use the concepts symbols too:
       if fnName != StrId(0) and lhs.typ.kind == Symbol:
-        maybeAddConceptMethods c, fnName, lhs.typ.symId, candidates
+        maybeAddConceptMethods c, fnName, lhs.typ.symId, cs.candidates
       # lhs.n escapes here, but is not read and will be set by argIndexes:
-      args.add lhs
+      cs.args.add lhs
   else:
-    semExpr(c, fn, {KeepMagics})
+    semExpr(c, cs.fn, {KeepMagics})
     fnName = getFnIdent(c)
-    it.n = fn.n
-  let fnKind = fn.kind
+    it.n = cs.fn.n
+  cs.fnKind = cs.fn.kind
+  var skipSemCheck = false
   while it.n.kind != ParRi:
     var arg = Item(n: it.n, typ: c.types.autoType)
     argIndexes.add c.dest.len
     semExpr c, arg
+    if arg.typ.typeKind == UntypedT:
+      skipSemCheck = true
     # scope extension: If the type is Typevar and it has attached
     # a concept, use the concepts symbols too:
     if fnName != StrId(0) and arg.typ.kind == Symbol:
-      maybeAddConceptMethods c, fnName, arg.typ.symId, candidates
+      maybeAddConceptMethods c, fnName, arg.typ.symId, cs.candidates
     it.n = arg.n
-    args.add arg
-  assert args.len == argIndexes.len
-  swap c.dest, dest
-  fn.n = beginRead(dest)
-  for i in 0 ..< args.len:
-    args[i].n = cursorAt(dest, argIndexes[i])
-  let genericArgs =
-    if hasGenericArgs: cursorAt(genericDest, 0)
-    else: emptyNode()
-
-  var m: seq[Match] = @[]
-  if fn.n.exprKind in {OchoiceX, CchoiceX}:
-    var f = fn.n
-    inc f
-    while f.kind != ParRi:
-      if f.kind == Symbol:
-        let sym = f.symId
-        let s = fetchSym(c, sym)
-        let candidate = FnCandidate(kind: s.kind, sym: sym, typ: fetchType(c, f, s))
-        m.add createMatch(addr c)
-        sigmatch(m[^1], candidate, args, genericArgs)
-      else:
-        buildErr c, fn.n.info, "`choice` node does not contain `symbol`"
-      inc f
-    considerTypeboundOps(c, m, candidates, args, genericArgs)
-  elif fn.n.kind == Ident:
-    # error should have been given above already:
-    # buildErr c, fn.n.info, "attempt to call undeclared routine"
-    discard
+    cs.args.add arg
+  assert cs.args.len == argIndexes.len
+  swap c.dest, cs.dest
+  for i in 0 ..< cs.args.len:
+    cs.args[i].n = cursorAt(cs.dest, argIndexes[i])
+  if skipSemCheck:
+    untypedCall c, it, cs
   else:
-    # Keep in mind that proc vars are a thing:
-    let sym = if fn.n.kind == Symbol: fn.n.symId else: SymId(0)
-    let candidate = FnCandidate(kind: fnKind, sym: sym, typ: fn.typ)
-    m.add createMatch(addr c)
-    sigmatch(m[^1], candidate, args, genericArgs)
-    considerTypeboundOps(c, m, candidates, args, genericArgs)
-  let idx = pickBestMatch(c, m)
-
-  c.dest.add callNode
-  if idx >= 0:
-    let finalFn = m[idx].fn
-    let isMagic = c.addFn(finalFn, fn.n, args)
-    c.dest.add m[idx].args
-    wantParRi c, it.n
-
-    if finalFn.kind == TemplateY:
-      typeofCallIs c, it, beforeCall, m[idx].returnType
-      if c.templateInstCounter <= MaxNestedTemplates:
-        inc c.templateInstCounter
-        withErrorContext c, callNode.info:
-          semTemplateCall c, it, finalFn.sym, beforeCall, m[idx]
-        dec c.templateInstCounter
-      else:
-        buildErr c, callNode.info, "recursion limit exceeded for template expansions"
-    elif c.routine.inGeneric == 0 and m[idx].inferred.len > 0 and not isMagic:
-      assert fn.n.kind == Symbol
-      let inst = c.requestRoutineInstance(fn.n.symId, m[idx], callNode.info)
-      c.dest[beforeCall+1].setSymId inst.targetSym
-      typeofCallIs c, it, beforeCall, inst.returnType
-    else:
-      typeofCallIs c, it, beforeCall, m[idx].returnType
-
-  elif idx == -2:
-    buildErr c, callNode.info, "ambiguous call"
-    wantParRi c, it.n
-  elif m.len > 0:
-    wantParRi c, it.n
-    var errorMsg = "Type mismatch at [position]"
-    for i in 0..<m.len:
-      errorMsg.add "\n"
-      addErrorMsg errorMsg, m[i]
-    c.dest.addParLe ErrT, callNode.info
-    c.dest.addStrLit errorMsg
-    c.dest.addParRi()
-  else:
-    buildErr c, callNode.info, "undeclared identifier"
-    wantParRi c, it.n
+    resolveOverloads c, it, cs
 
 proc findObjField(t: Cursor; name: StrId; level = 0): ObjField =
   assert t == "object"
@@ -1908,7 +1934,10 @@ proc semExprSym(c: var SemContext; it: var Item; s: Sym; start: int; flags: set[
   it.kind = s.kind
   let expected = it.typ
   if s.kind == NoSym:
-    c.buildErr it.n.info, "undeclared identifier"
+    if pool.syms.hasId(s.name):
+      c.buildErr it.n.info, "undeclared identifier: " & pool.syms[s.name]
+    else:
+      c.buildErr it.n.info, "undeclared identifier"
     it.typ = c.types.autoType
   elif s.kind == CchoiceY:
     if KeepMagics notin flags:
@@ -2159,7 +2188,7 @@ proc semFor(c: var SemContext; it: var Item) =
       buildErr c, it.n.info, "illformed AST: `unpackflat` inside `for` expected"
       skip it.n
 
-    if isMacroLike:
+    if isMacroLike and false:
       takeTree c.dest, it.n # don't touch the body
     else:
       inc c.routine.inLoop
