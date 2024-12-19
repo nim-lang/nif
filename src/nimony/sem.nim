@@ -848,7 +848,9 @@ proc untypedCall(c: var SemContext; it: var Item; cs: CallState) =
   wantParRi c, it.n
 
 proc semConvFromCall(c: var SemContext; it: var Item; cs: CallState) =
-  const IntegralTypes = {FloatT, CharT, IntT, UIntT, BoolT}
+  const
+    IntegralTypes = {FloatT, CharT, IntT, UIntT, BoolT}
+    StringTypes = {StringT, CstringT}
   let beforeExpr = c.dest.len
   let info = cs.callNode.info
   c.dest.add parLeToken(ConvX, info)
@@ -863,7 +865,8 @@ proc semConvFromCall(c: var SemContext; it: var Item; cs: CallState) =
   let destBase = skipDistinct(destType, isDistinct)
   let srcBase = skipDistinct(srcType, isDistinct)
 
-  if destBase.typeKind in IntegralTypes and srcBase.typeKind in IntegralTypes:
+  if (destBase.typeKind in IntegralTypes and srcBase.typeKind in IntegralTypes) or
+     (destBase.typeKind in StringTypes and srcBase.typeKind in StringTypes):
     discard "ok"
     # XXX Add hderef here somehow
     c.dest.addSubtree cs.args[0].n
@@ -2596,6 +2599,7 @@ proc semSuf(c: var SemContext, it: var Item) =
   of "f": it.typ = c.types.floatType
   of "f32": it.typ = c.types.float32Type
   of "f64": it.typ = c.types.float64Type
+  of "R": it.typ = c.types.stringType
   else:
     c.buildErr it.n.info, "unknown suffix: " & pool.strings[it.n.litId]
   takeToken c, it.n # suffix
