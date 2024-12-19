@@ -1,3 +1,5 @@
-proc foo(x: int) = discard
+type typed* {.magic: Stmt.}
+
+proc foo(x: typed) = discard
 
 foo(abc)
