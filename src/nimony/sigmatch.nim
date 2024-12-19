@@ -411,6 +411,9 @@ proc singleArgImpl(m: var Match; f: var Cursor; arg: Item) =
       if a.typeKind == NilT:
         discard "ok"
         inc f
+      elif a.typeKind == StringT and arg.n.kind == StringLit:
+        inc m.intCosts
+        inc f
       else:
         linearMatch m, f, a
       expectParRi m, f
