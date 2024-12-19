@@ -836,6 +836,9 @@ proc tryBuiltinDot(c: var SemContext; it: var Item; lhs: Item; fieldName: StrId;
 proc semBuiltinSubscript(c: var SemContext; lhs: Item; it: var Item)
 
 type
+  TransformedCallSource = enum
+    RegularCall, MethodCall, DotCall, SubscriptCall
+
   CallState = object
     beforeCall: int
     fn: Item
@@ -845,6 +848,8 @@ type
     args: seq[Item]
     hasGenericArgs: bool
     candidates: FnCandidates
+    source: TransformedCallSource
+      ## type of expression the call was transformed from
 
 proc untypedCall(c: var SemContext; it: var Item; cs: CallState) =
   c.dest.add cs.callNode
@@ -987,19 +992,41 @@ proc resolveOverloads(c: var SemContext; it: var Item; cs: var CallState) =
     else:
       errorMsg = "undeclared identifier"
     var errored = createTokenBuf(4)
-    errored.add cs.callNode
-    errored.addSubtree cs.fn.n
-    for a in cs.args:
-      errored.addSubtree a.n
+    # rebuild original call:
+    case cs.source
+    of RegularCall:
+      errored.add cs.callNode
+      errored.addSubtree cs.fn.n
+      for a in cs.args:
+        errored.addSubtree a.n
+    of MethodCall:
+      assert cs.args.len >= 1
+      errored.add cs.callNode
+      errored.addParLe(DotX, cs.callNode.info)
+      errored.addSubtree cs.args[0].n
+      errored.addParRi()
+      errored.addSubtree cs.fn.n
+      for i in 1 ..< cs.args.len:
+        errored.addSubtree cs.args[i].n
+    of DotCall:
+      assert cs.args.len == 1
+      errored.addParLe(DotX, cs.callNode.info)
+      errored.addSubtree cs.args[0].n
+      errored.addSubtree cs.fn.n
+    of SubscriptCall:
+      errored.addParLe(AtX, cs.callNode.info)
+      for a in cs.args:
+        errored.addSubtree a.n
     errored.addParRi()
     skipParRi it.n
     buildErr c, cs.callNode.info, errorMsg, cursorAt(errored, 0)
 
-proc semCall(c: var SemContext; it: var Item) =
+proc semCall(c: var SemContext; it: var Item; source: TransformedCallSource = RegularCall) =
   var cs = CallState(
     beforeCall: c.dest.len,
     callNode: it.n.load(),
-    dest: createTokenBuf(16)
+    dest: createTokenBuf(16),
+    source: source
   )
   inc it.n
   swap c.dest, cs.dest
@@ -1060,6 +1087,7 @@ proc semCall(c: var SemContext; it: var Item) =
     if dotState == FailedDot or
         # also ignore non-proc fields:
         (dotState == MatchedDot and cs.fn.typ.typeKind != ProcT):
+      cs.source = MethodCall
       # turn a.b(...) into b(a, ...)
       # first, delete the output of `tryBuiltinDot`:
       c.dest.shrink dotStart
@@ -1211,7 +1239,7 @@ proc semDot(c: var SemContext, it: var Item) =
     callBuf.addParRi()
     var call = Item(n: cursorAt(callBuf, 0), typ: expected)
     # error messages aren't specialized for now
-    semCall c, call
+    semCall c, call, DotCall
     it.typ = call.typ
 
 proc semWhile(c: var SemContext; it: var Item) =
@@ -2725,7 +2753,7 @@ proc semBuiltinSubscript(c: var SemContext; lhs: Item; it: var Item) =
   skipParRi it.n
   var call = Item(n: cursorAt(callBuf, 0), typ: it.typ)
   # error messages aren't specialized for now
-  semCall c, call
+  semCall c, call, SubscriptCall
   it.typ = call.typ
 
 proc semSubscript(c: var SemContext; it: var Item) =
