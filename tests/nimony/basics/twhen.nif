@@ -1,0 +1,17 @@
+(.nif24)
+,1,tests/nimony/basics/twhen.nim(stmts 24,1
+ (type ~22 :bool.0.twh0750pd 
+  (bool) . ~16
+  (pragmas 2
+   (magic 7 Bool)) 2
+  (enum ~14,1
+   (efld ~8 :false.0.twh0750pd 
+    (false) . 
+    (bool) +0) ~4,1
+   (efld ~7 :true.0.twh0750pd 
+    (true) . 
+    (bool) +1))) 2,5
+ (stmts 
+  (discard 8 "good")) 2,12
+ (stmts 
+  (discard 8 "good")))

@@ -36,7 +36,7 @@ Options:
   --cc:SYMBOL               specify the C compiler
   --opt:none|speed|size     optimize not at all or for speed|size
   --lineDir:on|off          generation of #line directive on|off
-  --bits:N                  (int M) has N bits; possible values: 64, 32, 16
+  --bits:N                  `(i -1)` has N bits; possible values: 64, 32, 16
   --version                 show the version
   --help                    show this help
 """

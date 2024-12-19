@@ -21,6 +21,7 @@ type
     AsgnS = "asgn"
     BlockS = "block"
     IfS = "if"
+    WhenS = "when"
     BreakS = "break"
     ContinueS = "continue"
     WhileS = "while"
@@ -110,6 +111,7 @@ type
     ConvX = "conv"
     OconvX = "oconv" # object conversion
     HconvX = "hconv" # hidden basic type conversion
+    DconvX = "dconf" # conversion between `distinct` types
     CallX = "call"
     CallStrLitX = "callstrlit"
     InfixX = "infix"
@@ -183,6 +185,8 @@ type
     Globalvar = "global"
     Discardable = "discardable"
     NoReturn = "noreturn"
+    Varargs = "varargs"
+    Borrow = "borrow"
 
   SubstructureKind* = enum
     NoSub
@@ -281,3 +285,6 @@ const
 
 proc addParLe*(dest: var TokenBuf; kind: TypeKind|SymKind|ExprKind|StmtKind; info = NoLineInfo) =
   dest.add parLeToken(pool.tags.getOrIncl($kind), info)
+
+proc parLeToken*(kind: TypeKind|SymKind|ExprKind|StmtKind|SubstructureKind; info = NoLineInfo): PackedToken =
+  parLeToken(pool.tags.getOrIncl($kind), info)

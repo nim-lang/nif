@@ -30,7 +30,7 @@ type
     tvars: HashSet[SymId]
     fn*: FnCandidate
     args*, typeArgs*: TokenBuf
-    err*: bool
+    err*, flipped*: bool
     skippedMod: TypeKind
     removeArgErrors: bool
     argInfo: PackedLineInfo
@@ -39,8 +39,9 @@ type
     returnType*: Cursor
     context: ptr SemContext
     error: MatchError
+    firstVarargPosition*: int
 
-proc createMatch*(context: ptr SemContext): Match = Match(context: context)
+proc createMatch*(context: ptr SemContext): Match = Match(context: context, firstVarargPosition: -1)
 
 proc concat(a: varargs[string]): string =
   result = a[0]
@@ -283,7 +284,10 @@ proc matchSymbol(m: var Match; f: Cursor; arg: Item) =
         if fparent == a.symId:
           m.args.addParLe OconvX, m.argInfo
           m.args.addIntLit diff, m.argInfo
-          inc m.inheritanceCosts, diff
+          if m.flipped:
+            dec m.inheritanceCosts, diff
+          else:
+            inc m.inheritanceCosts, diff
           inc m.opened
           diff = 0 # mark as success
           break
@@ -305,10 +309,20 @@ proc matchSymbol(m: var Match; f: Cursor; arg: Item) =
       else:
         singleArgImpl(m, impl, arg)
 
-proc cmpTypeBits(f, a: Cursor): int =
+proc typebits*(context: ptr SemContext; n: PackedToken): int =
+  if n.kind == IntLit:
+    result = pool.integers[n.intId]
+  elif n.kind == InlineInt:
+    result = n.soperand
+  else:
+    result = 0
+  if result == -1:
+    result = context.g.config.bits
+
+proc cmpTypeBits(context: ptr SemContext; f, a: Cursor): int =
   if (f.kind == IntLit or f.kind == InlineInt) and
      (a.kind == IntLit or a.kind == InlineInt):
-    result = typebits(f.load) - typebits(a.load)
+    result = typebits(context, f.load) - typebits(context, a.load)
   else:
     result = -1
 
@@ -321,7 +335,7 @@ proc matchIntegralType(m: var Match; f: var Cursor; arg: Item) =
     return
   let forig = f
   inc f
-  let cmp = cmpTypeBits(f, a)
+  let cmp = cmpTypeBits(m.context, f, a)
   if cmp == 0:
     discard "same types"
   elif cmp > 0:
@@ -330,6 +344,7 @@ proc matchIntegralType(m: var Match; f: var Cursor; arg: Item) =
       m.error "implicit conversion to " & typeToString(forig) & " is not mutable"
     else:
       m.args.addParLe HconvX, m.argInfo
+      m.args.addSubtree forig
       inc m.intCosts
       inc m.opened
   else:
@@ -395,6 +410,14 @@ proc singleArgImpl(m: var Match; f: var Cursor; arg: Item) =
       var a = arg.typ
       linearMatch m, f, a
       expectParRi m, f
+    of VarargsT:
+      discard "do not even advance f here"
+      if m.firstVarargPosition < 0:
+        m.firstVarargPosition = m.args.len
+    of UntypedT:
+      # `varargs` and `untyped` simply match everything:
+      inc f
+      expectParRi m, f
     of TupleT:
       let fOrig = f
       let aOrig = arg.typ
@@ -454,24 +477,36 @@ type
     EqualMatch
 
 proc usesConversion*(m: Match): bool {.inline.} =
-  result = m.inheritanceCosts + m.intCosts > 0
+  result = abs(m.inheritanceCosts) + m.intCosts > 0
 
 proc sigmatchLoop(m: var Match; f: var Cursor; args: openArray[Item]) =
   var i = 0
-  while i < args.len and f.kind != ParRi:
+  var isVarargs = false
+  while f.kind != ParRi:
     m.skippedMod = NoType
     m.removeArgErrors = false
-    m.argInfo = args[i].n.info
 
     assert f.symKind == ParamY
     let param = asLocal(f)
     var ftyp = param.typ
-    skip f
+    # This is subtle but only this order of `i >= args.len` checks
+    # is correct for all cases (varargs/too few args/too many args)
+    if ftyp != "varargs":
+      if i >= args.len: break
+      skip f
+    else:
+      isVarargs = true
+      if i >= args.len: break
+    m.argInfo = args[i].n.info
 
     singleArg m, ftyp, args[i]
     if m.err: break
     inc m.pos
     inc i
+  if isVarargs:
+    if m.firstVarargPosition < 0:
+      m.firstVarargPosition = m.args.len
+    skip f
 
 
 iterator typeVars(fn: SymId): SymId =
@@ -539,7 +574,7 @@ proc sigmatch*(m: var Match; fn: FnCandidate; args: openArray[Item];
     let moreArgs = collectDefaultValues(f)
     sigmatchLoop m, f, moreArgs
     if f.kind != ParRi:
-      m.error "too many parameters"
+      m.error "too few arguments"
 
   if f.kind == ParRi:
     inc f

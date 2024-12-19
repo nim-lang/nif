@@ -145,6 +145,9 @@ proc cursorAt*(b: var TokenBuf; i: int): Cursor {.inline.} =
   inc b.readers
   result = Cursor(p: addr b.data[i], rem: b.len-i)
 
+proc cursorToPosition*(b: TokenBuf; c: Cursor): int {.inline.} =
+  result = (cast[int](c) - cast[int](b.data)) div sizeof(PackedToken)
+
 proc add*(result: var TokenBuf; c: Cursor) =
   result.add c.load
 
@@ -267,6 +270,9 @@ proc insert*(dest: var TokenBuf; src: openArray[PackedToken]; pos: int) =
 
 proc insert*(dest: var TokenBuf; src: Cursor; pos: int) =
   insert dest, toOpenArray(cast[ptr  UncheckedArray[PackedToken]](src.p), 0, span(src)-1), pos
+
+proc insert*(dest: var TokenBuf; src: TokenBuf; pos: int) =
+  insert dest, toOpenArray(src.data, 0, src.len-1), pos
 
 proc replace*(dest: var TokenBuf; by: Cursor; pos: int) =
   let len = span(Cursor(p: addr dest.data[pos], rem: dest.len-pos))
