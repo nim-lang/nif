@@ -414,10 +414,6 @@ proc singleArgImpl(m: var Match; f: var Cursor; arg: Item) =
       discard "do not even advance f here"
       if m.firstVarargPosition < 0:
         m.firstVarargPosition = m.args.len
-    of UntypedT:
-      # `varargs` and `untyped` simply match everything:
-      inc f
-      expectParRi m, f
     of TupleT:
       let fOrig = f
       let aOrig = arg.typ
