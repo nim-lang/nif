@@ -30,6 +30,7 @@ type
     headers: HashSet[StrId]
     currentOwner: SymId
     toMangle: Table[SymbolKey, string]
+    borrowedProcs: Table[SymId, (Cursor, seq[SymId])]
 
 proc newNifModule(infile: string): NifModule =
   result = NifModule(stream: nifstreams.open(infile))
@@ -140,7 +141,7 @@ type
 
 proc traverseExpr(e: var EContext; c: var Cursor)
 proc traverseStmt(e: var EContext; c: var Cursor; mode = TraverseAll)
-proc traverseLocal(e: var EContext; c: var Cursor; tag: string; mode: TraverseMode)
+proc traverseLocal(e: var EContext; c: var Cursor; tag: string; mode: TraverseMode): SymId
 
 template loop(e: var EContext; c: var Cursor; body: untyped) =
   while true:
@@ -308,7 +309,8 @@ proc traverseType(e: var EContext; c: var Cursor; flags: set[TypeFlag] = {}) =
   else:
     error e, "type expected but got: ", c
 
-proc traverseParams(e: var EContext; c: var Cursor) =
+proc traverseParams(e: var EContext; c: var Cursor): seq[SymId] =
+  result = @[]
   if c.kind == DotToken:
     e.dest.add c
     inc c
@@ -318,7 +320,7 @@ proc traverseParams(e: var EContext; c: var Cursor) =
     loop e, c:
       if c.substructureKind != ParamS:
         error e, "expected (param) but got: ", c
-      traverseLocal(e, c, "param", TraverseSig)
+      result.add traverseLocal(e, c, "param", TraverseSig)
   # the result type
   traverseType e, c
 
@@ -447,7 +449,7 @@ proc traverseProc(e: var EContext; c: var Cursor; mode: TraverseMode) =
 
   skip c # generic parameters
 
-  traverseParams e, c
+  let params = traverseParams(e, c)
 
   let pinfo = c.info
   let prag = parsePragmas(e, c)
@@ -465,14 +467,18 @@ proc traverseProc(e: var EContext; c: var Cursor; mode: TraverseMode) =
   skip c # miscPos
 
   # body:
-  if mode != TraverseSig or prag.callConv == InlineC:
+
+  if Borrow in prag.flags:
+    e.borrowedProcs[s] = (c, params)
+    skip c
+  elif mode != TraverseSig or prag.callConv == InlineC:
     traverseStmt e, c, TraverseAll
   else:
     e.dest.addDotToken()
     skip c
   wantParRi e, c
   swap dst, e.dest
-  if Nodecl in prag.flags or isGeneric:
+  if {Nodecl, Borrow} * prag.flags != {} or isGeneric:
     discard "do not add to e.dest"
   else:
     e.dest.add dst
@@ -512,6 +518,51 @@ proc traverseTypeDecl(e: var EContext; c: var Cursor) =
     e.headers.incl prag.header
   discard setOwner(e, oldOwner)
 
+proc replaceParams(e: var EContext; body: var Cursor; paramValues: var Cursor; params: seq[SymId]) =
+  inc body # skip stmts
+  var nested = 0
+  while true:
+    case body.kind
+    of EofToken: break
+    of ParLe:
+      e.dest.add body
+      inc body
+      inc nested
+    of ParRi:
+      e.dest.add body
+      dec nested
+      if nested == 0:
+        inc body
+        break
+      inc body
+    of Symbol:
+      if body.symId in params:
+        traverseExpr(e, paramValues)
+      else:
+        e.dest.add body
+      inc body
+    else:
+      e.dest.add body
+      inc body
+
+proc traverseCall(e: var EContext, c: var Cursor) =
+  let callInfo = c.info
+  inc c
+  expectSym e, c
+  let s = c.symId
+  demand e, s
+  if s in e.borrowedProcs:
+    var (body, params) = e.borrowedProcs[s]
+    inc c
+    replaceParams(e, body, c, params)
+    skipParRi e, c
+  else:
+    e.add "call", callInfo
+    e.dest.add c
+    inc c
+    e.loop c:
+      traverseExpr e, c
+
 proc traverseExpr(e: var EContext; c: var Cursor) =
   var nested = 0
   while true:
@@ -527,6 +578,8 @@ proc traverseExpr(e: var EContext; c: var Cursor) =
         traverseType(e, c)
         swap skipped, e.dest
         inc nested
+      of CallX:
+        traverseCall(e, c)
       else:
         e.dest.add c
         inc nested
@@ -553,7 +606,7 @@ proc traverseExpr(e: var EContext; c: var Cursor) =
     if nested == 0:
       break
 
-proc traverseLocal(e: var EContext; c: var Cursor; tag: string; mode: TraverseMode) =
+proc traverseLocal(e: var EContext; c: var Cursor; tag: string; mode: TraverseMode): SymId =
   let toPatch = e.dest.len
   let vinfo = c.info
   e.add tag, vinfo
@@ -564,6 +617,7 @@ proc traverseLocal(e: var EContext; c: var Cursor; tag: string; mode: TraverseMo
   let prag = parsePragmas(e, c)
 
   e.dest.add symdefToken(s, sinfo)
+  result = s
   e.offer s
 
   var genPragmas = openGenPragmas()
@@ -711,19 +765,21 @@ proc traverseStmt(e: var EContext; c: var Cursor; mode = TraverseAll) =
         e.loop c:
           traverseStmt e, c, mode
     of VarS, LetS, CursorS, ResultS:
-      traverseLocal e, c, (if e.nestedIn[^1][0] == StmtsS and mode in {TraverseTopLevel, TraverseSig}: "gvar" else: "var"), mode
+      discard traverseLocal(e, c, (if e.nestedIn[^1][0] == StmtsS and mode in {TraverseTopLevel, TraverseSig}: "gvar" else: "var"), mode)
     of ConstS:
-      traverseLocal e, c, "const", mode
+      discard traverseLocal(e, c, "const", mode)
     of CmdS:
       e.dest.add tagToken("call", c.info)
       inc c
       e.loop c:
         traverseExpr e, c
-    of EmitS, AsgnS, RetS, CallS, DiscardS:
+    of EmitS, AsgnS, RetS, DiscardS:
       e.dest.add c
       inc c
       e.loop c:
         traverseExpr e, c
+    of CallS:
+      traverseCall(e, c)
     of BreakS: traverseBreak e, c
     of WhileS: traverseWhile e, c
     of BlockS: traverseBlock e, c
