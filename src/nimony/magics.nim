@@ -98,6 +98,7 @@ proc magicToTag*(m: TMagic): (string, int) =
   case m
   of mDefined: res DefinedX
   of mDeclared: res DeclaredX
+  of mIsMainModule: res IsMainModuleX
   of mCompiles: res CompilesX
   of mArrGet: res AtX
   of mArrPut: res AtX
