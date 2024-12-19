@@ -1386,12 +1386,23 @@ proc maybeInlineMagic(c: var SemContext; res: LoadResult) =
       inc n # skip the SymbolDef
       if n.kind == ParLe:
         # ^ export marker position has a `(`? If so, it is a magic!
-        c.dest[c.dest.len-1] = n.load
+        let exprStart = c.dest.len-1
+        c.dest[exprStart] = n.load
+        let magicKind = n.exprKind
         inc n
         while true:
           c.dest.add n
           if n.kind == ParRi: break
           inc n
+        if magicKind in {IsMainModuleX}:
+          # standalone symbol magic that needs semchecking
+          # code is overkill but mirrors `addFn` 
+          var magicExprBuf = createTokenBuf(c.dest.len - exprStart)
+          magicExprBuf.addUnstructured cursorAt(c.dest, exprStart)
+          endRead(c.dest)
+          c.dest.shrink exprStart
+          var magicExpr = Item(n: cursorAt(magicExprBuf, 0), typ: c.types.autoType)
+          semExpr c, magicExpr
 
 proc semTypeSym(c: var SemContext; s: Sym; info: PackedLineInfo; context: TypeDeclContext) =
   if s.kind in {TypeY, TypevarY}:
@@ -2665,6 +2676,18 @@ proc semDeclared(c: var SemContext; it: var Item) =
   it.typ = c.types.boolType
   commonType c, it, beforeExpr, expected
 
+proc semIsMainModule(c: var SemContext; it: var Item) =
+  let info = it.n.info
+  inc it.n
+  skipParRi it.n
+  let isMainModule = IsMain in c.moduleFlags
+  let beforeExpr = c.dest.len
+  c.dest.addParLe(if isMainModule: TrueX else: FalseX, info)
+  c.dest.addParRi()
+  let expected = it.typ
+  it.typ = c.types.boolType
+  commonType c, it, beforeExpr, expected
+
 proc semBuiltinSubscript(c: var SemContext; lhs: Item; it: var Item) =
   # it.n is after lhs, at args
   if lhs.n.kind == Symbol and lhs.kind == TypeY and
@@ -2931,6 +2954,8 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
       semDefined c, it
     of DeclaredX:
       semDeclared c, it
+    of IsMainModuleX:
+      semIsMainModule c, it
     of AtX:
       semSubscript c, it
     of UnpackX:
@@ -2992,10 +3017,6 @@ proc phaseX(c: var SemContext; n: Cursor; x: SemPhase): TokenBuf =
   wantParRi c, n
   result = move c.dest
 
-type
-  ModuleFlag* = enum
-    IsSystem, IsMain, SkipSystem
-
 proc semcheck*(infile, outfile: string; config: sink NifConfig; moduleFlags: set[ModuleFlag];
                commandLineArgs: sink string) =
   var n0 = setupProgram(infile, outfile)
@@ -3003,6 +3024,7 @@ proc semcheck*(infile, outfile: string; config: sink NifConfig; moduleFlags: set
     dest: createTokenBuf(),
     types: createBuiltinTypes(),
     thisModuleSuffix: prog.main,
+    moduleFlags: moduleFlags,
     g: ProgramContext(config: config),
     phase: SemcheckTopLevelSyms,
     routine: SemRoutine(kind: NoSym),

@@ -14,4 +14,12 @@
  (stmts 
   (discard 8 "good")) 2,12
  (stmts 
+  (discard 8 "good")) 20,14
+ (const ~14 :isMainModule.0.twh0750pd 
+  (ismainmodule) 
+  (pragmas 2
+   (magic 7 IsMainModule)) ~8,~12
+  (bool) ~8,~12
+  (false)) 2,17
+ (stmts 
   (discard 8 "good")))

@@ -12,6 +12,13 @@ when false:
 else:
   discard "good"
 
+const isMainModule* {.magic: IsMainModule.} = false
+
+when isMainModule:
+  discard "good"
+else:
+  discard "bad"
+
 when false:
   proc defined*(x: untyped): bool {.magic: Defined.}
 

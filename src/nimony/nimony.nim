@@ -10,7 +10,7 @@ import std / [parseopt, sets, strutils, os, assertions, syncio]
 
 import ".." / gear3 / gear3 # only imported to ensure it keeps compiling
 import ".." / gear2 / modnames
-import sem, nifconfig, semos
+import sem, nifconfig, semos, semdata
 
 const
   Version = "0.2"

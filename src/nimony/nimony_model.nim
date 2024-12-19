@@ -130,6 +130,7 @@ type
     LowX = "low"
     TypeofX = "typeof"
     UnpackX = "unpack"
+    IsMainModuleX = "ismainmodule"
 
   TypeKind* = enum
     NoType
