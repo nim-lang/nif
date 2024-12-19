@@ -1,4 +1,4 @@
-tests/nimony/basics/tundeclaredarg.nif(1, 13) Error: not a type
-tests/nimony/basics/tundeclaredarg.nif(1, 13) Error: unknown type name
-tests/nimony/basics/tundeclaredarg.nif(3, 4) Error: Type mismatch at [position]
+tests/nimony/basics/tundeclaredarg.nim(1, 13) Error: not a type
+tests/nimony/basics/tundeclaredarg.nim(1, 13) Error: unknown type name
+tests/nimony/basics/tundeclaredarg.nim(3, 4) Error: Type mismatch at [position]
 [1] BUG: unhandled type: err
