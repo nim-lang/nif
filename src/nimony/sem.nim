@@ -1427,9 +1427,15 @@ proc semTypeSym(c: var SemContext; s: Sym; info: PackedLineInfo; context: TypeDe
         var t = typ.body
         semLocalTypeImpl c, t, context
   elif s.kind != NoSym:
-    c.buildErr info, "type name expected, but got: " & pool.syms[s.name]
+    var orig = createTokenBuf(1)
+    orig.add c.dest[c.dest.len-1]
+    c.dest.shrink c.dest.len-1
+    c.buildErr info, "type name expected, but got: " & pool.syms[s.name], cursorAt(orig, 0)
   else:
-    c.buildErr info, "unknown type name"
+    var orig = createTokenBuf(1)
+    orig.add c.dest[c.dest.len-1]
+    c.dest.shrink c.dest.len-1
+    c.buildErr info, "unknown type name", cursorAt(orig, 0)
 
 proc semParams(c: var SemContext; n: var Cursor)
 proc semLocal(c: var SemContext; n: var Cursor; kind: SymKind)
@@ -2054,14 +2060,20 @@ proc semExprSym(c: var SemContext; it: var Item; s: Sym; start: int; flags: set[
   it.kind = s.kind
   let expected = it.typ
   if s.kind == NoSym:
+    var orig = createTokenBuf(1)
+    orig.add c.dest[c.dest.len-1]
+    c.dest.shrink c.dest.len-1
     if pool.syms.hasId(s.name):
-      c.buildErr it.n.info, "undeclared identifier: " & pool.syms[s.name]
+      c.buildErr it.n.info, "undeclared identifier: " & pool.syms[s.name], cursorAt(orig, 0)
     else:
-      c.buildErr it.n.info, "undeclared identifier"
+      c.buildErr it.n.info, "undeclared identifier", cursorAt(orig, 0)
     it.typ = c.types.autoType
   elif s.kind == CchoiceY:
     if KeepMagics notin flags:
+      assert c.dest[c.dest.len-1].kind == ParRi
+      c.dest.shrink c.dest.len-1
       c.buildErr it.n.info, "ambiguous identifier"
+      c.dest.addParRi()
     it.typ = c.types.autoType
   elif s.kind in {TypeY, TypevarY}:
     let typeStart = c.dest.len
@@ -2089,7 +2101,10 @@ proc semExprSym(c: var SemContext; it: var Item; s: Sym; start: int; flags: set[
       it.typ = n
       commonType c, it, start, expected
     else:
-      c.buildErr it.n.info, "could not load symbol: " & pool.syms[s.name] & "; errorCode: " & $res.status
+      var orig = createTokenBuf(1)
+      orig.add c.dest[c.dest.len-1]
+      c.dest.shrink c.dest.len-1
+      c.buildErr it.n.info, "could not load symbol: " & pool.syms[s.name] & "; errorCode: " & $res.status, cursorAt(orig, 0)
       it.typ = c.types.autoType
 
 proc semLocalTypeExpr(c: var SemContext, it: var Item) =
