@@ -903,6 +903,20 @@ proc semConvFromCall(c: var SemContext; it: var Item; cs: CallState) =
   wantParRi c, it.n
   commonType c, it, beforeExpr, destType
 
+proc semCast(c: var SemContext; it: var Item) =
+  # We keep this free from any sizeof computations here, we will do them in
+  # some backend step instead for now. XXX This affects `system.compiles` though
+  # and so must eventually be done here.
+  let beforeExpr = c.dest.len
+  takeToken c, it.n
+  let destType = semLocalType(c, it.n)
+  var x = Item(n: it.n, typ: c.types.autoType)
+  # XXX Add hderef here somehow
+  semExpr c, x
+  it.n = x.n
+  wantParRi c, it.n
+  commonType c, it, beforeExpr, destType
+
 proc resolveOverloads(c: var SemContext; it: var Item; cs: var CallState) =
   let genericArgs =
     if cs.hasGenericArgs: cursorAt(cs.genericDest, 0)
@@ -2944,8 +2958,10 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
       # type as the operand:
       semExpr c, it
       wantParRi c, it.n
+    of CastX:
+      semCast c, it
     of DerefX, PatX, AddrX, NilX, SizeofX, OconstrX, KvX,
-       CastX, ConvX, RangeX, RangesX,
+       ConvX, RangeX, RangesX,
        OconvX, HconvX,
        CompilesX, HighX, LowX, TypeofX:
       # XXX To implement
