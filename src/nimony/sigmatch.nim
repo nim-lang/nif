@@ -98,6 +98,13 @@ proc isObjectType(s: SymId): bool =
   let impl = objtypeImpl(s)
   result = impl.typeKind == ObjectT
 
+proc isEnumType*(n: Cursor): bool =
+  if n.kind == Symbol:
+    let impl = typeImpl(n.symId)
+    result = impl.typeKind == EnumT
+  else:
+    result = false
+
 proc isConcept(s: SymId): bool =
   #let impl = typeImpl(s)
   # XXX Model Concept in the grammar
@@ -395,9 +402,28 @@ proc singleArgImpl(m: var Match; f: var Cursor; arg: Item) =
       else:
         linearMatch m, f, a
       expectParRi m, f
-    of ArrayT, SetT:
+    of ArrayT, SetT, UncheckedArrayT:
       var a = skipModifier(arg.typ)
       linearMatch m, f, a
+      expectParRi m, f
+    of CstringT:
+      var a = skipModifier(arg.typ)
+      if a.typeKind == NilT:
+        discard "ok"
+        inc f
+      else:
+        linearMatch m, f, a
+      expectParRi m, f
+    of PointerT:
+      var a = skipModifier(arg.typ)
+      case a.typeKind
+      of NilT:
+        discard "ok"
+        inc f
+      of PtrT:
+        inc m.intCosts
+      else:
+        linearMatch m, f, a
       expectParRi m, f
     of TypedescT:
       # do not skip modifier
@@ -437,7 +463,8 @@ proc singleArgImpl(m: var Match; f: var Cursor; arg: Item) =
         if a.kind != ParRi:
           # len(a) > len(f)
           m.error expected(fOrig, aOrig)
-    else:
+    of NoType, ObjectT, EnumT, VoidT, PtrT, RefT, OutT, LentT, SinkT, NilT, OrT, AndT, NotT,
+        ConceptT, DistinctT, StaticT, ProcT, IterT, AutoT, SymKindT:
       m.error "BUG: unhandled type: " & pool.tags[f.tagId]
   else:
     m.error "BUG: " & expected(f, arg.typ)
