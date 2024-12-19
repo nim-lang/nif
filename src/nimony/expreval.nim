@@ -7,10 +7,11 @@
 ## expression evaluator for simple constant expressions, not meant to be complete
 
 include nifprelude
-import nimony_model, decls, programs, xints
+import nimony_model, decls, programs, xints, semdata
 
 type
   EvalContext* = object
+    c: ptr SemContext
     values: seq[TokenBuf]
     trueValue, falseValue: Cursor
 
@@ -29,8 +30,8 @@ proc isConstStringValue*(n: Cursor): bool =
 proc isConstCharValue*(n: Cursor): bool =
   n.kind == CharLit
 
-proc initEvalContext*(): EvalContext =
-  result = EvalContext(values: @[])
+proc initEvalContext*(c: ptr SemContext): EvalContext =
+  result = EvalContext(c: c, values: @[])
 
 proc skipParRi(n: var Cursor) =
   if n.kind == ParRi:
@@ -146,6 +147,11 @@ proc eval*(c: var EvalContext, n: var Cursor): Cursor =
       inc n
       result = n
       skipToEnd n
+    of IsMainModuleX:
+      if IsMain in c.c.moduleFlags:
+        return c.getTrueValue()
+      else:
+        return c.getFalseValue()
     else:
       if n.tagId == ErrT:
         result = n
@@ -155,14 +161,14 @@ proc eval*(c: var EvalContext, n: var Cursor): Cursor =
   else:
     error "cannot evaluate expression at compile time: " & toString(n, false), n.info
 
-proc evalExpr*(n: var Cursor): TokenBuf =
-  var ec = initEvalContext()
+proc evalExpr*(c: var SemContext, n: var Cursor): TokenBuf =
+  var ec = initEvalContext(addr c)
   let val = eval(ec, n)
   result = createTokenBuf(val.span)
   result.addSubtree val
 
-proc evalOrdinal*(n: Cursor): xint =
-  var ec = initEvalContext()
+proc evalOrdinal*(c: var SemContext, n: Cursor): xint =
+  var ec = initEvalContext(addr c)
   var n0 = n
   let val = eval(ec, n0)
   case val.kind

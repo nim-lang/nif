@@ -489,7 +489,7 @@ proc semConstBoolExpr(c: var SemContext; n: var Cursor) =
   if classifyType(c, it.typ) != BoolT:
     buildErr c, it.n.info, "expected `bool` but got: " & typeToString(it.typ)
   var e = cursorAt(c.dest, start)
-  var valueBuf = evalExpr(e)
+  var valueBuf = evalExpr(c, e)
   endRead(c.dest)
   let value = cursorAt(valueBuf, 0)
   if not isConstBoolValue(value):
@@ -509,7 +509,7 @@ proc semConstStrExpr(c: var SemContext; n: var Cursor) =
   if classifyType(c, it.typ) != StringT:
     buildErr c, it.n.info, "expected `string` but got: " & typeToString(it.typ)
   var e = cursorAt(c.dest, start)
-  var valueBuf = evalExpr(e)
+  var valueBuf = evalExpr(c, e)
   endRead(c.dest)
   let value = cursorAt(valueBuf, 0)
   if not isConstStringValue(value):
@@ -529,7 +529,7 @@ proc semConstIntExpr(c: var SemContext; n: var Cursor) =
   if classifyType(c, it.typ) != IntT:
     buildErr c, it.n.info, "expected `int` but got: " & typeToString(it.typ)
   var e = cursorAt(c.dest, start)
-  var valueBuf = evalExpr(e)
+  var valueBuf = evalExpr(c, e)
   endRead(c.dest)
   let value = cursorAt(valueBuf, 0)
   if not isConstIntValue(value):
@@ -1386,23 +1386,12 @@ proc maybeInlineMagic(c: var SemContext; res: LoadResult) =
       inc n # skip the SymbolDef
       if n.kind == ParLe:
         # ^ export marker position has a `(`? If so, it is a magic!
-        let exprStart = c.dest.len-1
-        c.dest[exprStart] = n.load
-        let magicKind = n.exprKind
+        c.dest[c.dest.len-1] = n.load
         inc n
         while true:
           c.dest.add n
           if n.kind == ParRi: break
           inc n
-        if magicKind in {IsMainModuleX}:
-          # standalone symbol magic that needs semchecking
-          # code is overkill but mirrors `addFn` 
-          var magicExprBuf = createTokenBuf(c.dest.len - exprStart)
-          magicExprBuf.addUnstructured cursorAt(c.dest, exprStart)
-          endRead(c.dest)
-          c.dest.shrink exprStart
-          var magicExpr = Item(n: cursorAt(magicExprBuf, 0), typ: c.types.autoType)
-          semExpr c, magicExpr
 
 proc semTypeSym(c: var SemContext; s: Sym; info: PackedLineInfo; context: TypeDeclContext) =
   if s.kind in {TypeY, TypevarY}:
@@ -1862,7 +1851,7 @@ proc evalConstIntExpr(c: var SemContext; n: var Cursor; expected: TypeCursor): x
   var x = Item(n: n, typ: expected)
   semExpr c, x
   n = x.n
-  result = evalOrdinal(cursorAt(c.dest, beforeExpr))
+  result = evalOrdinal(c, cursorAt(c.dest, beforeExpr))
   endRead c.dest
 
 proc semEnumField(c: var SemContext; n: var Cursor; state: var EnumTypeState) =
