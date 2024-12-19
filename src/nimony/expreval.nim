@@ -43,6 +43,7 @@ proc error(c: var EvalContext, msg: string, info: PackedLineInfo): Cursor =
   c.values.add createTokenBuf(3)
   c.values[i].addParLe ErrT, info
   c.values[i].addStrLit msg
+  c.values[i].addDotToken()
   c.values[i].addParRi()
   result = cursorAt(c.values[i], 0)
 
