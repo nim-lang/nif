@@ -100,8 +100,8 @@ proc isObjectType(s: SymId): bool =
 
 proc isEnumType*(n: Cursor): bool =
   if n.kind == Symbol:
-    let impl = typeImpl(n.symId)
-    result = impl.typeKind == EnumT
+    let impl = getTypeSection(n.symId)
+    result = impl.kind == TypeY and impl.body.typeKind == EnumT
   else:
     result = false
 
