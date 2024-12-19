@@ -30,6 +30,7 @@ type
     headers: HashSet[StrId]
     currentOwner: SymId
     toMangle: Table[SymbolKey, string]
+    borrowedProcs: Table[SymId, Cursor]
 
 proc newNifModule(infile: string): NifModule =
   result = NifModule(stream: nifstreams.open(infile))
@@ -453,14 +454,18 @@ proc traverseProc(e: var EContext; c: var Cursor; mode: TraverseMode) =
   skip c # miscPos
 
   # body:
-  if mode != TraverseSig or prag.callConv == InlineC:
+
+  if Borrow in prag.flags:
+    e.borrowedProcs[s] = c
+    skip c
+  elif mode != TraverseSig or prag.callConv == InlineC:
     traverseStmt e, c, TraverseAll
   else:
     e.dest.addDotToken()
     skip c
   wantParRi e, c
   swap dst, e.dest
-  if Nodecl in prag.flags or isGeneric:
+  if {Nodecl, Borrow} * prag.flags != {} or isGeneric:
     discard "do not add to e.dest"
   else:
     e.dest.add dst
@@ -500,6 +505,48 @@ proc traverseTypeDecl(e: var EContext; c: var Cursor) =
     e.headers.incl prag.header
   discard setOwner(e, oldOwner)
 
+proc replaceParams(e: var EContext; body: var Cursor; param: var Cursor) =
+  inc body # skip stmts
+  var nested = 0
+  while true:
+    case body.kind
+    of EofToken: break
+    of ParLe:
+      e.dest.add body
+      inc body
+      inc nested
+    of ParRi:
+      e.dest.add body
+      dec nested
+      if nested == 0:
+        inc body
+        break
+      inc body
+    of Symbol:
+      traverseExpr(e, param)
+      inc body
+    else:
+      e.dest.add body
+      inc body
+
+proc traverseCall(e: var EContext, c: var Cursor) =
+  let callInfo = c.info
+  inc c
+  expectSym e, c
+  let s = c.symId
+  demand e, s
+  if s in e.borrowedProcs:
+    var body = e.borrowedProcs[s]
+    inc c
+    replaceParams(e, body, c)
+    skipParRi e, c
+  else:
+    e.add "call", callInfo
+    e.dest.add c
+    inc c
+    e.loop c:
+      traverseExpr e, c
+
 proc traverseExpr(e: var EContext; c: var Cursor) =
   var nested = 0
   while true:
@@ -515,6 +562,8 @@ proc traverseExpr(e: var EContext; c: var Cursor) =
         traverseType(e, c)
         swap skipped, e.dest
         inc nested
+      of CallX:
+        traverseCall(e, c)
       else:
         e.dest.add c
         inc nested
@@ -707,11 +756,13 @@ proc traverseStmt(e: var EContext; c: var Cursor; mode = TraverseAll) =
       inc c
       e.loop c:
         traverseExpr e, c
-    of EmitS, AsgnS, RetS, CallS, DiscardS:
+    of EmitS, AsgnS, RetS, DiscardS:
       e.dest.add c
       inc c
       e.loop c:
         traverseExpr e, c
+    of CallS:
+      traverseCall(e, c)
     of BreakS: traverseBreak e, c
     of WhileS: traverseWhile e, c
     of BlockS: traverseBlock e, c
