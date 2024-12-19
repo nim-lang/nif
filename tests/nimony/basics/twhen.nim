@@ -1,6 +1,4 @@
-type
-  bool* {.magic: Bool.} = enum ## Built-in boolean type.
-    false = 0, true = 1
+import deps/mwhen
 
 when true:
   discard "good"
@@ -12,9 +10,29 @@ when false:
 else:
   discard "good"
 
-const isMainModule* {.magic: IsMainModule.} = false
-
 when isMainModule:
+  discard "good"
+else:
+  discard "bad"
+
+when isImportedMain1:
+  discard "bad"
+else:
+  discard "good"
+
+when isImportedMain2:
+  discard "bad"
+else:
+  discard "good"
+
+proc `not`*(x: bool): bool {.magic: Not.}
+
+when not true:
+  discard "bad"
+else:
+  discard "good"
+
+when not isImportedMain2:
   discard "good"
 else:
   discard "bad"

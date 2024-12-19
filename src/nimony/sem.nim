@@ -2919,7 +2919,6 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
       semBoolExpr c, it.n
       wantParRi c, it.n
     of NotX:
-      c.dest.add it.n
       takeToken c, it.n
       semBoolExpr c, it.n
       wantParRi c, it.n

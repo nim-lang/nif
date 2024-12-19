@@ -70,9 +70,9 @@ proc eval*(c: var EvalContext, n: var Cursor): Cursor =
   template propagateError(r: Cursor): Cursor =
     let val = r
     if val.kind == ParLe and val.tagId == ErrT:
-      val
-    else:
       return val
+    else:
+      val
   case n.kind
   of Ident:
     error "cannot evaluate undeclared ident: " & pool.strings[n.litId], n.info
