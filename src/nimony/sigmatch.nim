@@ -410,6 +410,7 @@ proc singleArgImpl(m: var Match; f: var Cursor; arg: Item) =
       var a = skipModifier(arg.typ)
       if a.typeKind == NilT:
         discard "ok"
+        inc f
       else:
         linearMatch m, f, a
       expectParRi m, f
@@ -418,6 +419,7 @@ proc singleArgImpl(m: var Match; f: var Cursor; arg: Item) =
       case a.typeKind
       of NilT:
         discard "ok"
+        inc f
       of PtrT:
         inc m.intCosts
       else:
