@@ -1745,14 +1745,19 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
           n = it.n
       wantParRi c, n
     of ObjectT:
-      if context != InTypeSection:
+      if context == InGenericConstraint:
+        c.dest.takeTree n
+      elif context != InTypeSection:
         c.buildErr info, "`object` type must be defined in a `type` section"
         skip n
       else:
         semObjectType c, n
     of EnumT:
-      c.buildErr info, "`enum` type must be defined in a `type` section"
-      skip n
+      if context == InGenericConstraint:
+        c.dest.takeTree n
+      else:
+        c.buildErr info, "`enum` type must be defined in a `type` section"
+        skip n
     of ConceptT:
       if context != InTypeSection:
         c.buildErr info, "`concept` type must be defined in a `type` section"
