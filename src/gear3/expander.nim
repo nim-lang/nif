@@ -30,7 +30,7 @@ type
     headers: HashSet[StrId]
     currentOwner: SymId
     toMangle: Table[SymbolKey, string]
-    borrowedProcs: Table[SymId, Cursor]
+    borrowedProcs: Table[SymId, (Cursor, seq[SymId])]
 
 proc newNifModule(infile: string): NifModule =
   result = NifModule(stream: nifstreams.open(infile))
@@ -141,7 +141,7 @@ type
 
 proc traverseExpr(e: var EContext; c: var Cursor)
 proc traverseStmt(e: var EContext; c: var Cursor; mode = TraverseAll)
-proc traverseLocal(e: var EContext; c: var Cursor; tag: string; mode: TraverseMode)
+proc traverseLocal(e: var EContext; c: var Cursor; tag: string; mode: TraverseMode): SymId
 
 template loop(e: var EContext; c: var Cursor; body: untyped) =
   while true:
@@ -297,7 +297,8 @@ proc traverseType(e: var EContext; c: var Cursor; flags: set[TypeFlag] = {}) =
   else:
     error e, "type expected but got: ", c
 
-proc traverseParams(e: var EContext; c: var Cursor) =
+proc traverseParams(e: var EContext; c: var Cursor): seq[SymId] =
+  result = @[]
   if c.kind == DotToken:
     e.dest.add c
     inc c
@@ -307,7 +308,7 @@ proc traverseParams(e: var EContext; c: var Cursor) =
     loop e, c:
       if c.substructureKind != ParamS:
         error e, "expected (param) but got: ", c
-      traverseLocal(e, c, "param", TraverseSig)
+      result.add traverseLocal(e, c, "param", TraverseSig)
   # the result type
   traverseType e, c
 
@@ -436,7 +437,7 @@ proc traverseProc(e: var EContext; c: var Cursor; mode: TraverseMode) =
 
   skip c # generic parameters
 
-  traverseParams e, c
+  let params = traverseParams(e, c)
 
   let pinfo = c.info
   let prag = parsePragmas(e, c)
@@ -456,7 +457,7 @@ proc traverseProc(e: var EContext; c: var Cursor; mode: TraverseMode) =
   # body:
 
   if Borrow in prag.flags:
-    e.borrowedProcs[s] = c
+    e.borrowedProcs[s] = (c, params)
     skip c
   elif mode != TraverseSig or prag.callConv == InlineC:
     traverseStmt e, c, TraverseAll
@@ -505,7 +506,7 @@ proc traverseTypeDecl(e: var EContext; c: var Cursor) =
     e.headers.incl prag.header
   discard setOwner(e, oldOwner)
 
-proc replaceParams(e: var EContext; body: var Cursor; param: var Cursor) =
+proc replaceParams(e: var EContext; body: var Cursor; paramValues: var Cursor; params: seq[SymId]) =
   inc body # skip stmts
   var nested = 0
   while true:
@@ -523,7 +524,10 @@ proc replaceParams(e: var EContext; body: var Cursor; param: var Cursor) =
         break
       inc body
     of Symbol:
-      traverseExpr(e, param)
+      if body.symId in params:
+        traverseExpr(e, paramValues)
+      else:
+        e.dest.add body
       inc body
     else:
       e.dest.add body
@@ -536,9 +540,9 @@ proc traverseCall(e: var EContext, c: var Cursor) =
   let s = c.symId
   demand e, s
   if s in e.borrowedProcs:
-    var body = e.borrowedProcs[s]
+    var (body, params) = e.borrowedProcs[s]
     inc c
-    replaceParams(e, body, c)
+    replaceParams(e, body, c, params)
     skipParRi e, c
   else:
     e.add "call", callInfo
@@ -590,7 +594,7 @@ proc traverseExpr(e: var EContext; c: var Cursor) =
     if nested == 0:
       break
 
-proc traverseLocal(e: var EContext; c: var Cursor; tag: string; mode: TraverseMode) =
+proc traverseLocal(e: var EContext; c: var Cursor; tag: string; mode: TraverseMode): SymId =
   let toPatch = e.dest.len
   let vinfo = c.info
   e.add tag, vinfo
@@ -601,6 +605,7 @@ proc traverseLocal(e: var EContext; c: var Cursor; tag: string; mode: TraverseMo
   let prag = parsePragmas(e, c)
 
   e.dest.add symdefToken(s, sinfo)
+  result = s
   e.offer s
 
   var genPragmas = openGenPragmas()
@@ -748,9 +753,9 @@ proc traverseStmt(e: var EContext; c: var Cursor; mode = TraverseAll) =
         e.loop c:
           traverseStmt e, c, mode
     of VarS, LetS, CursorS, ResultS:
-      traverseLocal e, c, (if e.nestedIn[^1][0] == StmtsS and mode in {TraverseTopLevel, TraverseSig}: "gvar" else: "var"), mode
+      discard traverseLocal(e, c, (if e.nestedIn[^1][0] == StmtsS and mode in {TraverseTopLevel, TraverseSig}: "gvar" else: "var"), mode)
     of ConstS:
-      traverseLocal e, c, "const", mode
+      discard traverseLocal(e, c, "const", mode)
     of CmdS:
       e.dest.add tagToken("call", c.info)
       inc c
