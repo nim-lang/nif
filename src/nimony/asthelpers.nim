@@ -41,6 +41,9 @@ proc addWithoutErrorsImpl(result: var TokenBuf; c: var Cursor) =
           result.add item
           inc nested
           inc c
+      else:
+        result.add item
+        inc c
 
 proc addWithoutErrors*(result: var TokenBuf, c: Cursor) =
   var c = c

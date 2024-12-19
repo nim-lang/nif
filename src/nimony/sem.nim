@@ -455,6 +455,7 @@ type
   SemFlag = enum
     KeepMagics
     PreferIterators
+    AllowUndeclared
 
 proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {})
 
@@ -941,8 +942,8 @@ proc resolveOverloads(c: var SemContext; it: var Item; cs: var CallState) =
     considerTypeboundOps(c, m, cs.candidates, cs.args, genericArgs)
   let idx = pickBestMatch(c, m)
 
-  c.dest.add cs.callNode
   if idx >= 0:
+    c.dest.add cs.callNode
     let finalFn = m[idx].fn
     let isMagic = c.addFn(finalFn, cs.fn.n, cs.args)
     c.dest.add m[idx].args
@@ -974,21 +975,25 @@ proc resolveOverloads(c: var SemContext; it: var Item; cs: var CallState) =
     else:
       typeofCallIs c, it, cs.beforeCall, m[idx].returnType
 
-  elif idx == -2:
-    buildErr c, cs.callNode.info, "ambiguous call"
-    wantParRi c, it.n
-  elif m.len > 0:
-    wantParRi c, it.n
-    var errorMsg = "Type mismatch at [position]"
-    for i in 0..<m.len:
-      errorMsg.add "\n"
-      addErrorMsg errorMsg, m[i]
-    c.dest.addParLe ErrT, cs.callNode.info
-    c.dest.addStrLit errorMsg
-    c.dest.addParRi()
   else:
-    buildErr c, cs.callNode.info, "undeclared identifier"
-    wantParRi c, it.n
+    var errorMsg: string
+    if idx == -2:
+      errorMsg = "ambiguous call"
+    elif m.len > 0:
+      errorMsg = "Type mismatch at [position]"
+      for i in 0..<m.len:
+        errorMsg.add "\n"
+        addErrorMsg errorMsg, m[i]
+    else:
+      errorMsg = "undeclared identifier"
+    var errored = createTokenBuf(4)
+    errored.add cs.callNode
+    errored.addSubtree cs.fn.n
+    for a in cs.args:
+      errored.addSubtree a.n
+    errored.addParRi()
+    skipParRi it.n
+    buildErr c, cs.callNode.info, errorMsg, cursorAt(errored, 0)
 
 proc semCall(c: var SemContext; it: var Item) =
   var cs = CallState(
@@ -1006,7 +1011,7 @@ proc semCall(c: var SemContext; it: var Item) =
     var lhsBuf = createTokenBuf(4)
     var lhs = Item(n: cs.fn.n, typ: c.types.autoType)
     swap c.dest, lhsBuf
-    semExpr c, lhs, {KeepMagics}
+    semExpr c, lhs, {KeepMagics, AllowUndeclared}
     swap c.dest, lhsBuf
     cs.fn.n = lhs.n
     lhs.n = cursorAt(lhsBuf, 0)
@@ -1060,7 +1065,7 @@ proc semCall(c: var SemContext; it: var Item) =
       c.dest.shrink dotStart
       # sem b:
       cs.fn = Item(n: fieldNameCursor, typ: c.types.autoType)
-      semExpr c, cs.fn, {KeepMagics}
+      semExpr c, cs.fn, {KeepMagics, AllowUndeclared}
       fnName = getFnIdent(c)
       # add a as argument:
       let lhsIndex = c.dest.len
@@ -1073,7 +1078,7 @@ proc semCall(c: var SemContext; it: var Item) =
       # lhs.n escapes here, but is not read and will be set by argIndexes:
       cs.args.add lhs
   else:
-    semExpr(c, cs.fn, {KeepMagics})
+    semExpr(c, cs.fn, {KeepMagics, AllowUndeclared})
     fnName = getFnIdent(c)
     it.n = cs.fn.n
   cs.fnKind = cs.fn.kind
@@ -2060,13 +2065,14 @@ proc semExprSym(c: var SemContext; it: var Item; s: Sym; start: int; flags: set[
   it.kind = s.kind
   let expected = it.typ
   if s.kind == NoSym:
-    var orig = createTokenBuf(1)
-    orig.add c.dest[c.dest.len-1]
-    c.dest.shrink c.dest.len-1
-    if pool.syms.hasId(s.name):
-      c.buildErr it.n.info, "undeclared identifier: " & pool.syms[s.name], cursorAt(orig, 0)
-    else:
-      c.buildErr it.n.info, "undeclared identifier", cursorAt(orig, 0)
+    if AllowUndeclared notin flags:
+      var orig = createTokenBuf(1)
+      orig.add c.dest[c.dest.len-1]
+      c.dest.shrink c.dest.len-1
+      if pool.syms.hasId(s.name):
+        c.buildErr it.n.info, "undeclared identifier: " & pool.syms[s.name], cursorAt(orig, 0)
+      else:
+        c.buildErr it.n.info, "undeclared identifier", cursorAt(orig, 0)
     it.typ = c.types.autoType
   elif s.kind == CchoiceY:
     if KeepMagics notin flags:
