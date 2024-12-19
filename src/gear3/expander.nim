@@ -246,6 +246,18 @@ proc traverseType(e: var EContext; c: var Cursor; flags: set[TypeFlag] = {}) =
         inc c
         traverseType e, c
         wantParRi e, c
+    of PointerT:
+      e.dest.add tagToken("ptr", c.info)
+      e.dest.add tagToken("void", c.info)
+      e.dest.addParRi()
+      inc c
+      wantParRi e, c
+    of CstringT:
+      e.dest.add tagToken("ptr", c.info)
+      e.dest.add tagToken("char", c.info)
+      e.dest.addParRi()
+      inc c
+      wantParRi e, c
     of StaticT, SinkT, DistinctT:
       inc c
       traverseType e, c, flags
