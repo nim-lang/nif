@@ -90,6 +90,14 @@
      (stmts 
       (discard 8 +4))))))
  
+ (proc 5 :foobar3.0.tesg7afhq1 . . . 13
+  (params) . . . 2,1
+  (stmts 6
+   (const :myconst.0 . . ~6,~4
+    (cstring) 17
+    (conv ~23,~4
+     (cstring) 
+     (suf "abc" "R")))))
  
  (proc 5 :ifExpr.0.tesg7afhq1 . . . 11
   (params) . . . 2,1
