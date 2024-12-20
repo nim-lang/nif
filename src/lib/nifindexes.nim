@@ -22,6 +22,7 @@ proc isImportant(s: string): bool =
 proc updateChecksum(dest: var Sha1State; content: TokenBuf) =
   let s = content.toString(true)
   dest.update(s)
+  #echo "updateChecksum: ", s
 
 type
   IndexChecksum = object
@@ -34,12 +35,13 @@ type
     letT, varT, cursorT, constT, typeT, procT, templateT, funcT,
       macroT, converterT, methodT, iteratorT, inlineT: TagId
 
-proc initIndexBuilder(): IndexChecksum =
+proc initIndexChecksum(): IndexChecksum =
   result = IndexChecksum(
     nested: 0,
     currentDecl: createTokenBuf(60),
     active: -1,
-    expectedKids: -1,
+    expectedKids: -2,
+    ignoreKids: -1,
     currentConstruct: TagId(0),
     checksum: newSha1State(),
     letT: registerTag("let"),
@@ -58,7 +60,7 @@ proc initIndexBuilder(): IndexChecksum =
   )
 
 proc handleAtom(b: var IndexChecksum) =
-  if b.nested == b.active:
+  if b.nested == b.active+1:
     dec b.expectedKids
 
 proc maybeNewConstruct(b: var IndexChecksum; t: PackedToken) =
@@ -80,8 +82,8 @@ proc maybeNewConstruct(b: var IndexChecksum; t: PackedToken) =
       b.currentDecl.add t
       b.active = b.nested
       b.currentConstruct = t.tag
-    elif t.tag == b.inlineT and b.currentConstruct in [b.procT, b.funcT, b.macroT, b.converterT, b.methodT]:
-      b.ignoreKids = 0
+  elif t.tag == b.inlineT and b.currentConstruct in [b.procT, b.funcT, b.macroT, b.converterT, b.methodT]:
+    b.ignoreKids = 0
 
 proc createIndex*(infile: string; buildChecksum = false) =
   let PublicT = registerTag "public"
@@ -101,13 +103,12 @@ proc createIndex*(infile: string; buildChecksum = false) =
   public.addParLe PublicT
   private.addParLe PrivateT
 
-  var b = initIndexBuilder()
+  var b = initIndexChecksum()
   while true:
     let offs = offset(s.r)
     let t = next(s)
     if t.kind == EofToken: break
     if b.active > 0 and b.expectedKids > b.ignoreKids:
-      echo "ADDING ", t.kind
       b.currentDecl.add t
     case t.kind
     of ParLe:
@@ -117,11 +118,14 @@ proc createIndex*(infile: string; buildChecksum = false) =
       inc b.nested
     of ParRi:
       dec b.nested
-      if b.nested == b.active-1:
+      if b.nested == b.active+1:
         dec b.expectedKids
-      if b.active == b.nested:
-        b.active = -1
+      elif b.active == b.nested:
+        # this is correct, make both the same:
         b.expectedKids = -1
+        b.ignoreKids = -1
+        b.active = -1
+        b.currentConstruct = TagId(0)
     of SymbolDef:
       handleAtom b
 
@@ -136,7 +140,7 @@ proc createIndex*(infile: string; buildChecksum = false) =
           else:
             addr(private)
         let diff = if isPublic: target - previousPublicTarget
-                  else: target - previousPrivateTarget
+                   else: target - previousPrivateTarget
         dest[].buildTree KvT, info:
           dest[].add symToken(sym, NoLineInfo)
           dest[].add intToken(pool.integers.getOrIncl(diff), NoLineInfo)
@@ -147,10 +151,14 @@ proc createIndex*(infile: string; buildChecksum = false) =
     else:
       handleAtom b
 
-    if b.expectedKids == 0:
-      b.currentConstruct = TagId(0)
-      updateChecksum(b.checksum, b.currentDecl)
-      b.currentDecl.shrink(0)
+    if b.expectedKids == b.ignoreKids:
+      if b.currentDecl.len > 0:
+        if b.ignoreKids == 1:
+          b.currentDecl.addParRi()
+        updateChecksum(b.checksum, b.currentDecl)
+        b.currentDecl.shrink(0)
+      b.expectedKids = -2
+      b.ignoreKids = -1
 
   public.addParRi()
   private.addParRi()
@@ -161,7 +169,8 @@ proc createIndex*(infile: string; buildChecksum = false) =
   content.add "\n"
   content.add toString(private)
   if buildChecksum:
-    content.add "(checksum " & $b.checksum.finalize() & ")\n"
+    let final = SecureHash b.checksum.finalize()
+    content.add "\n(checksum \"" & $final & "\")"
   content.add "\n)\n"
   if fileExists(indexName) and readFile(indexName) == content:
     discard "no change"
