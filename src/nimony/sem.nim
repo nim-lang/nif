@@ -483,7 +483,7 @@ proc semConstBoolExpr(c: var SemContext; n: var Cursor) =
   if classifyType(c, it.typ) != BoolT:
     buildErr c, it.n.info, "expected `bool` but got: " & typeToString(it.typ)
   var e = cursorAt(c.dest, start)
-  var valueBuf = evalExpr(e)
+  var valueBuf = evalExpr(c, e)
   endRead(c.dest)
   let value = cursorAt(valueBuf, 0)
   if not isConstBoolValue(value):
@@ -503,7 +503,7 @@ proc semConstStrExpr(c: var SemContext; n: var Cursor) =
   if classifyType(c, it.typ) != StringT:
     buildErr c, it.n.info, "expected `string` but got: " & typeToString(it.typ)
   var e = cursorAt(c.dest, start)
-  var valueBuf = evalExpr(e)
+  var valueBuf = evalExpr(c, e)
   endRead(c.dest)
   let value = cursorAt(valueBuf, 0)
   if not isConstStringValue(value):
@@ -523,7 +523,7 @@ proc semConstIntExpr(c: var SemContext; n: var Cursor) =
   if classifyType(c, it.typ) != IntT:
     buildErr c, it.n.info, "expected `int` but got: " & typeToString(it.typ)
   var e = cursorAt(c.dest, start)
-  var valueBuf = evalExpr(e)
+  var valueBuf = evalExpr(c, e)
   endRead(c.dest)
   let value = cursorAt(valueBuf, 0)
   if not isConstIntValue(value):
@@ -534,6 +534,15 @@ proc semConstIntExpr(c: var SemContext; n: var Cursor) =
   else:
     c.dest.shrink start
     c.dest.add valueBuf
+
+proc semConstExpr(c: var SemContext; it: var Item) =
+  let start = c.dest.len
+  semExpr c, it
+  var e = cursorAt(c.dest, start)
+  var valueBuf = evalExpr(c, e)
+  endRead(c.dest)
+  c.dest.shrink start
+  c.dest.add valueBuf
 
 proc isLastSon(n: Cursor): bool =
   var n = n
@@ -1863,7 +1872,11 @@ proc semLocal(c: var SemContext; n: var Cursor; kind: SymKind) =
       # no explicit type given:
       inc n # 3
       var it = Item(n: n, typ: c.types.autoType)
-      semExpr c, it # 4
+      if false and kind == ConstY:
+        withNewScope c:
+          semConstExpr c, it # 4
+      else:
+        semExpr c, it # 4
       n = it.n
       insertType c, it.typ, beforeType
     else:
@@ -1873,7 +1886,11 @@ proc semLocal(c: var SemContext; n: var Cursor; kind: SymKind) =
         takeToken c, n
       else:
         var it = Item(n: n, typ: typ)
-        semExpr c, it # 4
+        if false and kind == ConstY:
+          withNewScope c:
+            semConstExpr c, it # 4
+        else:
+          semExpr c, it # 4
         n = it.n
         patchType c, it.typ, beforeType
   else:
@@ -1904,7 +1921,7 @@ proc evalConstIntExpr(c: var SemContext; n: var Cursor; expected: TypeCursor): x
   var x = Item(n: n, typ: expected)
   semExpr c, x
   n = x.n
-  result = evalOrdinal(cursorAt(c.dest, beforeExpr))
+  result = evalOrdinal(c, cursorAt(c.dest, beforeExpr))
   endRead c.dest
 
 proc semEnumField(c: var SemContext; n: var Cursor; state: var EnumTypeState) =
@@ -2722,6 +2739,18 @@ proc semDeclared(c: var SemContext; it: var Item) =
   it.typ = c.types.boolType
   commonType c, it, beforeExpr, expected
 
+proc semIsMainModule(c: var SemContext; it: var Item) =
+  let info = it.n.info
+  inc it.n
+  skipParRi it.n
+  let isMainModule = IsMain in c.moduleFlags
+  let beforeExpr = c.dest.len
+  c.dest.addParLe(if isMainModule: TrueX else: FalseX, info)
+  c.dest.addParRi()
+  let expected = it.typ
+  it.typ = c.types.boolType
+  commonType c, it, beforeExpr, expected
+
 proc semBuiltinSubscript(c: var SemContext; lhs: Item; it: var Item) =
   # it.n is after lhs, at args
   if lhs.n.kind == Symbol and lhs.kind == TypeY and
@@ -2953,7 +2982,6 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
       semBoolExpr c, it.n
       wantParRi c, it.n
     of NotX:
-      c.dest.add it.n
       takeToken c, it.n
       semBoolExpr c, it.n
       wantParRi c, it.n
@@ -2988,6 +3016,8 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
       semDefined c, it
     of DeclaredX:
       semDeclared c, it
+    of IsMainModuleX:
+      semIsMainModule c, it
     of AtX:
       semSubscript c, it
     of UnpackX:
@@ -3054,10 +3084,6 @@ proc phaseX(c: var SemContext; n: Cursor; x: SemPhase): TokenBuf =
   wantParRi c, n
   result = move c.dest
 
-type
-  ModuleFlag* = enum
-    IsSystem, IsMain, SkipSystem
-
 proc semcheck*(infile, outfile: string; config: sink NifConfig; moduleFlags: set[ModuleFlag];
                commandLineArgs: sink string) =
   var n0 = setupProgram(infile, outfile)
@@ -3065,6 +3091,7 @@ proc semcheck*(infile, outfile: string; config: sink NifConfig; moduleFlags: set
     dest: createTokenBuf(),
     types: createBuiltinTypes(),
     thisModuleSuffix: prog.main,
+    moduleFlags: moduleFlags,
     g: ProgramContext(config: config),
     phase: SemcheckTopLevelSyms,
     routine: SemRoutine(kind: NoSym),

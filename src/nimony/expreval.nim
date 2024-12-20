@@ -7,10 +7,11 @@
 ## expression evaluator for simple constant expressions, not meant to be complete
 
 include nifprelude
-import nimony_model, decls, programs, xints
+import nimony_model, decls, programs, xints, semdata
 
 type
   EvalContext* = object
+    c: ptr SemContext
     values: seq[TokenBuf]
     trueValue, falseValue: Cursor
 
@@ -29,8 +30,8 @@ proc isConstStringValue*(n: Cursor): bool =
 proc isConstCharValue*(n: Cursor): bool =
   n.kind == CharLit
 
-proc initEvalContext*(): EvalContext =
-  result = EvalContext(values: @[])
+proc initEvalContext*(c: ptr SemContext): EvalContext =
+  result = EvalContext(c: c, values: @[])
 
 proc skipParRi(n: var Cursor) =
   if n.kind == ParRi:
@@ -70,9 +71,9 @@ proc eval*(c: var EvalContext, n: var Cursor): Cursor =
   template propagateError(r: Cursor): Cursor =
     let val = r
     if val.kind == ParLe and val.tagId == ErrT:
-      val
-    else:
       return val
+    else:
+      val
   case n.kind
   of Ident:
     error "cannot evaluate undeclared ident: " & pool.strings[n.litId], n.info
@@ -146,6 +147,13 @@ proc eval*(c: var EvalContext, n: var Cursor): Cursor =
       inc n
       result = n
       skipToEnd n
+    of IsMainModuleX:
+      inc n
+      skipParRi n
+      if IsMain in c.c.moduleFlags:
+        result = c.getTrueValue()
+      else:
+        result = c.getFalseValue()
     else:
       if n.tagId == ErrT:
         result = n
@@ -155,14 +163,14 @@ proc eval*(c: var EvalContext, n: var Cursor): Cursor =
   else:
     error "cannot evaluate expression at compile time: " & toString(n, false), n.info
 
-proc evalExpr*(n: var Cursor): TokenBuf =
-  var ec = initEvalContext()
+proc evalExpr*(c: var SemContext, n: var Cursor): TokenBuf =
+  var ec = initEvalContext(addr c)
   let val = eval(ec, n)
   result = createTokenBuf(val.span)
   result.addSubtree val
 
-proc evalOrdinal*(n: Cursor): xint =
-  var ec = initEvalContext()
+proc evalOrdinal*(c: var SemContext, n: Cursor): xint =
+  var ec = initEvalContext(addr c)
   var n0 = n
   let val = eval(ec, n0)
   case val.kind

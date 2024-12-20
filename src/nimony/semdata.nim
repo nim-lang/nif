@@ -62,6 +62,9 @@ type
     includedFiles*: seq[string] # will become part of the index file
     importedFiles*: seq[string] # likewise
 
+  ModuleFlag* = enum
+    IsSystem, IsMain, SkipSystem
+
   SemContext* = object
     dest*: TokenBuf
     routine*: SemRoutine
@@ -78,6 +81,7 @@ type
     instantiatedTypes*: OrderedTable[string, SymId]
     instantiatedProcs*: OrderedTable[string, SymId]
     thisModuleSuffix*: string
+    moduleFlags*: set[ModuleFlag]
     processedModules*: HashSet[string]
     usedTypevars*: int
     phase*: SemPhase
