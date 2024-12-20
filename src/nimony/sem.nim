@@ -560,7 +560,10 @@ proc semProcBody(c: var SemContext; itB: var Item) =
   var it = Item(n: itB.n, typ: c.types.autoType)
   semStmtsExprImpl c, it
   if c.routine.kind == TemplateY:
-    typecheck(c, info, it.typ, c.routine.returnType)
+    if c.routine.returnType.typeKind == UntypedT:
+      discard "ok"
+    else:
+      typecheck(c, info, it.typ, c.routine.returnType)
   elif classifyType(c, it.typ) == VoidT:
     discard "ok"
   else:
