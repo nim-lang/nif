@@ -32,10 +32,10 @@
   (stmts 4
    (result :result.0 . . ~4,~9
     (i -1) .) 4
-   (var :x.2 . .
+   (var :x.3 . .
     (string) 4 "abc") 7,1
    (asgn ~7 result.0 2 +4) 2,2
-   (asgn ~2 x.2 2 "34") ~2,~1
+   (asgn ~2 x.3 2 "34") ~2,~1
    (ret result.0))) ,14
  (proc 5 :overloaded.0.t277k7ei1 . . . 15
   (params) . . . 2,1
@@ -47,4 +47,14 @@
    (discard 11
     (call ~3 foo.0.t277k7ei1 3
      (add
-      (i -1) ~2 +34 1 +56) 8 "xyz")))))
+      (i -1) ~2 +34 1 +56) 8 "xyz")))) ,18
+ (proc 5 :exprReturn.0.t277k7ei1 . . . 15
+  (params 1
+   (param :x.2 . . ~14,~17
+    (i -1) .)) 2,~17
+  (i -1) . . 31
+  (stmts 
+   (result :result.1 . . ~29,~17
+    (i -1) .) 
+   (asgn result.1 x.2) ~31
+   (ret result.1))))

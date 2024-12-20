@@ -276,6 +276,7 @@ proc declareResult(c: var SemContext; info: PackedLineInfo): SymId =
     let s = Sym(kind: ResultY, name: result,
                 pos: c.dest.len)
     discard c.currentScope.addNonOverloadable(name, s)
+    c.routine.resId = result
 
     let declStart = c.dest.len
     buildTree c.dest, ResultS, info:

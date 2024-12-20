@@ -16,3 +16,5 @@ proc foo(x: int; y: string): int =
 proc overloaded() =
   let someInt = `+`(23, 90)
   discard foo(34+56, "xyz")
+
+proc exprReturn(x: int): int = x
