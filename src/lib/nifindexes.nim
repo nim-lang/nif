@@ -9,6 +9,8 @@
 import std / [os, tables, assertions, syncio]
 import bitabs, lineinfos, nifreader, nifstreams, nifcursors
 
+import std / [sha1]
+
 proc registerTag(tag: string): TagId = pool.tags.getOrIncl(tag)
 
 proc isImportant(s: string): bool =
@@ -17,7 +19,71 @@ proc isImportant(s: string): bool =
     if ch == '.': inc c
   result = c >= 2
 
-proc createIndex*(infile: string) =
+proc updateChecksum(dest: var Sha1State; content: TokenBuf) =
+  let s = content.toString(true)
+  dest.update(s)
+
+type
+  IndexChecksum = object
+    nested: int
+    currentDecl: TokenBuf
+    active: int
+    expectedKids, ignoreKids: int
+    currentConstruct: TagId
+    checksum: Sha1State
+    letT, varT, cursorT, constT, typeT, procT, templateT, funcT,
+      macroT, converterT, methodT, iteratorT, inlineT: TagId
+
+proc initIndexBuilder(): IndexChecksum =
+  result = IndexChecksum(
+    nested: 0,
+    currentDecl: createTokenBuf(60),
+    active: -1,
+    expectedKids: -1,
+    currentConstruct: TagId(0),
+    checksum: newSha1State(),
+    letT: registerTag("let"),
+    varT: registerTag("var"),
+    cursorT: registerTag("cursor"),
+    constT: registerTag("const"),
+    typeT: registerTag("type"),
+    procT: registerTag("proc"),
+    templateT: registerTag("template"),
+    funcT: registerTag("func"),
+    macroT: registerTag("macro"),
+    converterT: registerTag("converter"),
+    methodT: registerTag("method"),
+    iteratorT: registerTag("iterator"),
+    inlineT: registerTag("inline")
+  )
+
+proc handleAtom(b: var IndexChecksum) =
+  if b.nested == b.active:
+    dec b.expectedKids
+
+proc maybeNewConstruct(b: var IndexChecksum; t: PackedToken) =
+  if b.currentConstruct == TagId(0):
+    if t.tag in [b.cursorT, b.letT, b.varT, b.constT, b.typeT]:
+      b.expectedKids = 5
+      b.currentDecl.add t
+      b.active = b.nested
+      b.currentConstruct = t.tag
+    elif t.tag in [b.procT, b.funcT, b.macroT, b.converterT, b.methodT]:
+      b.expectedKids = 9
+      b.ignoreKids = 1
+      b.currentDecl.add t
+      b.active = b.nested
+      b.currentConstruct = t.tag
+    elif t.tag in [b.templateT, b.iteratorT]:
+      # these always have inlining semantics:
+      b.expectedKids = 9
+      b.currentDecl.add t
+      b.active = b.nested
+      b.currentConstruct = t.tag
+    elif t.tag == b.inlineT and b.currentConstruct in [b.procT, b.funcT, b.macroT, b.converterT, b.methodT]:
+      b.ignoreKids = 0
+
+proc createIndex*(infile: string; buildChecksum = false) =
   let PublicT = registerTag "public"
   let PrivateT = registerTag "private"
   let KvT = registerTag "kv"
@@ -35,13 +101,30 @@ proc createIndex*(infile: string) =
   public.addParLe PublicT
   private.addParLe PrivateT
 
+  var b = initIndexBuilder()
   while true:
     let offs = offset(s.r)
     let t = next(s)
     if t.kind == EofToken: break
-    if t.kind == ParLe:
+    if b.active > 0 and b.expectedKids > b.ignoreKids:
+      echo "ADDING ", t.kind
+      b.currentDecl.add t
+    case t.kind
+    of ParLe:
+      if buildChecksum:
+        maybeNewConstruct b, t
       target = offs
-    elif t.kind == SymbolDef:
+      inc b.nested
+    of ParRi:
+      dec b.nested
+      if b.nested == b.active-1:
+        dec b.expectedKids
+      if b.active == b.nested:
+        b.active = -1
+        b.expectedKids = -1
+    of SymbolDef:
+      handleAtom b
+
       let info = t.info
       let sym = t.symId
       if pool.syms[sym].isImportant:
@@ -61,6 +144,13 @@ proc createIndex*(infile: string) =
           previousPublicTarget = target
         else:
           previousPrivateTarget = target
+    else:
+      handleAtom b
+
+    if b.expectedKids == 0:
+      b.currentConstruct = TagId(0)
+      updateChecksum(b.checksum, b.currentDecl)
+      b.currentDecl.shrink(0)
 
   public.addParRi()
   private.addParRi()
@@ -70,6 +160,8 @@ proc createIndex*(infile: string) =
   content.add toString(public)
   content.add "\n"
   content.add toString(private)
+  if buildChecksum:
+    content.add "(checksum " & $b.checksum.finalize() & ")\n"
   content.add "\n)\n"
   if fileExists(indexName) and readFile(indexName) == content:
     discard "no change"
@@ -151,4 +243,4 @@ proc readIndex*(indexName: string): NifIndex =
     assert false, "expected 'index' tag"
 
 when isMainModule:
-  createIndex paramStr(1)
+  createIndex paramStr(1), true
