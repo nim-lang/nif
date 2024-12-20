@@ -214,23 +214,74 @@ template withErrorContext*(c: var SemContext; info: PackedLineInfo; body: untype
   finally:
     popErrorContext(c)
 
-proc buildErr*(c: var SemContext; info: PackedLineInfo; msg: string) =
+proc buildErr*(c: var SemContext; info: PackedLineInfo; msg: string; orig: Cursor) =
   when defined(debug):
     writeStackTrace()
     echo infoToStr(info) & " Error: " & msg
     quit msg
   c.dest.buildTree ErrT, info:
+    c.dest.addSubtree orig
     for instFrom in items(c.instantiatedFrom):
       c.dest.add dotToken(instFrom)
     c.dest.add strToken(pool.strings.getOrIncl(msg), info)
 
-proc buildLocalErr*(dest: var TokenBuf; info: PackedLineInfo; msg: string) =
+proc buildErr*(c: var SemContext; info: PackedLineInfo; msg: string) =
+  var orig = createTokenBuf(1)
+  orig.addDotToken()
+  c.buildErr info, msg, cursorAt(orig, 0)
+
+proc buildLocalErr*(dest: var TokenBuf; info: PackedLineInfo; msg: string; orig: Cursor) =
   when defined(debug):
     writeStackTrace()
     echo infoToStr(info) & " Error: " & msg
     quit msg
   dest.buildTree ErrT, info:
+    dest.addSubtree orig
     dest.add strToken(pool.strings.getOrIncl(msg), info)
+
+proc buildLocalErr*(dest: var TokenBuf; info: PackedLineInfo; msg: string) =
+  var orig = createTokenBuf(1)
+  orig.addDotToken()
+  dest.buildLocalErr info, msg, cursorAt(orig, 0)
+
+proc addWithoutErrorsImpl(result: var TokenBuf; c: var Cursor) =
+  assert c.kind != ParRi, "cursor at end?"
+  if c.kind != ParLe:
+    # atom:
+    result.add c.load
+    inc c
+  elif c.tagId == ErrT:
+    # only add original expression except if `.`, in which case delete completely
+    inc c
+    if c.kind != DotToken:
+      addWithoutErrorsImpl result, c
+    while c.kind != ParRi:
+      # only other possible tokens in error are `.` and string literal
+      inc c
+    inc c
+  else:
+    var nested = 0
+    while true:
+      let item = c.load
+      if item.kind == ParRi:
+        result.add item
+        dec nested
+        inc c
+        if nested == 0: break
+      elif item.kind == ParLe:
+        if item.tagId == ErrT:
+          addWithoutErrorsImpl(result, c)
+        else:
+          result.add item
+          inc nested
+          inc c
+      else:
+        result.add item
+        inc c
+
+proc addWithoutErrors*(result: var TokenBuf, c: Cursor) =
+  var c = c
+  addWithoutErrorsImpl(result, c)
 
 # -------------------------- type handling ---------------------------
 

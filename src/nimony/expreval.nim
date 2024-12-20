@@ -40,8 +40,9 @@ proc skipParRi(n: var Cursor) =
 
 proc error(c: var EvalContext, msg: string, info: PackedLineInfo): Cursor =
   let i = c.values.len
-  c.values.add createTokenBuf(3)
+  c.values.add createTokenBuf(4)
   c.values[i].addParLe ErrT, info
+  c.values[i].addDotToken()
   c.values[i].addStrLit msg
   c.values[i].addParRi()
   result = cursorAt(c.values[i], 0)

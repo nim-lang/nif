@@ -168,6 +168,7 @@ type
     SymKindT = "symkind"
     TypedescT = "typedesc"
     UntypedT = "untyped"
+    TypedT = "typed"
     CstringT = "cstring"
     PointerT = "pointer"
 

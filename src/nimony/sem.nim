@@ -447,6 +447,7 @@ type
   SemFlag = enum
     KeepMagics
     PreferIterators
+    AllowUndeclared
 
 proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {})
 
@@ -848,6 +849,9 @@ proc tryBuiltinDot(c: var SemContext; it: var Item; lhs: Item; fieldName: StrId;
 proc semBuiltinSubscript(c: var SemContext; lhs: Item; it: var Item)
 
 type
+  TransformedCallSource = enum
+    RegularCall, MethodCall, DotCall, SubscriptCall
+
   CallState = object
     beforeCall: int
     fn: Item
@@ -857,6 +861,8 @@ type
     args: seq[Item]
     hasGenericArgs: bool
     candidates: FnCandidates
+    source: TransformedCallSource
+      ## type of expression the call was transformed from
 
 proc untypedCall(c: var SemContext; it: var Item; cs: CallState) =
   c.dest.add cs.callNode
@@ -987,8 +993,8 @@ proc resolveOverloads(c: var SemContext; it: var Item; cs: var CallState) =
     considerTypeboundOps(c, m, cs.candidates, cs.args, genericArgs)
   let idx = pickBestMatch(c, m)
 
-  c.dest.add cs.callNode
   if idx >= 0:
+    c.dest.add cs.callNode
     let finalFn = m[idx].fn
     let isMagic = c.addFn(finalFn, cs.fn.n, cs.args)
     c.dest.add m[idx].args
@@ -1020,27 +1026,53 @@ proc resolveOverloads(c: var SemContext; it: var Item; cs: var CallState) =
     else:
       typeofCallIs c, it, cs.beforeCall, m[idx].returnType
 
-  elif idx == -2:
-    buildErr c, cs.callNode.info, "ambiguous call"
-    wantParRi c, it.n
-  elif m.len > 0:
-    wantParRi c, it.n
-    var errorMsg = "Type mismatch at [position]"
-    for i in 0..<m.len:
-      errorMsg.add "\n"
-      addErrorMsg errorMsg, m[i]
-    c.dest.addParLe ErrT, cs.callNode.info
-    c.dest.addStrLit errorMsg
-    c.dest.addParRi()
   else:
-    buildErr c, cs.callNode.info, "undeclared identifier"
-    wantParRi c, it.n
+    skipParRi it.n
+    var errorMsg: string
+    if idx == -2:
+      errorMsg = "ambiguous call"
+    elif m.len > 0:
+      errorMsg = "Type mismatch at [position]"
+      for i in 0..<m.len:
+        errorMsg.add "\n"
+        addErrorMsg errorMsg, m[i]
+    else:
+      errorMsg = "undeclared identifier"
+    var errored = createTokenBuf(4)
+    # rebuild original call:
+    case cs.source
+    of RegularCall:
+      errored.add cs.callNode
+      errored.addSubtree cs.fn.n
+      for a in cs.args:
+        errored.addSubtree a.n
+    of MethodCall:
+      assert cs.args.len >= 1
+      errored.add cs.callNode
+      errored.addParLe(DotX, cs.callNode.info)
+      errored.addSubtree cs.args[0].n
+      errored.addParRi()
+      errored.addSubtree cs.fn.n
+      for i in 1 ..< cs.args.len:
+        errored.addSubtree cs.args[i].n
+    of DotCall:
+      assert cs.args.len == 1
+      errored.addParLe(DotX, cs.callNode.info)
+      errored.addSubtree cs.args[0].n
+      errored.addSubtree cs.fn.n
+    of SubscriptCall:
+      errored.addParLe(AtX, cs.callNode.info)
+      for a in cs.args:
+        errored.addSubtree a.n
+    errored.addParRi()
+    buildErr c, cs.callNode.info, errorMsg, cursorAt(errored, 0)
 
-proc semCall(c: var SemContext; it: var Item) =
+proc semCall(c: var SemContext; it: var Item; source: TransformedCallSource = RegularCall) =
   var cs = CallState(
     beforeCall: c.dest.len,
     callNode: it.n.load(),
-    dest: createTokenBuf(16)
+    dest: createTokenBuf(16),
+    source: source
   )
   inc it.n
   swap c.dest, cs.dest
@@ -1052,7 +1084,7 @@ proc semCall(c: var SemContext; it: var Item) =
     var lhsBuf = createTokenBuf(4)
     var lhs = Item(n: cs.fn.n, typ: c.types.autoType)
     swap c.dest, lhsBuf
-    semExpr c, lhs, {KeepMagics}
+    semExpr c, lhs, {KeepMagics, AllowUndeclared}
     swap c.dest, lhsBuf
     cs.fn.n = lhs.n
     lhs.n = cursorAt(lhsBuf, 0)
@@ -1101,12 +1133,13 @@ proc semCall(c: var SemContext; it: var Item) =
     if dotState == FailedDot or
         # also ignore non-proc fields:
         (dotState == MatchedDot and cs.fn.typ.typeKind != ProcT):
+      cs.source = MethodCall
       # turn a.b(...) into b(a, ...)
       # first, delete the output of `tryBuiltinDot`:
       c.dest.shrink dotStart
       # sem b:
       cs.fn = Item(n: fieldNameCursor, typ: c.types.autoType)
-      semExpr c, cs.fn, {KeepMagics}
+      semExpr c, cs.fn, {KeepMagics, AllowUndeclared}
       fnName = getFnIdent(c)
       # add a as argument:
       let lhsIndex = c.dest.len
@@ -1119,7 +1152,7 @@ proc semCall(c: var SemContext; it: var Item) =
       # lhs.n escapes here, but is not read and will be set by argIndexes:
       cs.args.add lhs
   else:
-    semExpr(c, cs.fn, {KeepMagics})
+    semExpr(c, cs.fn, {KeepMagics, AllowUndeclared})
     fnName = getFnIdent(c)
     it.n = cs.fn.n
   cs.fnKind = cs.fn.kind
@@ -1193,8 +1226,10 @@ proc tryBuiltinDot(c: var SemContext; it: var Item; lhs: Item; fieldName: StrId;
           it.kind = FldY
           result = MatchedDot
         else:
+          c.dest.add identToken(fieldName, info)
           c.buildErr info, "undeclared field: " & pool.strings[fieldName]
       else:
+        c.dest.add identToken(fieldName, info)
         c.buildErr info, "object type expected"
     elif t.typeKind == TupleT:
       var tup = t
@@ -1208,10 +1243,12 @@ proc tryBuiltinDot(c: var SemContext; it: var Item; lhs: Item; fieldName: StrId;
           result = MatchedDot
           break
         skip tup
-      c.dest.add intToken(pool.integers.getOrIncl(0), info)
       if result != MatchedDot:
+        c.dest.add identToken(fieldName, info)
         c.buildErr info, "undeclared field: " & pool.strings[fieldName]
+      c.dest.add intToken(pool.integers.getOrIncl(0), info)
     else:
+      c.dest.add identToken(fieldName, info)
       c.buildErr info, "object type expected"
   c.dest.addParRi()
   if result == MatchedDot:
@@ -1247,8 +1284,7 @@ proc semDot(c: var SemContext, it: var Item) =
     callBuf.addSubtree lhs.n # add lhs as first argument
     callBuf.addParRi()
     var call = Item(n: cursorAt(callBuf, 0), typ: expected)
-    # error messages aren't specialized for now
-    semCall c, call
+    semCall c, call, DotCall
     it.typ = call.typ
 
 proc semWhile(c: var SemContext; it: var Item) =
@@ -1465,9 +1501,15 @@ proc semTypeSym(c: var SemContext; s: Sym; info: PackedLineInfo; context: TypeDe
         var t = typ.body
         semLocalTypeImpl c, t, context
   elif s.kind != NoSym:
-    c.buildErr info, "type name expected, but got: " & pool.syms[s.name]
+    var orig = createTokenBuf(1)
+    orig.add c.dest[c.dest.len-1]
+    c.dest.shrink c.dest.len-1
+    c.buildErr info, "type name expected, but got: " & pool.syms[s.name], cursorAt(orig, 0)
   else:
-    c.buildErr info, "unknown type name"
+    var orig = createTokenBuf(1)
+    orig.add c.dest[c.dest.len-1]
+    c.dest.shrink c.dest.len-1
+    c.buildErr info, "unknown type name", cursorAt(orig, 0)
 
 proc semParams(c: var SemContext; n: var Cursor)
 proc semLocal(c: var SemContext; n: var Cursor; kind: SymKind)
@@ -1735,8 +1777,9 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
         semExpr c, it
         n = it.n
       else:
-        c.buildErr info, "not a type"
-    of IntT, FloatT, CharT, BoolT, UIntT, VoidT, StringT, NilT, AutoT, SymKindT, UntypedT, CstringT, PointerT:
+        c.buildErr info, "not a type", n
+        skip n
+    of IntT, FloatT, CharT, BoolT, UIntT, VoidT, StringT, NilT, AutoT, SymKindT, UntypedT, TypedT, CstringT, PointerT:
       takeTree c, n
     of PtrT, RefT, MutT, OutT, LentT, SinkT, NotT, UncheckedArrayT, SetT, StaticT, TypedescT:
       takeToken c, n
@@ -1811,14 +1854,16 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
     if context in {InReturnTypeDecl, InGenericConstraint}:
       takeToken c, n
     else:
-      c.buildErr info, "not a type"
+      c.buildErr info, "not a type", n
+      inc n
   else:
     if context == AllowValues:
       var it = Item(n: n, typ: c.types.autoType)
       semExpr c, it
       n = it.n
     else:
-      c.buildErr info, "not a type"
+      c.buildErr info, "not a type", n
+      inc n
 
 proc semReturnType(c: var SemContext; n: var Cursor): TypeCursor =
   result = semLocalType(c, n, InReturnTypeDecl)
@@ -2090,10 +2135,14 @@ proc semExprSym(c: var SemContext; it: var Item; s: Sym; start: int; flags: set[
   it.kind = s.kind
   let expected = it.typ
   if s.kind == NoSym:
-    if pool.syms.hasId(s.name):
-      c.buildErr it.n.info, "undeclared identifier: " & pool.syms[s.name]
-    else:
-      c.buildErr it.n.info, "undeclared identifier"
+    if AllowUndeclared notin flags:
+      var orig = createTokenBuf(1)
+      orig.add c.dest[c.dest.len-1]
+      c.dest.shrink c.dest.len-1
+      if pool.syms.hasId(s.name):
+        c.buildErr it.n.info, "undeclared identifier: " & pool.syms[s.name], cursorAt(orig, 0)
+      else:
+        c.buildErr it.n.info, "undeclared identifier", cursorAt(orig, 0)
     it.typ = c.types.autoType
   elif s.kind == CchoiceY:
     if KeepMagics notin flags and c.routine.kind != TemplateY:
@@ -2742,8 +2791,7 @@ proc semBuiltinSubscript(c: var SemContext; lhs: Item; it: var Item) =
   callBuf.addParRi()
   skipParRi it.n
   var call = Item(n: cursorAt(callBuf, 0), typ: it.typ)
-  # error messages aren't specialized for now
-  semCall c, call
+  semCall c, call, SubscriptCall
   it.typ = call.typ
 
 proc semSubscript(c: var SemContext; it: var Item) =
@@ -2852,7 +2900,7 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
           skip it.n
         of IntT, FloatT, CharT, BoolT, UIntT, VoidT, StringT, NilT, AutoT, SymKindT,
             PtrT, RefT, MutT, OutT, LentT, SinkT, UncheckedArrayT, SetT, StaticT, TypedescT,
-            TupleT, ArrayT, VarargsT, ProcT, IterT, UntypedT, CstringT, PointerT:
+            TupleT, ArrayT, VarargsT, ProcT, IterT, UntypedT, TypedT, CstringT, PointerT:
           # every valid local type expression
           semLocalTypeExpr c, it
         of OrT, AndT, NotT, InvokeT:
@@ -3027,9 +3075,18 @@ proc reportErrors(c: var SemContext): int =
       inc result
       let info = c.dest[i].info
       inc i
+      # original expression, optional:
+      if c.dest[i].kind == DotToken:
+        inc i
+      else:
+        let x = cursorAt(c.dest, i)
+        inc i, span(x)
+        endRead(c.dest)
+      # instantiation contexts:
       while c.dest[i].kind == DotToken:
         r.trace infoToStr(c.dest[i].info), "instantiation from here"
         inc i
+      # error message:
       assert c.dest[i].kind == StringLit
       r.error infoToStr(info), pool.strings[c.dest[i].litId]
       inc i

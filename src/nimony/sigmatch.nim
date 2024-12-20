@@ -61,6 +61,7 @@ proc addErrorMsg*(dest: var string; m: Match) =
 proc addErrorMsg*(dest: var TokenBuf; m: Match) =
   assert m.err
   dest.addParLe ErrT, m.argInfo
+  dest.addDotToken()
   let str = "For type " & typeToString(m.fn.typ) & " mismatch at position\n" &
     "[" & $(m.pos+1) & "] " & m.error.msg
   dest.addStrLit str
@@ -437,8 +438,8 @@ proc singleArgImpl(m: var Match; f: var Cursor; arg: Item) =
       discard "do not even advance f here"
       if m.firstVarargPosition < 0:
         m.firstVarargPosition = m.args.len
-    of UntypedT:
-      # `varargs` and `untyped` simply match everything:
+    of UntypedT, TypedT:
+      # `typed` and `untyped` simply match everything:
       inc f
       expectParRi m, f
     of TupleT:
