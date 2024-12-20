@@ -244,45 +244,6 @@ proc buildLocalErr*(dest: var TokenBuf; info: PackedLineInfo; msg: string) =
   orig.addDotToken()
   dest.buildLocalErr info, msg, cursorAt(orig, 0)
 
-proc takeWithoutErrors*(result: var TokenBuf; c: var Cursor) =
-  assert c.kind != ParRi, "cursor at end?"
-  if c.kind != ParLe:
-    # atom:
-    result.add c.load
-    inc c
-  elif c.tagId == ErrT:
-    # only add original expression except if `.`, in which case delete completely
-    inc c
-    if c.kind != DotToken:
-      takeWithoutErrors(result, c)
-    while c.kind != ParRi:
-      # only other possible tokens in error are `.` and string literal
-      inc c
-    inc c
-  else:
-    var nested = 0
-    while true:
-      let item = c.load
-      if item.kind == ParRi:
-        result.add item
-        dec nested
-        inc c
-        if nested == 0: break
-      elif item.kind == ParLe:
-        if item.tagId == ErrT:
-          takeWithoutErrors(result, c)
-        else:
-          result.add item
-          inc nested
-          inc c
-      else:
-        result.add item
-        inc c
-
-proc addWithoutErrors*(result: var TokenBuf, c: Cursor) =
-  var c = c
-  takeWithoutErrors(result, c)
-
 # -------------------------- type handling ---------------------------
 
 proc typeToCanon*(buf: TokenBuf; start: int): string =

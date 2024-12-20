@@ -2739,6 +2739,9 @@ proc semTupleConstr(c: var SemContext, it: var Item) =
   commonType c, it, exprStart, origExpected
 
 proc getDottedIdent(n: var Cursor): string =
+  let isError = n.kind == ParLe and n.tagId == ErrT
+  if isError:
+    inc n
   if n.kind == ParLe and n == $DotX:
     inc n
     result = getDottedIdent(n)
@@ -2755,15 +2758,14 @@ proc getDottedIdent(n: var Cursor): string =
       result = ""
     else:
       result = pool.strings[s]
+  if isError:
+    skipToEnd n
 
 proc semDefined(c: var SemContext; it: var Item) =
   inc it.n
   let info = it.n.info
   let orig = it.n
-  var stripped = createTokenBuf(4)
-  stripped.takeWithoutErrors(it.n)
-  var nameCursor = cursorAt(stripped, 0)
-  let name = getDottedIdent(nameCursor)
+  let name = getDottedIdent(it.n)
   skipParRi it.n
   if name == "":
     c.buildErr info, "invalid expression for defined: " & toString(orig, false), orig
@@ -2787,12 +2789,14 @@ proc semDeclared(c: var SemContext; it: var Item) =
   inc it.n
   let info = it.n.info
   let orig = it.n
-  # XXX maybe always type the argument and check for Symbol/errored Ident instead 
-  var stripped = createTokenBuf(4)
-  stripped.takeWithoutErrors(it.n)
-  var nameCursor = cursorAt(stripped, 0)
+  # XXX maybe always type the argument and check for Symbol/errored Ident instead
+  let isError = it.n.kind == ParLe and it.n.tagId == ErrT
+  if isError:
+    inc it.n
   # does not consider module quoted symbols for now
-  let nameId = getIdent(nameCursor)
+  let nameId = getIdent(it.n)
+  if isError:
+    skipToEnd it.n
   skipParRi it.n
   if nameId == StrId(0):
     c.buildErr info, "invalid expression for declared: " & toString(orig, false), orig
