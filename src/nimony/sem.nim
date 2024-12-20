@@ -308,7 +308,6 @@ type
 proc subs(c: var SemContext; dest: var TokenBuf; sc: var SubsContext; body: Cursor) =
   var nested = 0
   var n = body
-  let isAtom = n.kind != ParLe
   while true:
     case n.kind
     of UnknownToken, EofToken, DotToken, Ident, StringLit, CharLit, IntLit, UIntLit, FloatLit:
@@ -335,8 +334,7 @@ proc subs(c: var SemContext; dest: var TokenBuf; sc: var SubsContext; body: Curs
     of ParRi:
       dest.add n
       dec nested
-      if nested == 0: break
-    if isAtom: break
+    if nested == 0: break
     inc n
 
 include templates

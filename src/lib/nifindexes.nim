@@ -73,9 +73,7 @@ proc createIndex*(infile: string) =
   if fileExists(indexName) and readFile(indexName) == content:
     discard "no change"
   else:
-    var outp = open(indexName, fmWrite)
-    outp.writeLine content
-    close outp
+    writeFile(indexName, content)
 
 type
   NifIndexEntry* = object
