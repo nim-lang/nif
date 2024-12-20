@@ -22,14 +22,15 @@ proc isImportant(s: string): bool =
 proc updateChecksum(dest: var Sha1State; content: TokenBuf) =
   let s = content.toString(false)
   dest.update(s)
-  #echo "updateChecksum: ", s
+  echo "updateChecksum: ", s
 
 type
   IndexChecksum = object
     nested: int
     currentDecl: TokenBuf
     active: int
-    expectedKids, ignoreKids: int
+    remainingKids: int
+    needsParRi: bool
     currentConstruct: TagId
     checksum: Sha1State
     letT, varT, cursorT, constT, typeT, procT, templateT, funcT,
@@ -40,8 +41,7 @@ proc initIndexChecksum(): IndexChecksum =
     nested: 0,
     currentDecl: createTokenBuf(60),
     active: -1,
-    expectedKids: -2,
-    ignoreKids: -1,
+    remainingKids: 0,
     currentConstruct: TagId(0),
     checksum: newSha1State(),
     letT: registerTag("let"),
@@ -60,30 +60,34 @@ proc initIndexChecksum(): IndexChecksum =
   )
 
 proc handleAtom(b: var IndexChecksum) =
-  if b.nested == b.active+1:
-    dec b.expectedKids
+  if b.nested == b.active and b.remainingKids > 0:
+    dec b.remainingKids
+    if b.remainingKids == 0:
+      b.needsParRi = true
 
 proc maybeNewConstruct(b: var IndexChecksum; t: PackedToken) =
   if b.currentConstruct == TagId(0):
     if t.tag in [b.cursorT, b.letT, b.varT, b.constT, b.typeT]:
-      b.expectedKids = 5
+      b.remainingKids = 5
       b.currentDecl.add t
       b.active = b.nested
       b.currentConstruct = t.tag
+      b.needsParRi = false
     elif t.tag in [b.procT, b.funcT, b.macroT, b.converterT, b.methodT]:
-      b.expectedKids = 9
-      b.ignoreKids = 1
+      b.remainingKids = 8
       b.currentDecl.add t
       b.active = b.nested
       b.currentConstruct = t.tag
+      b.needsParRi = false
     elif t.tag in [b.templateT, b.iteratorT]:
       # these always have inlining semantics:
-      b.expectedKids = 9
+      b.remainingKids = 9
       b.currentDecl.add t
       b.active = b.nested
       b.currentConstruct = t.tag
+      b.needsParRi = false
   elif t.tag == b.inlineT and b.currentConstruct in [b.procT, b.funcT, b.macroT, b.converterT, b.methodT]:
-    b.ignoreKids = 0
+    inc b.remainingKids
 
 proc createIndex*(infile: string; buildChecksum = false) =
   let PublicT = registerTag "public"
@@ -108,24 +112,28 @@ proc createIndex*(infile: string; buildChecksum = false) =
     let offs = offset(s.r)
     let t = next(s)
     if t.kind == EofToken: break
-    if b.active > 0 and b.expectedKids > b.ignoreKids:
+    if b.active > 0 and b.remainingKids > 0:
       b.currentDecl.add t
     case t.kind
     of ParLe:
+      if b.active == b.nested:
+        if b.remainingKids > 0:
+          dec b.remainingKids
+          if b.remainingKids == 0:
+            b.needsParRi = true
+
+      inc b.nested
       if buildChecksum:
         maybeNewConstruct b, t
       target = offs
-      inc b.nested
+
     of ParRi:
-      dec b.nested
-      if b.nested == b.active+1:
-        dec b.expectedKids
-      elif b.active == b.nested:
-        # this is correct, make both the same:
-        b.expectedKids = -1
-        b.ignoreKids = -1
+      if b.active == b.nested:
         b.active = -1
         b.currentConstruct = TagId(0)
+        b.needsParRi = false
+
+      dec b.nested
     of SymbolDef:
       handleAtom b
 
@@ -153,14 +161,12 @@ proc createIndex*(infile: string; buildChecksum = false) =
     else:
       handleAtom b
 
-    if b.expectedKids == b.ignoreKids:
+    if b.remainingKids == 0:
       if b.currentDecl.len > 0:
-        if b.ignoreKids == 1:
+        if b.needsParRi:
           b.currentDecl.addParRi()
         updateChecksum(b.checksum, b.currentDecl)
         b.currentDecl.shrink(0)
-      b.expectedKids = -2
-      b.ignoreKids = -1
 
   public.addParRi()
   private.addParRi()
@@ -254,4 +260,4 @@ proc readIndex*(indexName: string): NifIndex =
     assert false, "expected 'index' tag"
 
 when isMainModule:
-  createIndex paramStr(1), false
+  createIndex paramStr(1), true
