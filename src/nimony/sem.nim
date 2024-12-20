@@ -823,6 +823,24 @@ proc getFnIdent(c: var SemContext): StrId =
   result = getIdent(c, n)
   endRead(c.dest)
 
+proc containsGenericParams(n: TypeCursor): bool =
+  var n = n
+  var nested = 0
+  while true:
+    case n.kind
+    of Symbol:
+      let res = tryLoadSym(n.symId)
+      if res.status == LacksNothing and res.decl == $TypevarY:
+        return true
+    of ParLe:
+      inc nested
+    of ParRi:
+      dec nested
+    else: discard
+    if nested == 0: break
+    inc n
+  return false
+
 type
   DotExprState = enum
     MatchedDot, FailedDot, InvalidDot
@@ -869,7 +887,8 @@ proc semConvFromCall(c: var SemContext; it: var Item; cs: CallState) =
   let srcBase = skipDistinct(srcType, isDistinct)
 
   if (destBase.typeKind in IntegralTypes and srcBase.typeKind in IntegralTypes) or
-     (destBase.typeKind in StringTypes and srcBase.typeKind in StringTypes):
+     (destBase.typeKind in StringTypes and srcBase.typeKind in StringTypes) or
+     (destBase.containsGenericParams or srcBase.containsGenericParams):
     discard "ok"
     # XXX Add hderef here somehow
     c.dest.addSubtree cs.args[0].n
@@ -927,6 +946,8 @@ proc semCast(c: var SemContext; it: var Item) =
   let destBase = skipDistinct(destType, isDistinct)
   let srcBase = skipDistinct(srcType, isDistinct)
   if destBase.isCastableType and srcBase.isCastableType:
+    commonType c, it, beforeExpr, destType
+  elif containsGenericParams(srcType) or containsGenericParams(destType):
     commonType c, it, beforeExpr, destType
   else:
     c.dest.shrink beforeExpr
