@@ -51,7 +51,7 @@ proc unquote*(c: var Cursor): StrId =
   assert r.len > 0
   result = getOrIncl(pool.strings, r)
 
-proc getIdent*(c: var SemContext; n: var Cursor): StrId =
+proc getIdent*(n: var Cursor): StrId =
   var nested = 0
   while exprKind(n) in {OchoiceX, CchoiceX}:
     inc nested
@@ -244,7 +244,7 @@ proc buildLocalErr*(dest: var TokenBuf; info: PackedLineInfo; msg: string) =
   orig.addDotToken()
   dest.buildLocalErr info, msg, cursorAt(orig, 0)
 
-proc addWithoutErrorsImpl(result: var TokenBuf; c: var Cursor) =
+proc takeWithoutErrors*(result: var TokenBuf; c: var Cursor) =
   assert c.kind != ParRi, "cursor at end?"
   if c.kind != ParLe:
     # atom:
@@ -254,7 +254,7 @@ proc addWithoutErrorsImpl(result: var TokenBuf; c: var Cursor) =
     # only add original expression except if `.`, in which case delete completely
     inc c
     if c.kind != DotToken:
-      addWithoutErrorsImpl result, c
+      takeWithoutErrors(result, c)
     while c.kind != ParRi:
       # only other possible tokens in error are `.` and string literal
       inc c
@@ -270,7 +270,7 @@ proc addWithoutErrorsImpl(result: var TokenBuf; c: var Cursor) =
         if nested == 0: break
       elif item.kind == ParLe:
         if item.tagId == ErrT:
-          addWithoutErrorsImpl(result, c)
+          takeWithoutErrors(result, c)
         else:
           result.add item
           inc nested
@@ -281,7 +281,7 @@ proc addWithoutErrorsImpl(result: var TokenBuf; c: var Cursor) =
 
 proc addWithoutErrors*(result: var TokenBuf, c: Cursor) =
   var c = c
-  addWithoutErrorsImpl(result, c)
+  takeWithoutErrors(result, c)
 
 # -------------------------- type handling ---------------------------
 
@@ -460,7 +460,7 @@ proc declareOverloadableSym*(c: var SemContext; it: var Item; kind: SymKind): Sy
     c.dest.add it.n
     inc it.n
   else:
-    let lit = getIdent(c, it.n)
+    let lit = getIdent(it.n)
     if lit == StrId(0):
       c.buildErr info, "identifier expected"
       result = SymId(0)
@@ -503,7 +503,7 @@ proc handleSymDef*(c: var SemContext; n: var Cursor; kind: SymKind): DelayedSym 
     c.dest.add symdefToken(symId, info)
     inc n
   else:
-    let lit = getIdent(c, n)
+    let lit = getIdent(n)
     if lit == StrId(0):
       c.buildErr info, "identifier expected"
       result = DelayedSym(status: ErrNoIdent, info: info)

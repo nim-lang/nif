@@ -819,7 +819,7 @@ proc typeofCallIs(c: var SemContext; it: var Item; beforeCall: int; returnType: 
 
 proc getFnIdent(c: var SemContext): StrId =
   var n = beginRead(c.dest)
-  result = getIdent(c, n)
+  result = getIdent(n)
   endRead(c.dest)
 
 proc containsGenericParams(n: TypeCursor): bool =
@@ -1122,7 +1122,7 @@ proc semCall(c: var SemContext; it: var Item; source: TransformedCallSource = Re
     cs.fn.n = lhs.n
     lhs.n = cursorAt(lhsBuf, 0)
     let fieldNameCursor = cs.fn.n
-    let fieldName = getIdent(c, cs.fn.n)
+    let fieldName = getIdent(cs.fn.n)
     # skip optional inheritance depth:
     if cs.fn.n.kind == IntLit:
       inc cs.fn.n
@@ -1268,7 +1268,7 @@ proc semDot(c: var SemContext, it: var Item) =
   it.n = lhs.n
   lhs.n = cursorAt(lhsBuf, 0)
   let fieldNameCursor = it.n
-  let fieldName = getIdent(c, it.n)
+  let fieldName = getIdent(it.n)
   # skip optional inheritance depth:
   if it.n.kind == IntLit:
     inc it.n
@@ -1743,7 +1743,7 @@ proc addVarargsParameter(c: var SemContext; paramsAt: int; info: PackedLineInfo)
       while n.kind != ParRi:
         if n.substructureKind == ParamS:
           inc n
-          let lit = getIdent(c, n)
+          let lit = getIdent(n)
           if lit != StrId(0) and pool.strings[lit] == vanon:
             # already added:
             endRead(c.dest)
@@ -2309,7 +2309,7 @@ proc isRangeNode(c: var SemContext; n: Cursor): bool =
   if n.exprKind notin {CallX, InfixX}:
     return false
   inc n
-  let name = getIdent(c, n)
+  let name = getIdent(n)
   result = name != StrId(0) and pool.strings[name] == ".."
 
 proc semCaseOfValue(c: var SemContext; it: var Item; selectorType: TypeCursor;
@@ -2738,18 +2738,43 @@ proc semTupleConstr(c: var SemContext, it: var Item) =
   c.dest.shrink typeStart
   commonType c, it, exprStart, origExpected
 
+proc getDottedIdent(n: var Cursor): string =
+  if n.kind == ParLe and n == $DotX:
+    inc n
+    result = getDottedIdent(n)
+    let s = getIdent(n)
+    if s == StrId(0) or result == "":
+      result = ""
+    else:
+      result.add(pool.strings[s])
+    skipParRi n
+  else:
+    # treat as atom
+    let s = getIdent(n)
+    if s == StrId(0):
+      result = ""
+    else:
+      result = pool.strings[s]
+
 proc semDefined(c: var SemContext; it: var Item) =
   inc it.n
-  # does not consider dots for now
-  let name = pool.strings[getIdent(c, it.n)]
+  let info = it.n.info
+  let orig = it.n
+  var stripped = createTokenBuf(4)
+  stripped.takeWithoutErrors(it.n)
+  var nameCursor = cursorAt(stripped, 0)
+  let name = getDottedIdent(nameCursor)
   skipParRi it.n
-  let isDefined = name in c.g.config.defines
-  let beforeExpr = c.dest.len
-  c.dest.addParLe(if isDefined: TrueX else: FalseX, it.n.info)
-  c.dest.addParRi()
-  let expected = it.typ
-  it.typ = c.types.boolType
-  commonType c, it, beforeExpr, expected
+  if name == "":
+    c.buildErr info, "invalid expression for defined: " & toString(orig, false), orig
+  else:
+    let isDefined = name in c.g.config.defines
+    let beforeExpr = c.dest.len
+    c.dest.addParLe(if isDefined: TrueX else: FalseX, it.n.info)
+    c.dest.addParRi()
+    let expected = it.typ
+    it.typ = c.types.boolType
+    commonType c, it, beforeExpr, expected
 
 proc isDeclared(c: var SemContext; name: StrId): bool =
   var scope = c.currentScope
@@ -2760,16 +2785,25 @@ proc isDeclared(c: var SemContext; name: StrId): bool =
 
 proc semDeclared(c: var SemContext; it: var Item) =
   inc it.n
+  let info = it.n.info
+  let orig = it.n
+  # XXX maybe always type the argument and check for Symbol/errored Ident instead 
+  var stripped = createTokenBuf(4)
+  stripped.takeWithoutErrors(it.n)
+  var nameCursor = cursorAt(stripped, 0)
   # does not consider module quoted symbols for now
-  let nameId = getIdent(c, it.n)
+  let nameId = getIdent(nameCursor)
   skipParRi it.n
-  let isDeclared = isDeclared(c, nameId)
-  let beforeExpr = c.dest.len
-  c.dest.addParLe(if isDeclared: TrueX else: FalseX, it.n.info)
-  c.dest.addParRi()
-  let expected = it.typ
-  it.typ = c.types.boolType
-  commonType c, it, beforeExpr, expected
+  if nameId == StrId(0):
+    c.buildErr info, "invalid expression for declared: " & toString(orig, false), orig
+  else:
+    let isDeclared = isDeclared(c, nameId)
+    let beforeExpr = c.dest.len
+    c.dest.addParLe(if isDeclared: TrueX else: FalseX, it.n.info)
+    c.dest.addParRi()
+    let expected = it.typ
+    it.typ = c.types.boolType
+    commonType c, it, beforeExpr, expected
 
 proc semBuiltinSubscript(c: var SemContext; lhs: Item; it: var Item) =
   # it.n is after lhs, at args
