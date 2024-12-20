@@ -2077,7 +2077,7 @@ proc semExprSym(c: var SemContext; it: var Item; s: Sym; start: int; flags: set[
       c.buildErr it.n.info, "undeclared identifier"
     it.typ = c.types.autoType
   elif s.kind == CchoiceY:
-    if KeepMagics notin flags:
+    if KeepMagics notin flags and c.routine.kind != TemplateY:
       c.buildErr it.n.info, "ambiguous identifier"
     it.typ = c.types.autoType
   elif s.kind in {TypeY, TypevarY}:

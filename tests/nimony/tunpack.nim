@@ -22,13 +22,20 @@ const
 
 var zz: cstring = "xzy"
 
+proc `$`*(s: string): string
+proc `$`*(s: int): string
+proc `$`*(s: bool): string
+
 type
   untyped* {.magic: Expr.}
 
 iterator unpack(): untyped {.magic: Unpack.}
+proc unpackToCall(fn: untyped) {.magic: Unpack.}
 
 template toArray(): untyped {.varargs.} = [unpack()]
 template toTuple(): untyped {.varargs.} = (unpack(),)
+
+template toStringArray(): untyped {.varargs.} = [unpackToCall(`$`)]
 
 proc use =
   let a = toArray(1, 2, 3)
@@ -36,5 +43,7 @@ proc use =
   let t = toTuple("a", 2)
 
   let emptyTuple = toTuple()
+
+  let s = toStringArray("a", 1, "b")
 
 use()
