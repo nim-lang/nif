@@ -60,13 +60,14 @@
   (pragmas 2
    (borrow)) . 9
   (stmts 
-   (dconf 6 VarId.0.tdikoa9tc1 
-    (add ~7,~16
-     (i -1) 
-     (dconf ~7,~16
-      (i -1) x.3) 
-     (dconf ~7,~16
-      (i -1) y.3))))) 4,24
+   (ret 
+    (dconv 6 VarId.0.tdikoa9tc1 
+     (add ~7,~16
+      (i -1) 
+      (dconv ~7,~16
+       (i -1) x.3) 
+      (dconv ~7,~16
+       (i -1) y.3)))))) 4,24
  (var :x.0.tdikoa9tc1 . . 3 VarId.0.tdikoa9tc1 .) 2,26
  (asgn ~2 x.0.tdikoa9tc1 4
   (infix \2B.1.tdikoa9tc1 ~2 x.0.tdikoa9tc1 2 x.0.tdikoa9tc1)) 4,28
