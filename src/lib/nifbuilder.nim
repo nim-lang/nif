@@ -36,7 +36,7 @@ proc extract*(b: sink Builder): string =
   ## Extracts the buffer from the builder.
   ## The builder should not be used afterwards.
   when not defined(showBroken):
-    assert b.nesting == 0, "unpaired '(' or ')'"
+    assert b.nesting == 0, "unpaired '(' or ')'" & $b.nesting
   assert b.mode == UsesMem, "cannot extract from a file"
   result = move(b.buf)
 
