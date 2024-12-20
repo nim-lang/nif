@@ -148,10 +148,12 @@ proc eval*(c: var EvalContext, n: var Cursor): Cursor =
       result = n
       skipToEnd n
     of IsMainModuleX:
+      inc n
+      skipParRi n
       if IsMain in c.c.moduleFlags:
-        return c.getTrueValue()
+        result = c.getTrueValue()
       else:
-        return c.getFalseValue()
+        result = c.getFalseValue()
     else:
       if n.tagId == ErrT:
         result = n

@@ -541,6 +541,15 @@ proc semConstIntExpr(c: var SemContext; n: var Cursor) =
     c.dest.shrink start
     c.dest.add valueBuf
 
+proc semConstExpr(c: var SemContext; it: var Item) =
+  let start = c.dest.len
+  semExpr c, it
+  var e = cursorAt(c.dest, start)
+  var valueBuf = evalExpr(c, e)
+  endRead(c.dest)
+  c.dest.shrink start
+  c.dest.add valueBuf
+
 proc isLastSon(n: Cursor): bool =
   var n = n
   skip n
@@ -1810,7 +1819,11 @@ proc semLocal(c: var SemContext; n: var Cursor; kind: SymKind) =
       # no explicit type given:
       inc n # 3
       var it = Item(n: n, typ: c.types.autoType)
-      semExpr c, it # 4
+      if kind == ConstY:
+        withNewScope c:
+          semConstExpr c, it # 4
+      else:
+        semExpr c, it # 4
       n = it.n
       insertType c, it.typ, beforeType
     else:
@@ -1820,7 +1833,11 @@ proc semLocal(c: var SemContext; n: var Cursor; kind: SymKind) =
         takeToken c, n
       else:
         var it = Item(n: n, typ: typ)
-        semExpr c, it # 4
+        if kind == ConstY:
+          withNewScope c:
+            semConstExpr c, it # 4
+        else:
+          semExpr c, it # 4
         n = it.n
         patchType c, it.typ, beforeType
   else:
