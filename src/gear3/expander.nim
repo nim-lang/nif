@@ -41,7 +41,7 @@ proc newNifModule(infile: string): NifModule =
   result.buf.add eof
   let indexName = infile.changeFileExt".idx.nif"
   if not fileExists(indexName) or getLastModificationTime(indexName) < getLastModificationTime(infile):
-    createIndex infile
+    createIndex infile, true
   result.index = readIndex(indexName)
 
 proc load(e: var EContext; suffix: string): NifModule =
