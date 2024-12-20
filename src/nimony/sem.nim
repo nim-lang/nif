@@ -1819,7 +1819,7 @@ proc semLocal(c: var SemContext; n: var Cursor; kind: SymKind) =
       # no explicit type given:
       inc n # 3
       var it = Item(n: n, typ: c.types.autoType)
-      if kind == ConstY:
+      if false and kind == ConstY:
         withNewScope c:
           semConstExpr c, it # 4
       else:
@@ -1833,7 +1833,7 @@ proc semLocal(c: var SemContext; n: var Cursor; kind: SymKind) =
         takeToken c, n
       else:
         var it = Item(n: n, typ: typ)
-        if kind == ConstY:
+        if false and kind == ConstY:
           withNewScope c:
             semConstExpr c, it # 4
         else:

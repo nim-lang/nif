@@ -9,4 +9,6 @@ when isMainModule:
 else:
   const isImportedMain1* = false
 
-const isImportedMain2* = isMainModule
+when false:
+  # needs `const`s to evaluate their values
+  const isImportedMain2* = isMainModule
