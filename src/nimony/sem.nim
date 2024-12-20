@@ -560,7 +560,10 @@ proc semProcBody(c: var SemContext; itB: var Item) =
   var it = Item(n: itB.n, typ: c.types.autoType)
   semStmtsExprImpl c, it
   if c.routine.kind == TemplateY:
-    typecheck(c, info, it.typ, c.routine.returnType)
+    if c.routine.returnType.typeKind == UntypedT:
+      discard "ok"
+    else:
+      typecheck(c, info, it.typ, c.routine.returnType)
   elif classifyType(c, it.typ) == VoidT:
     discard "ok"
   else:
@@ -1745,14 +1748,19 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
           n = it.n
       wantParRi c, n
     of ObjectT:
-      if context != InTypeSection:
+      if context == InGenericConstraint:
+        c.dest.takeTree n
+      elif context != InTypeSection:
         c.buildErr info, "`object` type must be defined in a `type` section"
         skip n
       else:
         semObjectType c, n
     of EnumT:
-      c.buildErr info, "`enum` type must be defined in a `type` section"
-      skip n
+      if context == InGenericConstraint:
+        c.dest.takeTree n
+      else:
+        c.buildErr info, "`enum` type must be defined in a `type` section"
+        skip n
     of ConceptT:
       if context != InTypeSection:
         c.buildErr info, "`concept` type must be defined in a `type` section"
@@ -2069,7 +2077,7 @@ proc semExprSym(c: var SemContext; it: var Item; s: Sym; start: int; flags: set[
       c.buildErr it.n.info, "undeclared identifier"
     it.typ = c.types.autoType
   elif s.kind == CchoiceY:
-    if KeepMagics notin flags:
+    if KeepMagics notin flags and c.routine.kind != TemplateY:
       c.buildErr it.n.info, "ambiguous identifier"
     it.typ = c.types.autoType
   elif s.kind in {TypeY, TypevarY}:

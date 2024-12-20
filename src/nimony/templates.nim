@@ -63,6 +63,22 @@ proc expandTemplateImpl(c: var SemContext; dest: var TokenBuf;
 
         skip body
         unsafeDec body
+      elif body.exprKind == UnpackX:
+        inc body
+        var arg = e.firstVarargMatch
+        if body.kind == ParRi:
+          # `unpack()` variant:
+          while arg.kind != ParRi:
+            dest.takeTree arg
+        else:
+          # `unpack(fn)` variant:
+          while arg.kind != ParRi:
+            dest.addParLe CallX, arg.info
+            dest.copyTree body # fn
+            dest.takeTree arg
+            dest.addParRi()
+          skip body
+          unsafeDec body
       else:
         dest.add body
         inc nested
