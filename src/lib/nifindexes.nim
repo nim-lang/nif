@@ -66,10 +66,11 @@ proc createIndex*(infile: string) =
   private.addParRi()
   close s
 
-  var content = "(.nif24)\n(index"
+  var content = "(.nif24)\n(index\n"
   content.add toString(public)
+  content.add "\n"
   content.add toString(private)
-  content.add ")"
+  content.add "\n)\n"
   if fileExists(indexName) and readFile(indexName) == content:
     discard "no change"
   else:
