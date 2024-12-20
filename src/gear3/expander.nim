@@ -254,7 +254,8 @@ proc traverseType(e: var EContext; c: var Cursor; flags: set[TypeFlag] = {}) =
       wantParRi e, c
     of CstringT:
       e.dest.add tagToken("ptr", c.info)
-      e.dest.add tagToken("char", c.info)
+      e.dest.add tagToken($CharT, c.info)
+      e.dest.addIntLit(8, c.info)
       e.dest.addParRi()
       inc c
       wantParRi e, c
@@ -526,6 +527,12 @@ proc traverseExpr(e: var EContext; c: var Cursor) =
         swap skipped, e.dest
         traverseType(e, c)
         swap skipped, e.dest
+        inc nested
+      of ConvX:
+        e.dest.add c
+        inc c
+        traverseType(e, c)
+        traverseExpr(e, c)
         inc nested
       else:
         e.dest.add c
