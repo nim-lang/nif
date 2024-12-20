@@ -20,7 +20,7 @@ proc isImportant(s: string): bool =
   result = c >= 2
 
 proc updateChecksum(dest: var Sha1State; content: TokenBuf) =
-  let s = content.toString(true)
+  let s = content.toString(false)
   dest.update(s)
   #echo "updateChecksum: ", s
 
@@ -132,8 +132,10 @@ proc createIndex*(infile: string; buildChecksum = false) =
       let info = t.info
       let sym = t.symId
       if pool.syms[sym].isImportant:
+        let back = offset(s.r)
         let tb = next(s)
         let isPublic = tb.kind != DotToken
+        jumpTo s.r, back
         var dest =
           if isPublic:
             addr(public)
