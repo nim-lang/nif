@@ -460,6 +460,9 @@ proc traverseProc(e: var EContext; c: var Cursor; mode: TraverseMode) =
     e.addKeyVal genPragmas, "was", symToken(s, pinfo), pinfo
   if Selectany in prag.flags:
     e.addKey genPragmas, "selectany", pinfo
+
+  if Borrow in prag.flags:
+    e.addKey genPragmas, $InlineC, pinfo
   closeGenPragmas e, genPragmas
 
   skip c # miscPos
