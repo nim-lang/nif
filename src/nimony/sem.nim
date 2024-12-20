@@ -164,11 +164,7 @@ proc commonType(c: var SemContext; it: var Item; argBegin: int; expected: TypeCu
     typematch m, expected, arg
   endRead(c.dest)
   if m.err:
-    when defined(debug):
-      shrink c.dest, argBegin
-      c.dest.addErrorMsg m
-    else:
-      c.typeMismatch info, it.typ, expected
+    c.typeMismatch info, it.typ, expected
   else:
     shrink c.dest, argBegin
     c.dest.add m.args
@@ -312,7 +308,6 @@ type
 proc subs(c: var SemContext; dest: var TokenBuf; sc: var SubsContext; body: Cursor) =
   var nested = 0
   var n = body
-  let isAtom = n.kind != ParLe
   while true:
     case n.kind
     of UnknownToken, EofToken, DotToken, Ident, StringLit, CharLit, IntLit, UIntLit, FloatLit:
@@ -339,8 +334,7 @@ proc subs(c: var SemContext; dest: var TokenBuf; sc: var SubsContext; body: Curs
     of ParRi:
       dest.add n
       dec nested
-      if nested == 0: break
-    if isAtom: break
+    if nested == 0: break
     inc n
 
 include templates
@@ -573,7 +567,10 @@ proc semProcBody(c: var SemContext; itB: var Item) =
   var it = Item(n: itB.n, typ: c.types.autoType)
   semStmtsExprImpl c, it
   if c.routine.kind == TemplateY:
-    typecheck(c, info, it.typ, c.routine.returnType)
+    if c.routine.returnType.typeKind == UntypedT:
+      discard "ok"
+    else:
+      typecheck(c, info, it.typ, c.routine.returnType)
   elif classifyType(c, it.typ) == VoidT:
     discard "ok"
   else:
@@ -833,6 +830,24 @@ proc getFnIdent(c: var SemContext): StrId =
   result = getIdent(c, n)
   endRead(c.dest)
 
+proc containsGenericParams(n: TypeCursor): bool =
+  var n = n
+  var nested = 0
+  while true:
+    case n.kind
+    of Symbol:
+      let res = tryLoadSym(n.symId)
+      if res.status == LacksNothing and res.decl == $TypevarY:
+        return true
+    of ParLe:
+      inc nested
+    of ParRi:
+      dec nested
+    else: discard
+    if nested == 0: break
+    inc n
+  return false
+
 type
   DotExprState = enum
     MatchedDot, FailedDot, InvalidDot
@@ -861,7 +876,9 @@ proc untypedCall(c: var SemContext; it: var Item; cs: CallState) =
   wantParRi c, it.n
 
 proc semConvFromCall(c: var SemContext; it: var Item; cs: CallState) =
-  const IntegralTypes = {FloatT, CharT, IntT, UIntT, BoolT}
+  const
+    IntegralTypes = {FloatT, CharT, IntT, UIntT, BoolT}
+    StringTypes = {StringT, CstringT}
   let beforeExpr = c.dest.len
   let info = cs.callNode.info
   c.dest.add parLeToken(ConvX, info)
@@ -876,7 +893,9 @@ proc semConvFromCall(c: var SemContext; it: var Item; cs: CallState) =
   let destBase = skipDistinct(destType, isDistinct)
   let srcBase = skipDistinct(srcType, isDistinct)
 
-  if destBase.typeKind in IntegralTypes and srcBase.typeKind in IntegralTypes:
+  if (destBase.typeKind in IntegralTypes and srcBase.typeKind in IntegralTypes) or
+     (destBase.typeKind in StringTypes and srcBase.typeKind in StringTypes) or
+     (destBase.containsGenericParams or srcBase.containsGenericParams):
     discard "ok"
     # XXX Add hderef here somehow
     c.dest.addSubtree cs.args[0].n
@@ -911,6 +930,35 @@ proc semConvFromCall(c: var SemContext; it: var Item; cs: CallState) =
 
   wantParRi c, it.n
   commonType c, it, beforeExpr, destType
+
+proc isCastableType(t: TypeCursor): bool =
+  const IntegralTypes = {FloatT, CharT, IntT, UIntT, BoolT, PointerT, CstringT, RefT, PtrT, NilT}
+  result = t.typeKind in IntegralTypes or isEnumType(t)
+
+proc semCast(c: var SemContext; it: var Item) =
+  let beforeExpr = c.dest.len
+  let info = it.n.info
+  takeToken c, it.n
+  let destType = semLocalType(c, it.n)
+  var x = Item(n: it.n, typ: c.types.autoType)
+  # XXX Add hderef here somehow
+  semExpr c, x
+  it.n = x.n
+  wantParRi c, it.n
+
+  var srcType = skipModifier(x.typ)
+
+  # distinct type conversion?
+  var isDistinct = false
+  let destBase = skipDistinct(destType, isDistinct)
+  let srcBase = skipDistinct(srcType, isDistinct)
+  if destBase.isCastableType and srcBase.isCastableType:
+    commonType c, it, beforeExpr, destType
+  elif containsGenericParams(srcType) or containsGenericParams(destType):
+    commonType c, it, beforeExpr, destType
+  else:
+    c.dest.shrink beforeExpr
+    c.buildErr info, "cannot `cast` between types " & typeToString(srcType) & " and " & typeToString(destType)
 
 proc resolveOverloads(c: var SemContext; it: var Item; cs: var CallState) =
   let genericArgs =
@@ -1697,7 +1745,7 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
         n = it.n
       else:
         c.buildErr info, "not a type"
-    of IntT, FloatT, CharT, BoolT, UIntT, VoidT, StringT, NilT, AutoT, SymKindT, UntypedT:
+    of IntT, FloatT, CharT, BoolT, UIntT, VoidT, StringT, NilT, AutoT, SymKindT, UntypedT, CstringT, PointerT:
       takeTree c, n
     of PtrT, RefT, MutT, OutT, LentT, SinkT, NotT, UncheckedArrayT, SetT, StaticT, TypedescT:
       takeToken c, n
@@ -1728,14 +1776,19 @@ proc semLocalTypeImpl(c: var SemContext; n: var Cursor; context: TypeDeclContext
           n = it.n
       wantParRi c, n
     of ObjectT:
-      if context != InTypeSection:
+      if context == InGenericConstraint:
+        c.dest.takeTree n
+      elif context != InTypeSection:
         c.buildErr info, "`object` type must be defined in a `type` section"
         skip n
       else:
         semObjectType c, n
     of EnumT:
-      c.buildErr info, "`enum` type must be defined in a `type` section"
-      skip n
+      if context == InGenericConstraint:
+        c.dest.takeTree n
+      else:
+        c.buildErr info, "`enum` type must be defined in a `type` section"
+        skip n
     of ConceptT:
       if context != InTypeSection:
         c.buildErr info, "`concept` type must be defined in a `type` section"
@@ -2060,7 +2113,7 @@ proc semExprSym(c: var SemContext; it: var Item; s: Sym; start: int; flags: set[
       c.buildErr it.n.info, "undeclared identifier"
     it.typ = c.types.autoType
   elif s.kind == CchoiceY:
-    if KeepMagics notin flags:
+    if KeepMagics notin flags and c.routine.kind != TemplateY:
       c.buildErr it.n.info, "ambiguous identifier"
     it.typ = c.types.autoType
   elif s.kind in {TypeY, TypevarY}:
@@ -2476,6 +2529,9 @@ proc literalB(c: var SemContext; it: var Item; literalType: TypeCursor) =
   it.typ = literalType
   commonType c, it, beforeExpr, expected
 
+proc semNil(c: var SemContext; it: var Item) =
+  literalB c, it, c.types.nilType
+
 proc semTypedUnaryArithmetic(c: var SemContext; it: var Item) =
   let beforeExpr = c.dest.len
   takeToken c, it.n
@@ -2587,6 +2643,7 @@ proc semSuf(c: var SemContext, it: var Item) =
   of "f": it.typ = c.types.floatType
   of "f32": it.typ = c.types.float32Type
   of "f64": it.typ = c.types.float64Type
+  of "R": it.typ = c.types.stringType
   else:
     c.buildErr it.n.info, "unknown suffix: " & pool.strings[it.n.litId]
   takeToken c, it.n # suffix
@@ -2824,7 +2881,7 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
           skip it.n
         of IntT, FloatT, CharT, BoolT, UIntT, VoidT, StringT, NilT, AutoT, SymKindT,
             PtrT, RefT, MutT, OutT, LentT, SinkT, UncheckedArrayT, SetT, StaticT, TypedescT,
-            TupleT, ArrayT, VarargsT, ProcT, IterT, UntypedT:
+            TupleT, ArrayT, VarargsT, ProcT, IterT, UntypedT, CstringT, PointerT:
           # every valid local type expression
           semLocalTypeExpr c, it
         of OrT, AndT, NotT, InvokeT:
@@ -2974,11 +3031,16 @@ proc semExpr(c: var SemContext; it: var Item; flags: set[SemFlag] = {}) =
       # type as the operand:
       semExpr c, it
       wantParRi c, it.n
-    of DerefX, PatX, AddrX, NilX, SizeofX, OconstrX, KvX,
-       CastX, ConvX, RangeX, RangesX,
+    of CastX:
+      semCast c, it
+    of NilX:
+      semNil c, it
+    of DerefX, PatX, AddrX, SizeofX, OconstrX, KvX,
+       ConvX, RangeX, RangesX,
        OconvX, HconvX,
        CompilesX, HighX, LowX, TypeofX:
       # XXX To implement
+      buildErr c, it.n.info, "to implement: " & $exprKind(it.n)
       takeToken c, it.n
       wantParRi c, it.n
 

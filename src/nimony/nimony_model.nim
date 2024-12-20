@@ -169,6 +169,8 @@ type
     SymKindT = "symkind"
     TypedescT = "typedesc"
     UntypedT = "untyped"
+    CstringT = "cstring"
+    PointerT = "pointer"
 
   PragmaKind* = enum
     NoPragma
