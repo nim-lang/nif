@@ -252,4 +252,4 @@ proc readIndex*(indexName: string): NifIndex =
     assert false, "expected 'index' tag"
 
 when isMainModule:
-  createIndex paramStr(1), true
+  createIndex paramStr(1), false
