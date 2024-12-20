@@ -22,7 +22,7 @@ proc isImportant(s: string): bool =
 proc updateChecksum(dest: var Sha1State; content: TokenBuf) =
   let s = content.toString(false)
   dest.update(s)
-  echo "updateChecksum: ", s
+  #echo "updateChecksum: ", s
 
 type
   IndexChecksum = object
@@ -30,7 +30,7 @@ type
     currentDecl: TokenBuf
     active: int
     remainingKids: int
-    needsParRi: bool
+    needsParRi, skipBody: bool
     currentConstruct: TagId
     checksum: Sha1State
     letT, varT, cursorT, constT, typeT, procT, templateT, funcT,
@@ -59,7 +59,9 @@ proc initIndexChecksum(): IndexChecksum =
     inlineT: registerTag("inline")
   )
 
-proc handleAtom(b: var IndexChecksum) =
+proc handleAtom(b: var IndexChecksum; t: PackedToken) =
+  if b.active > 0 and b.remainingKids > 0:
+    b.currentDecl.add t
   if b.nested == b.active and b.remainingKids > 0:
     dec b.remainingKids
     if b.remainingKids == 0:
@@ -68,26 +70,29 @@ proc handleAtom(b: var IndexChecksum) =
 proc maybeNewConstruct(b: var IndexChecksum; t: PackedToken) =
   if b.currentConstruct == TagId(0):
     if t.tag in [b.cursorT, b.letT, b.varT, b.constT, b.typeT]:
-      b.remainingKids = 5
+      b.remainingKids = 4
       b.currentDecl.add t
       b.active = b.nested
       b.currentConstruct = t.tag
       b.needsParRi = false
+      b.skipBody = false
     elif t.tag in [b.procT, b.funcT, b.macroT, b.converterT, b.methodT]:
       b.remainingKids = 8
       b.currentDecl.add t
       b.active = b.nested
       b.currentConstruct = t.tag
       b.needsParRi = false
+      b.skipBody = true
     elif t.tag in [b.templateT, b.iteratorT]:
       # these always have inlining semantics:
-      b.remainingKids = 9
+      b.remainingKids = 8
       b.currentDecl.add t
       b.active = b.nested
       b.currentConstruct = t.tag
       b.needsParRi = false
+      b.skipBody = false
   elif t.tag == b.inlineT and b.currentConstruct in [b.procT, b.funcT, b.macroT, b.converterT, b.methodT]:
-    inc b.remainingKids
+    b.skipBody = false
 
 proc createIndex*(infile: string; buildChecksum = false) =
   let PublicT = registerTag "public"
@@ -112,15 +117,15 @@ proc createIndex*(infile: string; buildChecksum = false) =
     let offs = offset(s.r)
     let t = next(s)
     if t.kind == EofToken: break
-    if b.active > 0 and b.remainingKids > 0:
-      b.currentDecl.add t
     case t.kind
     of ParLe:
       if b.active == b.nested:
-        if b.remainingKids > 0:
-          dec b.remainingKids
-          if b.remainingKids == 0:
-            b.needsParRi = true
+        if b.skipBody and b.remainingKids == 2:
+          b.remainingKids = 0
+          b.needsParRi = true
+
+      if b.active > 0 and b.remainingKids > 0:
+        b.currentDecl.add t
 
       inc b.nested
       if buildChecksum:
@@ -128,14 +133,19 @@ proc createIndex*(infile: string; buildChecksum = false) =
       target = offs
 
     of ParRi:
+      if b.active > 0 and b.remainingKids > 0:
+        b.currentDecl.add t
+
       if b.active == b.nested:
         b.active = -1
         b.currentConstruct = TagId(0)
-        b.needsParRi = false
+
+        if b.remainingKids > 0:
+          dec b.remainingKids
 
       dec b.nested
     of SymbolDef:
-      handleAtom b
+      handleAtom b, t
 
       let info = t.info
       let sym = t.symId
@@ -159,7 +169,7 @@ proc createIndex*(infile: string; buildChecksum = false) =
         else:
           previousPrivateTarget = target
     else:
-      handleAtom b
+      handleAtom b, t
 
     if b.remainingKids == 0:
       if b.currentDecl.len > 0:
