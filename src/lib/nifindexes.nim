@@ -66,12 +66,15 @@ proc createIndex*(infile: string) =
   private.addParRi()
   close s
 
-  var outp = open(indexName, fmWrite)
-  outp.writeLine "(.nif24)\n(index"
-  outp.writeLine toString(public)
-  outp.writeLine toString(private)
-  outp.writeLine ")"
-  close outp
+  var content = "(.nif24)\n(index\n"
+  content.add toString(public)
+  content.add "\n"
+  content.add toString(private)
+  content.add "\n)\n"
+  if fileExists(indexName) and readFile(indexName) == content:
+    discard "no change"
+  else:
+    writeFile(indexName, content)
 
 type
   NifIndexEntry* = object
