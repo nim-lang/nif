@@ -111,7 +111,7 @@ type
     ConvX = "conv"
     OconvX = "oconv" # object conversion
     HconvX = "hconv" # hidden basic type conversion
-    DconvX = "dconf" # conversion between `distinct` types
+    DconvX = "dconv" # conversion between `distinct` types
     CallX = "call"
     CallStrLitX = "callstrlit"
     InfixX = "infix"
