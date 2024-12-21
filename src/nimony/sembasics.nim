@@ -51,7 +51,7 @@ proc unquote*(c: var Cursor): StrId =
   assert r.len > 0
   result = getOrIncl(pool.strings, r)
 
-proc getIdent*(c: var SemContext; n: var Cursor): StrId =
+proc getIdent*(n: var Cursor): StrId =
   var nested = 0
   while exprKind(n) in {OchoiceX, CchoiceX}:
     inc nested
@@ -214,23 +214,35 @@ template withErrorContext*(c: var SemContext; info: PackedLineInfo; body: untype
   finally:
     popErrorContext(c)
 
-proc buildErr*(c: var SemContext; info: PackedLineInfo; msg: string) =
+proc buildErr*(c: var SemContext; info: PackedLineInfo; msg: string; orig: Cursor) =
   when defined(debug):
     writeStackTrace()
     echo infoToStr(info) & " Error: " & msg
     quit msg
   c.dest.buildTree ErrT, info:
+    c.dest.addSubtree orig
     for instFrom in items(c.instantiatedFrom):
       c.dest.add dotToken(instFrom)
     c.dest.add strToken(pool.strings.getOrIncl(msg), info)
 
-proc buildLocalErr*(dest: var TokenBuf; info: PackedLineInfo; msg: string) =
+proc buildErr*(c: var SemContext; info: PackedLineInfo; msg: string) =
+  var orig = createTokenBuf(1)
+  orig.addDotToken()
+  c.buildErr info, msg, cursorAt(orig, 0)
+
+proc buildLocalErr*(dest: var TokenBuf; info: PackedLineInfo; msg: string; orig: Cursor) =
   when defined(debug):
     writeStackTrace()
     echo infoToStr(info) & " Error: " & msg
     quit msg
   dest.buildTree ErrT, info:
+    dest.addSubtree orig
     dest.add strToken(pool.strings.getOrIncl(msg), info)
+
+proc buildLocalErr*(dest: var TokenBuf; info: PackedLineInfo; msg: string) =
+  var orig = createTokenBuf(1)
+  orig.addDotToken()
+  dest.buildLocalErr info, msg, cursorAt(orig, 0)
 
 # -------------------------- type handling ---------------------------
 
@@ -409,7 +421,7 @@ proc declareOverloadableSym*(c: var SemContext; it: var Item; kind: SymKind): Sy
     c.dest.add it.n
     inc it.n
   else:
-    let lit = getIdent(c, it.n)
+    let lit = getIdent(it.n)
     if lit == StrId(0):
       c.buildErr info, "identifier expected"
       result = SymId(0)
@@ -452,7 +464,7 @@ proc handleSymDef*(c: var SemContext; n: var Cursor; kind: SymKind): DelayedSym 
     c.dest.add symdefToken(symId, info)
     inc n
   else:
-    let lit = getIdent(c, n)
+    let lit = getIdent(n)
     if lit == StrId(0):
       c.buildErr info, "identifier expected"
       result = DelayedSym(status: ErrNoIdent, info: info)
