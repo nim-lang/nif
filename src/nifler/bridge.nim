@@ -579,12 +579,14 @@ proc initTranslationContext*(conf: ConfigRef; outfile: string; portablePaths, de
 proc close*(c: var TranslationContext) =
   c.b.close()
   if c.depsEnabled:
+    c.deps.endTree()
     c.deps.close()
 
 proc moduleToIr*(n: PNode; c: var TranslationContext) =
   c.b.addHeader "Nifler", "nim-parsed"
   if c.depsEnabled:
     c.deps.addHeader "Nifler", "nim-deps"
+    c.deps.addTree "stmts"
   toNif(n, nil, c)
 
 proc createConf(): ConfigRef =

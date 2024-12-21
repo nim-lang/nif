@@ -78,7 +78,7 @@ proc handleCmdLine() =
   config.defines.incl "nimony"
   config.bits = sizeof(int)*8
   var commandLineArgs = ""
-
+  var isChild = false
   for kind, key, val in getopt():
     case kind
     of cmdArgument:
@@ -113,6 +113,10 @@ proc handleCmdLine() =
         of "32": config.bits = 32
         of "16": config.bits = 16
         else: quit "invalid value for --bits"
+      of "ischild":
+        # undocumented command line option, by design
+        isChild = true
+        forwardArg = false
       else: writeHelp()
       if forwardArg:
         commandLineArgs.add " --" & key
@@ -133,9 +137,10 @@ proc handleCmdLine() =
   of None:
     quit "command missing"
   of SingleModule:
-    createDir("nifcache")
-    requiresTool "nifler", "src/nifler/nifler.nim", forceRebuild
-    requiresTool "nifc", "src/nifc/nifc.nim", forceRebuild
+    if not isChild:
+      createDir("nifcache")
+      requiresTool "nifler", "src/nifler/nifler.nim", forceRebuild
+      requiresTool "nifc", "src/nifc/nifc.nim", forceRebuild
     processSingleModule(args[0].addFileExt(".nim"), config, moduleFlags,
                         commandLineArgs, forceRebuild)
 
