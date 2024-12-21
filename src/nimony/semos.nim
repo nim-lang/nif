@@ -135,4 +135,4 @@ proc getFile*(c: var SemContext; info: PackedLineInfo): string =
   result = pool.files[fid]
 
 proc selfExec*(c: var SemContext; file: string) =
-  exec os.getAppFilename() & c.commandLineArgs & " m " & quoteShell(file)
+  exec os.getAppFilename() & c.commandLineArgs & " --ischild m " & quoteShell(file)
