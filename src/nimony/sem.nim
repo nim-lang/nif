@@ -196,7 +196,7 @@ proc semInclude(c: var SemContext; it: var Item) =
     c.buildErr info, "wrong `include` statement"
   else:
     for f1 in items(files):
-      let f2 = resolveFile(c, getFile(c, info), f1)
+      let f2 = resolveFile(c.g.config.paths, getFile(info), f1)
       c.meta.includedFiles.add f2
       # check for recursive include files:
       var isRecursive = false
@@ -223,7 +223,7 @@ proc semInclude(c: var SemContext; it: var Item) =
   producesVoid c, info, it.typ
 
 proc importSingleFile(c: var SemContext; f1, origin: string; info: PackedLineInfo) =
-  let f2 = resolveFile(c, origin, f1)
+  let f2 = resolveFile(c.g.config.paths, origin, f1)
   let suffix = moduleSuffix(f2, c.g.config.paths)
   if not c.processedModules.containsOrIncl(suffix):
     c.meta.importedFiles.add f2
@@ -257,7 +257,7 @@ proc semImport(c: var SemContext; it: var Item) =
   if hasError:
     c.buildErr info, "wrong `import` statement"
   else:
-    let origin = getFile(c, info)
+    let origin = getFile(info)
     for f in files:
       importSingleFile c, f, origin, info
 
@@ -3180,10 +3180,9 @@ proc phaseX(c: var SemContext; n: Cursor; x: SemPhase): TokenBuf =
   wantParRi c, n
   result = move c.dest
 
-proc semcheck*(infile, outfile: string; config: sink NifConfig; moduleFlags: set[ModuleFlag];
-               commandLineArgs: sink string) =
-  var n0 = setupProgram(infile, outfile)
-  var c = SemContext(
+proc createSemContext*(config: sink NifConfig; moduleFlags: set[ModuleFlag];
+                       commandLineArgs: sink string): SemContext =
+  result = SemContext(
     dest: createTokenBuf(),
     types: createBuiltinTypes(),
     thisModuleSuffix: prog.main,
@@ -3192,6 +3191,11 @@ proc semcheck*(infile, outfile: string; config: sink NifConfig; moduleFlags: set
     phase: SemcheckTopLevelSyms,
     routine: SemRoutine(kind: NoSym),
     commandLineArgs: commandLineArgs)
+
+proc semcheck*(infile, outfile: string; config: sink NifConfig; moduleFlags: set[ModuleFlag];
+               commandLineArgs: sink string) =
+  var n0 = setupProgram(infile, outfile)
+  var c = createSemContext(config, moduleFlags, commandLineArgs)
   c.currentScope = Scope(tab: initTable[StrId, seq[Sym]](), up: nil, kind: ToplevelScope)
 
   assert n0 == "stmts"
