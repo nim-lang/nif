@@ -20,13 +20,14 @@ type
   DepContext = object
     config: NifConfig
     nodes: Table[string, Node]
-    currentNode: Node
+    rootNode: Node
     includeStack: seq[string]
     processedModules: HashSet[string]
 
-proc processDep(c: var DepContext; n: var Cursor)
+proc processDep(c: var DepContext; n: var Cursor; current: Node)
+proc parseDeps(c: var DepContext; src: string; current: Node)
 
-proc processInclude(c: var DepContext; it: var Cursor) =
+proc processInclude(c: var DepContext; it: var Cursor; current: Node) =
   var files: seq[string] = @[]
   var hasError = false
   let info = it.info
@@ -48,27 +49,25 @@ proc processInclude(c: var DepContext; it: var Cursor) =
           break
 
       if not isRecursive:
-        c.currentNode.files.add f2
+        current.files.add f2
         var buf = parseFile(f2, c.config.paths)
         c.includeStack.add f2
         var n = cursorAt(buf, 0)
-        processDep c, n
+        processDep c, n, current
         c.includeStack.setLen c.includeStack.len - 1
       else:
         discard "ignore recursive include"
 
-proc importSingleFile(c: var DepContext; f1, origin: string; info: PackedLineInfo) =
+proc importSingleFile(c: var DepContext; f1, origin: string; info: PackedLineInfo; current: Node) =
   let f2 = resolveFile(c.config.paths, origin, f1)
   let suffix = moduleSuffix(f2, c.config.paths)
-  c.currentNode.deps.add f2
+  current.deps.add f2
   if not c.processedModules.containsOrIncl(suffix):
+    var imported = Node(files: @[f2])
+    c.nodes[f2] = imported
+    parseDeps c, f2, imported
 
-    if needsRecompile(f2, suffix):
-      selfExec c, f2
-
-    loadInterface suffix, c.importTab
-
-proc processImport(c: var DepContext; it: var Cursor) =
+proc processImport(c: var DepContext; it: var Cursor; current: Node) =
   let info = it.info
   var x = it
   skip it
@@ -91,34 +90,44 @@ proc processImport(c: var DepContext; it: var Cursor) =
   else:
     let origin = getFile(info)
     for f in files:
-      importSingleFile c, f, origin, info
+      importSingleFile c, f, origin, info, current
 
-proc processDep(c: var DepContext; n: var Cursor) =
+proc processDep(c: var DepContext; n: var Cursor; current: Node) =
   case stmtKind(n)
   of ImportS:
-    processImport c, n
+    processImport c, n, current
   of IncludeS:
-    processInclude c, n
+    processInclude c, n, current
   else:
     skip n
 
-proc processDeps(config: sink NifConfig; n: Cursor) =
+proc processDeps(c: var DepContext; n: Cursor; current: Node) =
   var n = n
   var nested = 0
-  var c = DepContext(config: config, currentNode: nil, includeStack: @[])
   while true:
     case n.kind
     of ParLe:
       inc nested
       if pool.tags[n.tagId] == "stmts":
         inc n
-        processDep c, n
-
+        processDep c, n, current
+      else:
+        inc n
     of ParRi:
       dec nested
       inc n
     else: inc n
     if nested == 0: break
+
+proc parseDeps(c: var DepContext; src: string; current: Node) =
+  let depsFile = src.changeFileExt(".deps.nif")
+  var stream = nifstreams.open(depsFile)
+  try:
+    discard processDirectives(stream.r)
+    var buf = fromStream(stream)
+    processDeps c, beginRead(buf), current
+  finally:
+    nifstreams.close(stream)
 
 proc nimexec*(cmd: string) =
   let t = findExe("nim")
@@ -142,14 +151,8 @@ proc buildGraph(project: string) =
   exec quoteShell(nifler) & " --portablePaths --deps parse " & quoteShell(project) & " " &
     quoteShell(src)
 
-  let depsFile = src.changeFileExt(".deps.nif")
-  var stream = nifstreams.open(depsFile)
-  try:
-    discard processDirectives(stream.r)
-    var buf = fromStream(stream)
-    processDeps config, beginRead buf
-  finally:
-    nifstreams.close(stream)
+  var c = DepContext(config: config, rootNode: Node(files: @[project]), includeStack: @[])
+  c.nodes[project] = c.rootNode
 
 
 when isMainModule:
